@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security problem
+    url: https://github.com/CosmicVaults/AstraeusPlugin/blob/main/SECURITY.md
+    about: Please report security problems privately by email to support@cosmicvaults.com, not as a public issue.
+  - name: Account, billing or the Astraeus website
+    url: https://cosmicvaults.com
+    about: For anything about your Cosmic Vaults account or the dashboard itself.

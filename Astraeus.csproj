@@ -1,0 +1,252 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">    
+
+    <PropertyGroup>
+        <TargetFramework>net8.0-windows</TargetFramework>
+        <OutputType>Library</OutputType>
+        <RootNamespace>CosmicVaults.NINA.Astraeus</RootNamespace>
+        <AssemblyName>CosmicVaults.NINA.Astraeus</AssemblyName>
+        <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+        <UseWPF>true</UseWPF>
+        <ImportWindowsDesktopTargets>true</ImportWindowsDesktopTargets>
+        <EnableWindowsTargeting>true</EnableWindowsTargeting>
+        <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <AstraeusReleaseVersion>1.0.1</AstraeusReleaseVersion>
+        <AstraeusVersionEpoch>2026-01-01</AstraeusVersionEpoch>
+    </PropertyGroup>
+
+    <!--
+        Packaging paths. stage\ is exactly what ships (see the Package target below); dist\ receives
+        the downloadable installer built from it. The Installer target needs Inno Setup 6.3 or later
+        (https://jrsoftware.org/isdl.php), looked for in Program Files (x86) and then in the per-user
+        "install for me only" location; point InnoSetupCompiler at ISCC.exe if it lives elsewhere:
+        -p:InnoSetupCompiler="D:\Tools\Inno Setup 6\ISCC.exe"
+    -->
+    <PropertyGroup>
+        <AstraeusStageDir>$(MSBuildProjectDirectory)\stage</AstraeusStageDir>
+        <AstraeusDistDir>$(MSBuildProjectDirectory)\dist</AstraeusDistDir>
+        <!-- Machine-wide install first, then Inno's "install for me only" location. The last line only gives the error a path to name. -->
+        <InnoSetupCompiler Condition="'$(InnoSetupCompiler)' == '' And Exists('$(MSBuildProgramFiles32)\Inno Setup 6\ISCC.exe')">$(MSBuildProgramFiles32)\Inno Setup 6\ISCC.exe</InnoSetupCompiler>
+        <InnoSetupCompiler Condition="'$(InnoSetupCompiler)' == '' And Exists('$(LOCALAPPDATA)\Programs\Inno Setup 6\ISCC.exe')">$(LOCALAPPDATA)\Programs\Inno Setup 6\ISCC.exe</InnoSetupCompiler>
+        <InnoSetupCompiler Condition="'$(InnoSetupCompiler)' == ''">$(MSBuildProgramFiles32)\Inno Setup 6\ISCC.exe</InnoSetupCompiler>
+    </PropertyGroup>
+    
+    
+    <!--
+        Which Astraeus server the build talks to (Engine\ServerEndpoints.cs). Debug defaults to dev,
+        the local web stack, and Release to production, so every Release build and installer is one
+        users can run. -p:AstraeusBackend=staging builds against a staging server, which only the
+        maintainer's copy of ServerEndpoints.cs names.
+    -->
+    <PropertyGroup>
+        <AstraeusBackend Condition="'$(AstraeusBackend)' == '' And '$(Configuration)' == 'Debug'">dev</AstraeusBackend>
+        <AstraeusBackend Condition="'$(AstraeusBackend)' == ''">production</AstraeusBackend>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(AstraeusBackend)' == 'dev'">
+        <DefineConstants>$(DefineConstants);DEV</DefineConstants>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(AstraeusBackend)' == 'staging'">
+        <DefineConstants>$(DefineConstants);STAGING</DefineConstants>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(AstraeusBackend)' == 'production'">
+        <DefineConstants>$(DefineConstants);PRODUCTION</DefineConstants>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+        <!-- Keeps this machine's source path out of the shipped DLL and PDB ([CallerFilePath], debug info). -->
+        <PathMap>$(MSBuildProjectDirectory)=/_/</PathMap>
+    </PropertyGroup>
+
+    <Target Name="CheckAstraeusBackend" BeforeTargets="BeforeBuild">
+        <Error Condition="'$(AstraeusBackend)' != 'dev' And '$(AstraeusBackend)' != 'staging' And '$(AstraeusBackend)' != 'production'"
+               Text="AstraeusBackend must be dev, production or staging, not '$(AstraeusBackend)'."/>
+    </Target>
+
+    <!-- NuGet Packages -->
+    <!--
+        LibVLCSharp and its native runtime back the RTSP feed source. Pinned to the versions
+        isbeorn/nina.plugin.rtsp ships, which are known to work inside NINA 3.x on net8.0-windows.
+        Both are LGPL-2.1: we link dynamically against unmodified binaries, which is compliant, and
+        3rd-party-licenses.txt carries the required notice.
+    -->
+    <ItemGroup>
+        <PackageReference Include="NINA.Plugin" Version="3.2.0.9001"/>
+        <PackageReference Include="LibVLCSharp" Version="3.9.1"/>
+        <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.21"/>
+    </ItemGroup>
+
+
+    <!--
+        Post-build: copy the plugin and its RTSP support files to the NINA Plugins folder. Not on a
+        CI runner (GitHub Actions sets CI=true), which has no N.I.N.A. to deploy into.
+    -->
+    <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="'$(CI)' != 'true'">
+        <!--
+            The same folder the installer uses (DefaultDirName in installer\Astraeus.iss, named after
+            the plugin rather than the assembly). NINA loads every folder under Plugins\3.0.0, so a
+            dev build deployed anywhere else starts as a second copy of the plugin beside an
+            installed one, and both run.
+        -->
+        <PropertyGroup>
+            <AstraeusPluginDir>$(LOCALAPPDATA)\NINA\Plugins\3.0.0\Astraeus</AstraeusPluginDir>
+        </PropertyGroup>
+        <MakeDir Directories="$(AstraeusPluginDir)" Condition="!Exists('$(AstraeusPluginDir)')"/>
+        <!-- Copy plugin DLL -->
+        <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(AstraeusPluginDir)"/>
+        <!--
+            LibVLCSharp is the only managed dependency NINA does not already load, so it has to
+            travel with us; the rest of the output folder is NINA assemblies the host already has.
+        -->
+        <Copy SourceFiles="$(TargetDir)LibVLCSharp.dll" DestinationFolder="$(AstraeusPluginDir)"
+              Condition="Exists('$(TargetDir)LibVLCSharp.dll')"/>
+        <!--
+            The native tree must sit at libvlc\win-x64 beside the assembly: LibVlcRtspSource hands
+            that exact path to Core.Initialize, because native resolution follows the process
+            directory rather than the plugin folder and would otherwise never find it.
+
+            win-x64 only. VideoLAN.LibVLC.Windows restores both architectures, but NINA 3 is x64 and
+            ResolveLibVlcDirectory looks nowhere else, so copying win-x86 as well only pushed another
+            96 MB into LOCALAPPDATA. Note %(RecursiveDir) is relative to the fixed part of the
+            include, so narrowing the glob drops the win-x64 segment and the destination has to put
+            it back.
+        -->
+        <ItemGroup>
+            <AstraeusLibVlcFiles Include="$(TargetDir)libvlc\win-x64\**\*.*"/>
+        </ItemGroup>
+        <Copy SourceFiles="@(AstraeusLibVlcFiles)"
+              DestinationFolder="$(AstraeusPluginDir)\libvlc\win-x64\%(RecursiveDir)"
+              SkipUnchangedFiles="true"/>
+        <Copy SourceFiles="3rd-party-licenses.txt" DestinationFolder="$(AstraeusPluginDir)"
+              Condition="Exists('3rd-party-licenses.txt')"/>
+    </Target>
+
+
+    <!--
+        Stages exactly what ships, for the N.I.N.A. manifest repository's tools/CreateManifest.ps1:
+
+            dotnet build -c Release
+            dotnet msbuild -t:Package -p:Configuration=Release
+            .\CreateManifest.ps1 -file .\stage\CosmicVaults.NINA.Astraeus.dll -createArchive -includeAll
+
+        The staging folder is the point of this target. CreateManifest.ps1 -includeAll archives every
+        file sitting beside the DLL it is given, and $(TargetDir) is emphatically not that set:
+        CopyLocalLockFileAssemblies fills it with NINA's own assemblies - ASCOM, Accord,
+        EntityFramework and dozens more - which the host already loads and whose copies ours would
+        shadow. Shipping the build output would produce a plugin that fails to load in ways that look
+        nothing like a packaging mistake.
+
+        The file list mirrors isbeorn/nina.plugin.rtsp, which packages the same dependency the same
+        way and lands at roughly 44 MB zipped.
+    -->
+    <Target Name="Package" DependsOnTargets="Build">
+        <!-- From scratch each time, so a file dropped from the list cannot linger in a release. -->
+        <RemoveDir Directories="$(AstraeusStageDir)"/>
+        <MakeDir Directories="$(AstraeusStageDir)"/>
+        <ItemGroup>
+            <AstraeusShipFiles Include="$(TargetPath)"/>
+            <AstraeusShipFiles Include="$(TargetDir)$(TargetName).pdb"
+                               Condition="Exists('$(TargetDir)$(TargetName).pdb')"/>
+            <AstraeusShipFiles Include="$(TargetDir)LibVLCSharp.dll"/>
+            <AstraeusShipFiles Include="3rd-party-licenses.txt"/>
+            <AstraeusShipFiles Include="LICENSE.txt"/>
+            <AstraeusShipLicenseFiles Include="licenses\*.txt"/>
+            <AstraeusShipLibVlcFiles Include="$(TargetDir)libvlc\win-x64\**\*.*"/>
+        </ItemGroup>
+        <Copy SourceFiles="@(AstraeusShipFiles)" DestinationFolder="$(AstraeusStageDir)"/>
+        <Copy SourceFiles="@(AstraeusShipLicenseFiles)" DestinationFolder="$(AstraeusStageDir)\licenses"/>
+        <Copy SourceFiles="@(AstraeusShipLibVlcFiles)"
+              DestinationFolder="$(AstraeusStageDir)\libvlc\win-x64\%(RecursiveDir)"/>
+        <Message Importance="high" Text="Staged for packaging: $(AstraeusStageDir)"/>
+    </Target>
+
+
+    <!--
+        Builds the downloadable installer that end users get from CosmicVaults.com:
+
+            dotnet msbuild -t:Installer -p:Configuration=Release
+
+        It packs the stage folder - and only the stage folder, for the reasons given above - into a
+        single Inno Setup exe that lands the files in %LOCALAPPDATA%\NINA\Plugins\3.0.0\Astraeus, the
+        folder N.I.N.A.'s own plugin installer would use. installer\Astraeus.iss is the script; the
+        full four-part version is handed to it from AstraeusFileVersion, so the installer's name,
+        Settings > Apps, N.I.N.A.'s plugin list and the server all show the same number. Release
+        only: a Debug build talks to localhost and must not leave this machine. The SHA-256 written
+        beside the exe is for the download page.
+    -->
+    <Target Name="Installer" DependsOnTargets="Package;GenerateAstraeusVersionInfo">
+        <Error Condition="'$(Configuration)' != 'Release'"
+               Text="The installer must be built from the Release configuration: dotnet msbuild -t:Installer -p:Configuration=Release"/>
+        <Error Condition="!Exists('$(InnoSetupCompiler)')"
+               Text="Inno Setup was not found at '$(InnoSetupCompiler)'. Install Inno Setup 6.3 or later from https://jrsoftware.org/isdl.php, or pass -p:InnoSetupCompiler=&lt;path to ISCC.exe&gt;."/>
+        <PropertyGroup>
+            <AstraeusInstallerName>Astraeus-Setup-$(AstraeusFileVersion).exe</AstraeusInstallerName>
+            <AstraeusInstallerFile>$(AstraeusDistDir)\$(AstraeusInstallerName)</AstraeusInstallerFile>
+        </PropertyGroup>
+        <MakeDir Directories="$(AstraeusDistDir)"/>
+        <Exec Command="&quot;$(InnoSetupCompiler)&quot; /Q &quot;/DAppVersion=$(AstraeusFileVersion)&quot; &quot;/DStageDir=$(AstraeusStageDir)&quot; &quot;/DOutputDir=$(AstraeusDistDir)&quot; &quot;$(MSBuildProjectDirectory)\installer\Astraeus.iss&quot;"/>
+        <Error Condition="!Exists('$(AstraeusInstallerFile)')"
+               Text="Inno Setup finished but '$(AstraeusInstallerFile)' does not exist; OutputBaseFilename in installer\Astraeus.iss no longer matches this target."/>
+        <GetFileHash Files="$(AstraeusInstallerFile)" Algorithm="SHA256">
+            <Output TaskParameter="Hash" PropertyName="AstraeusInstallerSha256"/>
+        </GetFileHash>
+        <!-- "hash *filename" is the line sha256sum -c understands. -->
+        <WriteLinesToFile File="$(AstraeusInstallerFile).sha256"
+                          Lines="$(AstraeusInstallerSha256) *$(AstraeusInstallerName)"
+                          Overwrite="true"/>
+        <Message Importance="high" Text="Installer: $(AstraeusInstallerFile)"/>
+    </Target>
+
+
+
+    <!--
+        The version attributes are generated rather than hand-written because the plugin reports its
+        AssemblyFileVersion to the server in the connect hello: a number nobody remembered to bump
+        would make two different builds indistinguishable at the other end. Bump
+        AstraeusReleaseVersion above for a release; the fourth component, Build, is the day count
+        since AstraeusVersionEpoch and follows on its own.
+
+        AssemblyVersion deliberately keeps a fixed .0 so the identity NINA binds against does not
+        churn on every rebuild - only AssemblyFileVersion carries the build number, and that is the
+        one NINA's PluginBase.Version and the server both read.
+
+        A release build supplies the whole number instead: the release workflow passes the tag as
+        -p:AstraeusFileVersion=1.0.1.278, so the DLL, the zip, the installer and the manifest carry
+        the tag's number whatever day the build runs. Its first three parts must match
+        AstraeusReleaseVersion, which catches a tag cut before the bump. Today's number, for naming
+        a tag:
+
+            dotnet msbuild Astraeus.csproj -getProperty:AstraeusFileVersion -t:GenerateAstraeusVersionInfo
+    -->
+    <Target Name="GenerateAstraeusVersionInfo" BeforeTargets="BeforeCompile">
+        <PropertyGroup Condition="'$(AstraeusFileVersion)' == ''">
+            <AstraeusBuildNumber>$([System.DateTime]::UtcNow.Subtract($([System.DateTime]::Parse($(AstraeusVersionEpoch)))).Days)</AstraeusBuildNumber>
+            <AstraeusFileVersion>$(AstraeusReleaseVersion).$(AstraeusBuildNumber)</AstraeusFileVersion>
+        </PropertyGroup>
+        <Error Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('$(AstraeusFileVersion)', '^\d+\.\d+\.\d+\.\d+$'))"
+               Text="AstraeusFileVersion must be four numbers, Major.Minor.Patch.Build, not '$(AstraeusFileVersion)'."/>
+        <PropertyGroup>
+            <AstraeusFileReleaseVersion>$(AstraeusFileVersion.Substring(0, $(AstraeusFileVersion.LastIndexOf('.'))))</AstraeusFileReleaseVersion>
+            <AstraeusVersionInfoFile>$(IntermediateOutputPath)AstraeusVersionInfo.g.cs</AstraeusVersionInfoFile>
+        </PropertyGroup>
+        <Error Condition="'$(AstraeusFileReleaseVersion)' != '$(AstraeusReleaseVersion)'"
+               Text="AstraeusFileVersion $(AstraeusFileVersion) does not belong to AstraeusReleaseVersion $(AstraeusReleaseVersion). Bump AstraeusReleaseVersion in Astraeus.csproj, or tag the version it gives."/>
+        <ItemGroup>
+            <AstraeusVersionInfoLines Include="// &lt;auto-generated /&gt; Written by the GenerateAstraeusVersionInfo target. Do not edit." />
+            <AstraeusVersionInfoLines Include="[assembly: System.Reflection.AssemblyVersion(&quot;$(AstraeusReleaseVersion).0&quot;)]" />
+            <AstraeusVersionInfoLines Include="[assembly: System.Reflection.AssemblyFileVersion(&quot;$(AstraeusFileVersion)&quot;)]" />
+        </ItemGroup>
+        <!--
+            WriteOnlyWhenDifferent keeps same-day rebuilds incremental: the file only changes when
+            the day rolls over, so the compiler is not forced to re-run every single build.
+        -->
+        <WriteLinesToFile File="$(AstraeusVersionInfoFile)" Lines="@(AstraeusVersionInfoLines)"
+                          Overwrite="true" WriteOnlyWhenDifferent="true" />
+        <ItemGroup>
+            <Compile Include="$(AstraeusVersionInfoFile)" />
+            <FileWrites Include="$(AstraeusVersionInfoFile)" />
+        </ItemGroup>
+    </Target>
+
+</Project>

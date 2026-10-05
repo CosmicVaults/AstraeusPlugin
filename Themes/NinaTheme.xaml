@@ -1,0 +1,214 @@
+<!--
+    The N.I.N.A.-native look, with the same Ast.* keys the options views use. AstraeusTheme loads it
+    when "Use N.I.N.A. theme" is ticked.
+
+    No keyless implicit styles here, so bare controls fall through to N.I.N.A.'s own app-level styles
+    (its ON/OFF checkbox, StandardButton, StandardTextBlock). An implicit style here would undo that.
+
+    No colour literals either. Every brush comes from NinaBrushAliases.cs, which maps the Ast.* keys
+    onto N.I.N.A.'s profile-bound brushes, since the user's schema may be light.
+
+    Left out on purpose, since they only back the brand theme's implicit styles: Ast.TextBoxBase,
+    Ast.PasswordBoxBase, Ast.ComboBoxBase, Ast.ComboBoxItem, Ast.ComboBoxToggle, Ast.ToggleBase,
+    Ast.SliderBase, Ast.SliderFill, Ast.SliderEmpty, Ast.SliderThumb, Ast.ToolTipBase.
+-->
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--  ===== Text =====  -->
+
+    <!--
+        Text styles derive from {x:Type TextBlock}, which resolves to N.I.N.A.'s StandardTextBlock since
+        this dictionary has no implicit style. Naming the type keeps us off N.I.N.A.'s internal key
+        names. The derived styles only change size, weight and wrapping, never colour or font.
+    -->
+    <Style x:Key="Ast.TextBase" BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock" />
+
+    <Style x:Key="Ast.PageTitle" BasedOn="{StaticResource Ast.TextBase}" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="20" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style x:Key="Ast.PageSub" BasedOn="{StaticResource Ast.TextBase}" TargetType="TextBlock">
+        <Setter Property="Opacity" Value="0.75" />
+    </Style>
+
+    <!--
+        The brand theme separates label tiers by colour and a mono font, which would mean picking values
+        N.I.N.A. doesn't use. Here the tiers use weight and Opacity, which dims on any schema.
+    -->
+    <Style x:Key="Ast.SectionHeader" BasedOn="{StaticResource Ast.TextBase}" TargetType="TextBlock">
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Opacity" Value="0.75" />
+    </Style>
+
+    <Style x:Key="Ast.CardHeader" BasedOn="{StaticResource Ast.SectionHeader}" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <!--  A plain label under this theme. N.I.N.A. writes its own the same way.  -->
+    <Style x:Key="Ast.Label" BasedOn="{StaticResource Ast.TextBase}" TargetType="TextBlock" />
+
+    <Style x:Key="Ast.Hint" BasedOn="{StaticResource Ast.TextBase}" TargetType="TextBlock">
+        <Setter Property="Opacity" Value="0.75" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!--  ===== Page ground =====  -->
+
+    <!--
+        Next to nothing. The brand theme paints an opaque frame because it can't sit on a background it
+        didn't choose. This theme can, so the page shows N.I.N.A.'s own ground. Kept as a style so
+        OptionsPageView.xaml can name one key either way.
+    -->
+    <Style x:Key="Ast.PageGround" TargetType="Border">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <!--  Enough to keep the first card off the host edge, like N.I.N.A.'s own spacing.  -->
+        <Setter Property="Padding" Value="10" />
+    </Style>
+
+    <!--  ===== Cards =====  -->
+
+    <!--
+        Like N.I.N.A.'s StandardGroupBox, a header over a hairline with the content indented below. No
+        fill or corner radius.
+    -->
+    <Style x:Key="Ast.Card" TargetType="HeaderedContentControl">
+        <Setter Property="Margin" Value="0,0,0,14" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="HeaderedContentControl">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Border Padding="0,0,0,4"
+                                BorderBrush="{DynamicResource Ast.Divider}"
+                                BorderThickness="0,0,0,1">
+                            <TextBlock Style="{StaticResource Ast.CardHeader}"
+                                       Text="{Binding Header, RelativeSource={RelativeSource TemplatedParent}}" />
+                        </Border>
+                        <ContentPresenter Grid.Row="1" Margin="10,12,0,0" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.6" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--  A section inside a card, with the header over a hairline like N.I.N.A.'s own option groups.  -->
+    <Style x:Key="Ast.Section" TargetType="HeaderedContentControl">
+        <Setter Property="Margin" Value="0,24,0,0" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="HeaderedContentControl">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource Ast.SectionHeader}"
+                                   Text="{Binding Header, RelativeSource={RelativeSource TemplatedParent}}" />
+                        <Border Height="1" Margin="0,10,0,14" Background="{DynamicResource Ast.Divider}" />
+                        <ContentPresenter />
+                    </StackPanel>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--  ===== Buttons =====  -->
+
+    <!--
+        Every button is N.I.N.A.'s own, with only the alignment and padding the layouts expect. No gold,
+        violet or danger tints, because StandardButton resets Background on hover and press, so a tint
+        set from here would vanish. The names stay separate so the views can keep using
+        Ast.ButtonNeutral and Ast.ButtonDanger.
+    -->
+    <Style x:Key="Ast.ButtonBase" BasedOn="{StaticResource {x:Type Button}}" TargetType="Button">
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Padding" Value="10,4" />
+    </Style>
+
+    <Style x:Key="Ast.ButtonNeutral" BasedOn="{StaticResource Ast.ButtonBase}" TargetType="Button" />
+    <Style x:Key="Ast.ButtonDanger" BasedOn="{StaticResource Ast.ButtonBase}" TargetType="Button" />
+
+    <!--  ===== Banner, dot, info icon =====  -->
+
+    <Style x:Key="Ast.Banner" TargetType="ContentControl">
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ContentControl">
+                    <Border Background="{DynamicResource Ast.BgCard}"
+                            BorderBrush="{DynamicResource Ast.Divider}"
+                            BorderThickness="1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="4" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Background="{DynamicResource Ast.Warning}" />
+                            <ContentPresenter Grid.Column="1" Margin="12,10" />
+                        </Grid>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--  Fill is the off state. LoginView layers a second dot over it when signed in.  -->
+    <Style x:Key="Ast.Dot" TargetType="Ellipse">
+        <Setter Property="Width" Value="12" />
+        <Setter Property="Height" Value="12" />
+        <Setter Property="Fill" Value="{DynamicResource Ast.BgInset}" />
+        <Setter Property="Stroke" Value="{DynamicResource Ast.Divider}" />
+        <Setter Property="StrokeThickness" Value="1.5" />
+    </Style>
+
+    <Style x:Key="Ast.InfoIcon" TargetType="ContentControl">
+        <Setter Property="Width" Value="16" />
+        <Setter Property="Height" Value="16" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="Opacity" Value="0.75" />
+        <Setter Property="ToolTipService.InitialShowDelay" Value="150" />
+        <Setter Property="ToolTipService.ShowDuration" Value="60000" />
+        <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ContentControl">
+                    <Canvas Width="16" Height="16" Background="Transparent">
+                        <Ellipse Width="16"
+                                 Height="16"
+                                 Stroke="{DynamicResource Ast.TextDim}"
+                                 StrokeThickness="1.5" />
+                        <Ellipse Canvas.Left="6.9"
+                                 Canvas.Top="3.9"
+                                 Width="2.2"
+                                 Height="2.2"
+                                 Fill="{DynamicResource Ast.TextDim}" />
+                        <Path Data="M8,7.2 L8,11.6"
+                              Stroke="{DynamicResource Ast.TextDim}"
+                              StrokeEndLineCap="Round"
+                              StrokeStartLineCap="Round"
+                              StrokeThickness="1.7" />
+                    </Canvas>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Opacity" Value="1" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+</ResourceDictionary>

@@ -1,0 +1,40 @@
+Third-party components distributed with the Astraeus plugin for N.I.N.A.
+========================================================================
+
+The Astraeus plugin is distributed by Cosmic Vaults. The components below are
+redistributed unmodified and remain under their own licences. Full copies of the
+licences named here are in the "licenses" folder beside this file.
+
+
+LibVLCSharp 3.9.1
+-----------------
+Copyright (C) VideoLAN and its authors.
+Licensed under the GNU Lesser General Public License, version 2.1 or later.
+Source:  https://code.videolan.org/videolan/LibVLCSharp/-/tree/3.9.1
+Package: https://www.nuget.org/packages/LibVLCSharp/3.9.1
+
+LibVLC 3.0.21 (VideoLAN.LibVLC.Windows: libvlc, libvlccore and their plugins)
+-----------------------------------------------------------------------------
+Copyright (C) VideoLAN and its authors.
+libvlc and libvlccore are licensed under the GNU Lesser General Public License,
+version 2.1 or later. Most of the plugins in libvlc\win-x64\plugins are too, but
+some are licensed under the GNU General Public License, version 2 or later (for
+example libx264, the H.264 encoder module).
+Source:  https://code.videolan.org/videolan/vlc/-/tree/3.0.21
+         https://download.videolan.org/pub/videolan/vlc/3.0.21/
+Package: https://www.nuget.org/packages/VideoLAN.LibVLC.Windows/3.0.21
+
+These libraries are used only by the webcam feed's RTSP source, and only when a
+user configures an RTSP feed. They are linked dynamically and shipped without
+modification, in the libvlc folder beside the plugin assembly.
+
+Licence texts:
+  licenses\LGPL-2.1.txt   GNU Lesser General Public License, version 2.1
+  licenses\GPL-2.0.txt    GNU General Public License, version 2
+
+Under the terms of the LGPL you may replace these libraries with your own build.
+The plugin loads them from the "libvlc\win-x64" folder next to
+CosmicVaults.NINA.Astraeus.dll; replacing the files in that folder with a
+compatible LibVLC 3.x build is sufficient, and no relinking of the plugin is
+required. The corresponding source for the exact versions shipped is at the
+links above.

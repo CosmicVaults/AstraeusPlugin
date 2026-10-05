@@ -1,0 +1,408 @@
+﻿<UserControl x:Class="CosmicVaults.NINA.Astraeus.Controls.AutopilotSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:CosmicVaults.NINA.Astraeus.Controls"
+             xmlns:themes="clr-namespace:CosmicVaults.NINA.Astraeus.Themes">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <themes:AstraeusTheme />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <StackPanel>
+
+        <!--  Greyed out while the plugin is disabled, as the heartbeat would only turn it back off.  -->
+        <StackPanel Orientation="Horizontal">
+            <CheckBox IsChecked="{Binding IsEnabled, Mode=TwoWay}"
+                      IsEnabled="{Binding DataContext.IsPluginEnabled, RelativeSource={RelativeSource AncestorType=local:OptionsPageView}}" />
+            <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="Enable autopilot" />
+        </StackPanel>
+
+        <HeaderedContentControl Header="Schedule" Style="{DynamicResource Ast.Section}">
+            <StackPanel>
+
+                <TextBlock Margin="0,0,0,6" Style="{DynamicResource Ast.Label}" Text="Start/stop imaging at" />
+                <ComboBox DisplayMemberPath="DisplayName"
+                          ItemsSource="{Binding OperatingWindows}"
+                          SelectedValue="{Binding OperatingWindow, Mode=TwoWay}"
+                          SelectedValuePath="Value" />
+
+                <TextBlock Margin="0,14,0,6" Style="{DynamicResource Ast.Label}" Text="Roof handling" />
+                <ComboBox DisplayMemberPath="DisplayName"
+                          ItemsSource="{Binding RoofModes}"
+                          SelectedValue="{Binding RoofMode, Mode=TwoWay}"
+                          SelectedValuePath="Value" />
+
+                <StackPanel Margin="0,10,0,0" Orientation="Horizontal">
+                    <CheckBox IsChecked="{Binding ShouldParkMountToOpenRoof, Mode=TwoWay}" />
+                    <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="Park mount to open roof" />
+                    <ContentControl Margin="8,0,0,0" VerticalAlignment="Center" Style="{DynamicResource Ast.InfoIcon}">
+                        <ContentControl.ToolTip>
+                            <TextBlock MaxWidth="360"
+                                       TextWrapping="Wrap"
+                                       Text="Only applies when NINA is set to refuse shutter movement with the mount unparked (Dome settings -> 'Refuse open or close if mount is unparked'). Parking to satisfy that rule slews the mount while the roof is still closed. Enable only if your park position is reachable in that state." />
+                        </ContentControl.ToolTip>
+                    </ContentControl>
+                </StackPanel>
+
+                <!--  Delayed, or a drag would write the profile and push a settings frame on every tick.  -->
+                <TextBlock Margin="0,14,0,6" Style="{DynamicResource Ast.Label}" Text="{Binding SafeSettleLabel}" />
+                <!--  The icon follows the fixed-width slider, not the label, whose width changes as it is dragged.  -->
+                <StackPanel Orientation="Horizontal">
+                    <Slider Width="300"
+                            Minimum="0"
+                            Maximum="{Binding MaxSafeSettleSeconds, Mode=OneTime}"
+                            TickFrequency="10"
+                            IsSnapToTickEnabled="True"
+                            SmallChange="10"
+                            LargeChange="60"
+                            Value="{Binding SafeSettleSeconds, Mode=TwoWay, Delay=400}"
+                            ToolTip="Drag for 0 to 10 minutes, in 10 second steps." />
+                    <ContentControl Margin="12,0,0,0" VerticalAlignment="Center" Style="{DynamicResource Ast.InfoIcon}">
+                        <ContentControl.ToolTip>
+                            <TextBlock MaxWidth="360"
+                                       TextWrapping="Wrap"
+                                       Text="How long the safety monitor must read Safe, without a break, before the autopilot reopens the roof and unparks after an unsafe spell. Stops a safety monitor that flaps on marginal weather from parking and reopening every few minutes. Zero resumes on the first Safe reading." />
+                        </ContentControl.ToolTip>
+                    </ContentControl>
+                </StackPanel>
+
+            </StackPanel>
+        </HeaderedContentControl>
+
+        <HeaderedContentControl Header="Equipment" Style="{DynamicResource Ast.Section}">
+            <StackPanel>
+
+                <StackPanel Orientation="Horizontal">
+                    <CheckBox IsChecked="{Binding ShouldAutoConnectEquipment, Mode=TwoWay}" />
+                    <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="Auto-connect equipment" />
+                    <ContentControl Margin="8,0,0,0" VerticalAlignment="Center" Style="{DynamicResource Ast.InfoIcon}">
+                        <ContentControl.ToolTip>
+                            <TextBlock MaxWidth="360"
+                                       TextWrapping="Wrap"
+                                       Text="Connects the default devices below at dusk and disconnects them again at dawn, after the shutdown sequence. If disabled the autopilot will wait for required equipment to connect before operating." />
+                        </ContentControl.ToolTip>
+                    </ContentControl>
+                </StackPanel>
+
+                <StackPanel Margin="0,14,0,0" Orientation="Horizontal">
+                    <CheckBox IsChecked="{Binding IsCameraCoolingEnabled, Mode=TwoWay}" />
+                    <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="Cool the camera at dusk and warm it at dawn" />
+                    <ContentControl Margin="8,0,0,0" VerticalAlignment="Center" Style="{DynamicResource Ast.InfoIcon}">
+                        <ContentControl.ToolTip>
+                            <TextBlock MaxWidth="360"
+                                       TextWrapping="Wrap"
+                                       Text="Cools to the temperature below, over N.I.N.A.'s cooling duration, once the equipment is connected and before the roof opens. If the cooler is already set colder (by a start-up sequence for instance), it is left there, with a warning. Warms over N.I.N.A.'s warming duration (Options -&gt; Equipment -&gt; Camera) once the mount is parked and the roof closed, before the shutdown sequence. The camera stays cold all night, and is not warmed when the autopilot is switched off or stops on a fault." />
+                        </ContentControl.ToolTip>
+                    </ContentControl>
+                </StackPanel>
+                <StackPanel Margin="24,10,0,0" Orientation="Horizontal" IsEnabled="{Binding IsCameraCoolingEnabled}">
+                    <TextBlock Margin="0,0,10,0" VerticalAlignment="Center" Text="Cooling temperature (°C)" />
+                    <TextBox Width="96"
+                             Text="{Binding CameraCoolingTemperature, Mode=TwoWay, StringFormat=F1}"
+                             ToolTip="-50 to 20 °C." />
+                </StackPanel>
+
+                <StackPanel Margin="0,14,0,6" Orientation="Horizontal">
+                    <TextBlock VerticalAlignment="Center" Style="{DynamicResource Ast.Label}" Text="Flat panel" />
+                    <ContentControl Margin="8,0,0,0" VerticalAlignment="Center" Style="{DynamicResource Ast.InfoIcon}">
+                        <ContentControl.ToolTip>
+                            <TextBlock MaxWidth="360"
+                                       TextWrapping="Wrap"
+                                       Text="Leave on 'Ignore' if you do not use a flat panel or you control it during the start-up and shutdown sequence. Before imaging starts the light is switched off and the cover opened, and a cover that cannot be confirmed open can stop the autopilot. 'Always open and close' also closes the cover when the night ends or when the autopilot stops on a fault." />
+                        </ContentControl.ToolTip>
+                    </ContentControl>
+                </StackPanel>
+                <ComboBox DisplayMemberPath="DisplayName"
+                          ItemsSource="{Binding FlatPanelModes}"
+                          SelectedValue="{Binding FlatPanelMode, Mode=TwoWay}"
+                          SelectedValuePath="Value" />
+
+                <StackPanel Margin="0,10,0,0" Orientation="Horizontal" IsEnabled="{Binding IsFlatPanelRoofOptionEnabled}">
+                    <CheckBox IsChecked="{Binding ShouldOperateFlatPanelWithRoofClosed, Mode=TwoWay}" />
+                    <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="Can operate with roof closed" />
+                    <ContentControl Margin="8,0,0,0" VerticalAlignment="Center" Style="{DynamicResource Ast.InfoIcon}">
+                        <ContentControl.ToolTip>
+                            <TextBlock MaxWidth="360"
+                                       TextWrapping="Wrap"
+                                       Text="On: the roof always closes first and the cover after it. Off: the cover only moves under an open roof. It is closed before the roof at dawn, and if bad weather has already closed the roof by then, it is left open with a warning in the log." />
+                        </ContentControl.ToolTip>
+                    </ContentControl>
+                </StackPanel>
+
+                <StackPanel Margin="0,16,0,2" Orientation="Horizontal">
+                    <TextBlock VerticalAlignment="Center" Style="{DynamicResource Ast.Label}" Text="Default devices to connect" />
+                    <ContentControl Margin="8,0,0,0" VerticalAlignment="Center" Style="{DynamicResource Ast.InfoIcon}">
+                        <ContentControl.ToolTip>
+                            <TextBlock MaxWidth="360"
+                                       TextWrapping="Wrap"
+                                       Text="If auto-connect is on, these are the devices the autopilot will connect to. Set to None if not using that device. If a different device is connected when the autopilot starts, that is the device that will be used, not the default." />
+                        </ContentControl.ToolTip>
+                    </ContentControl>
+                </StackPanel>
+                <ItemsControl ItemsSource="{Binding DefaultDevices}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="0,10,0,0">
+                                <TextBlock Margin="0,0,0,6" Style="{DynamicResource Ast.Label}" Text="{Binding Label}" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ComboBox Grid.Column="0"
+                                              Margin="0,0,10,0"
+                                              DisplayMemberPath="DisplayName"
+                                              DropDownOpened="DeviceCombo_DropDownOpened"
+                                              ItemsSource="{Binding Options}"
+                                              SelectedValue="{Binding SelectedId, Mode=TwoWay}"
+                                              SelectedValuePath="Id" />
+                                    <Button Grid.Column="1"
+                                            Command="{Binding RefreshCommand}"
+                                            Content="Refresh"
+                                            Style="{DynamicResource Ast.ButtonNeutral}" />
+                                </Grid>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+            </StackPanel>
+        </HeaderedContentControl>
+
+        <HeaderedContentControl Header="Sequences" Style="{DynamicResource Ast.Section}">
+            <StackPanel>
+
+                <StackPanel Margin="0,0,0,6" Orientation="Horizontal">
+                    <TextBlock VerticalAlignment="Center" Style="{DynamicResource Ast.Label}" Text="Startup sequence (.json)" />
+                    <ContentControl Margin="8,0,0,0" VerticalAlignment="Center" Style="{DynamicResource Ast.InfoIcon}">
+                        <ContentControl.ToolTip>
+                            <TextBlock MaxWidth="360"
+                                       TextWrapping="Wrap"
+                                       Text="A user-defined N.I.N.A. sequence the autopilot runs at the start of each night. Use it for set-up actions specific to your equipment (e.g. configure switch settings, connect equipment, take dusk flats). Runs at the start time set under Schedule, before the autopilot connects the rest of the equipment, cools the camera or opens the roof. If the sequence fails, the autopilot secures the observatory and switches itself off." />
+                        </ContentControl.ToolTip>
+                    </ContentControl>
+                </StackPanel>
+                <Grid Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox Grid.Column="0"
+                             Margin="0,0,10,0"
+                             IsReadOnly="True"
+                             Text="{Binding StartupSequencePath, Mode=OneWay}"
+                             ToolTip="{Binding StartupSequencePath}" />
+                    <Button Grid.Column="1"
+                            Margin="0,0,10,0"
+                            Command="{Binding BrowseStartupSequenceCommand}"
+                            Content="Browse..."
+                            Style="{DynamicResource Ast.ButtonNeutral}" />
+                    <Button Grid.Column="2"
+                            Command="{Binding ClearStartupSequenceCommand}"
+                            Content="Clear"
+                            Style="{DynamicResource Ast.ButtonNeutral}" />
+                </Grid>
+
+                <StackPanel Margin="0,0,0,6" Orientation="Horizontal">
+                    <TextBlock VerticalAlignment="Center" Style="{DynamicResource Ast.Label}" Text="Shutdown sequence (.json)" />
+                    <ContentControl Margin="8,0,0,0" VerticalAlignment="Center" Style="{DynamicResource Ast.InfoIcon}">
+                        <ContentControl.ToolTip>
+                            <TextBlock MaxWidth="360"
+                                       TextWrapping="Wrap"
+                                       Text="A user-defined N.I.N.A. sequence the autopilot runs at the end of each night. Use it for shutdown actions specific to your equipment (e.g. configure switch settings, disconnect equipment, take dawn flats). Runs at the stop time set under Schedule, after the mount is parked, the roof is closed (when roof handling is 'Operate roof automatically') and, with cooling on, the camera is warmed. With auto-connect on, Astraeus disconnects the equipment afterwards; with it off, every device is left connected. Not run when the autopilot is switched off or stops on a fault." />
+                        </ContentControl.ToolTip>
+                    </ContentControl>
+                </StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox Grid.Column="0"
+                             Margin="0,0,10,0"
+                             IsReadOnly="True"
+                             Text="{Binding ShutdownSequencePath, Mode=OneWay}"
+                             ToolTip="{Binding ShutdownSequencePath}" />
+                    <Button Grid.Column="1"
+                            Margin="0,0,10,0"
+                            Command="{Binding BrowseShutdownSequenceCommand}"
+                            Content="Browse..."
+                            Style="{DynamicResource Ast.ButtonNeutral}" />
+                    <Button Grid.Column="2"
+                            Command="{Binding ClearShutdownSequenceCommand}"
+                            Content="Clear"
+                            Style="{DynamicResource Ast.ButtonNeutral}" />
+                </Grid>
+
+            </StackPanel>
+        </HeaderedContentControl>
+
+        <HeaderedContentControl Header="Autofocus" Style="{DynamicResource Ast.Section}">
+            <StackPanel>
+
+                <StackPanel Orientation="Horizontal">
+                    <CheckBox IsChecked="{Binding IsAutofocusEnabled, Mode=TwoWay}" />
+                    <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="Enable autofocus" />
+                </StackPanel>
+
+                <Border Margin="0,10,0,0"
+                        Padding="14"
+                        Background="{DynamicResource Ast.BgInset}"
+                        BorderBrush="{DynamicResource Ast.Ink}"
+                        BorderThickness="2"
+                        CornerRadius="10"
+                        IsEnabled="{Binding IsAutofocusEnabled}">
+                    <StackPanel>
+
+                        <StackPanel Orientation="Horizontal">
+                            <CheckBox IsChecked="{Binding IsSmartAutofocusEnabled, Mode=TwoWay}" />
+                            <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="Smart Autofocus (the server decides when to focus and positions the focuser; replaces the triggers below)" />
+                        </StackPanel>
+
+                        <!--  The cadence triggers are stored but ignored while Smart Autofocus is on.  -->
+                        <StackPanel Margin="0,10,0,0" IsEnabled="{Binding IsCadenceTriggersEnabled}">
+
+                            <StackPanel Orientation="Horizontal">
+                                <CheckBox IsChecked="{Binding ShouldAutofocusOnTemperatureChange, Mode=TwoWay}" />
+                                <TextBlock Margin="12,0,10,0" VerticalAlignment="Center" Text="On temperature change (°C)" />
+                                <TextBox Width="96"
+                                         IsEnabled="{Binding ShouldAutofocusOnTemperatureChange}"
+                                         Text="{Binding AutofocusTemperatureThreshold, Mode=TwoWay, StringFormat=F1}" />
+                            </StackPanel>
+
+                            <StackPanel Margin="0,10,0,0" Orientation="Horizontal">
+                                <CheckBox IsChecked="{Binding ShouldAutofocusOnFilterChange, Mode=TwoWay}" />
+                                <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="On filter change" />
+                            </StackPanel>
+
+                            <StackPanel Margin="0,10,0,0" Orientation="Horizontal">
+                                <CheckBox IsChecked="{Binding ShouldAutofocusOnTimeInterval, Mode=TwoWay}" />
+                                <TextBlock Margin="12,0,10,0" VerticalAlignment="Center" Text="Every (minutes)" />
+                                <TextBox Width="96"
+                                         IsEnabled="{Binding ShouldAutofocusOnTimeInterval}"
+                                         Text="{Binding AutofocusIntervalMinutes, Mode=TwoWay}" />
+                            </StackPanel>
+
+                        </StackPanel>
+
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </HeaderedContentControl>
+
+        <HeaderedContentControl Header="Mount limits" Style="{DynamicResource Ast.Section}">
+            <StackPanel>
+
+                <StackPanel Orientation="Horizontal">
+                    <CheckBox IsChecked="{Binding IsMountLimitEnabled, Mode=TwoWay}" />
+                    <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="Enforce mount pointing / tracking limits" />
+                </StackPanel>
+
+                <Border Margin="0,10,0,0"
+                        Padding="14"
+                        Background="{DynamicResource Ast.BgInset}"
+                        BorderBrush="{DynamicResource Ast.Ink}"
+                        BorderThickness="2"
+                        CornerRadius="10"
+                        IsEnabled="{Binding IsMountLimitEnabled}">
+                    <StackPanel>
+
+                        <StackPanel Orientation="Horizontal">
+                            <CheckBox IsChecked="{Binding IsAltitudeLimitEnabled, Mode=TwoWay}" />
+                            <TextBlock Margin="12,0,10,0" VerticalAlignment="Center" Text="Minimum altitude (°)" />
+                            <TextBox Width="96"
+                                     IsEnabled="{Binding IsAltitudeLimitEnabled}"
+                                     Text="{Binding MinAltitudeDegrees, Mode=TwoWay, StringFormat=F1}" />
+                        </StackPanel>
+
+                        <StackPanel Margin="0,10,0,0" Orientation="Horizontal">
+                            <CheckBox IsChecked="{Binding IsCustomHorizonLimitEnabled, Mode=TwoWay}" />
+                            <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="Use NINA custom horizon (from profile)" />
+                        </StackPanel>
+
+                        <!--  The meridian limit itself is N.I.N.A.'s Meridian Flip settings.  -->
+                        <StackPanel Margin="0,10,0,0" Orientation="Horizontal">
+                            <CheckBox IsChecked="{Binding IsMeridianFlipEnabled, Mode=TwoWay}" />
+                            <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="Enable meridian flips" />
+                            <ContentControl Margin="8,0,0,0" VerticalAlignment="Center" Style="{DynamicResource Ast.InfoIcon}">
+                                <ContentControl.ToolTip> 
+                                    <TextBlock MaxWidth="360"
+                                               TextWrapping="Wrap"
+                                               Text="German equatorial mounts only. The meridian limit is N.I.N.A.'s own, set in Options &gt; Imaging &gt; Meridian Flip: Maximum minutes after meridian (or Pause before meridian, when set) is the limit, and Minutes after meridian is the earliest a flip happens. Needs a mount that reports its side of pier. Per-project opt-out is available when creating a new project on the web" />
+                                </ContentControl.ToolTip>
+                            </ContentControl>
+                        </StackPanel>
+
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </HeaderedContentControl>
+
+        <!--  Always applies, unlike the mount limits above.  -->
+        <HeaderedContentControl Header="Re-centre tolerance" Style="{DynamicResource Ast.Section}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Margin="0,0,10,0" VerticalAlignment="Center" Text="Re-centre if off target by more than (arcmin)" />
+                <TextBox Width="96" Text="{Binding RecenterToleranceArcmin, Mode=TwoWay, StringFormat=F1}" />
+                <ContentControl Margin="12,0,0,0" VerticalAlignment="Center" Style="{DynamicResource Ast.InfoIcon}">
+                    <ContentControl.ToolTip>
+                        <TextBlock MaxWidth="360"
+                                   TextWrapping="Wrap"
+                                   Text="How far off target the mount or a frame's plate solve may be before the autopilot slews and plate solves again. Keep it above N.I.N.A.'s pointing tolerance (Options &gt; Plate Solving), or every frame re-centres." />
+                    </ContentControl.ToolTip>
+                </ContentControl>
+            </StackPanel>
+        </HeaderedContentControl>
+
+        <HeaderedContentControl Header="Rotator" Style="{DynamicResource Ast.Section}">
+            <StackPanel>
+
+                <StackPanel Margin="0,0,0,6" Orientation="Horizontal">
+                    <TextBlock VerticalAlignment="Center"
+                               Style="{DynamicResource Ast.Label}"
+                               Text="When the target specifies no position angle" />
+                    <ContentControl Margin="8,0,0,0" VerticalAlignment="Center" Style="{DynamicResource Ast.InfoIcon}">
+                        <ContentControl.ToolTip>
+                            <TextBlock MaxWidth="360"
+                                       TextWrapping="Wrap"
+                                       Text="Only applies when a rotator is connected. Sky position angle needs a plate solve to establish the rotator's sky offset; mechanical angle does not." />
+                        </ContentControl.ToolTip>
+                    </ContentControl>
+                </StackPanel>
+                <ComboBox DisplayMemberPath="DisplayName"
+                          ItemsSource="{Binding RotatorFallbackModes}"
+                          SelectedValue="{Binding RotatorFallbackMode, Mode=TwoWay}"
+                          SelectedValuePath="Value" />
+
+                <StackPanel Margin="0,10,0,0" Orientation="Horizontal">
+                    <TextBlock Margin="0,0,10,0" VerticalAlignment="Center" Text="Angle (°)" />
+                    <TextBox Width="96"
+                             IsEnabled="{Binding IsRotatorAngleEnabled}"
+                             Text="{Binding RotatorFallbackAngle, Mode=TwoWay, StringFormat=F2}" />
+                </StackPanel>
+
+            </StackPanel>
+        </HeaderedContentControl>
+
+        <HeaderedContentControl Header="Cloud upload" Style="{DynamicResource Ast.Section}">
+            <StackPanel Orientation="Horizontal">
+                <CheckBox IsChecked="{Binding IsCloudUploadEnabled, Mode=TwoWay}" />
+                <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="Upload captured frames to the cloud" />
+                <ContentControl Margin="8,0,0,0" VerticalAlignment="Center" Style="{DynamicResource Ast.InfoIcon}">
+                    <ContentControl.ToolTip>
+                        <TextBlock MaxWidth="360"
+                                   TextWrapping="Wrap"
+                                   Text="Applies to Autopilot and dashboard captures alike. When off, nothing is uploaded: full-resolution frames and their previews stay on this machine. The live preview still reaches the dashboard and control hub while you are watching." />
+                    </ContentControl.ToolTip>
+                </ContentControl>
+            </StackPanel>
+        </HeaderedContentControl>
+
+    </StackPanel>
+</UserControl>

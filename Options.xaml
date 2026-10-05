@@ -1,0 +1,18 @@
+<ResourceDictionary
+    x:Class="CosmicVaults.NINA.Astraeus.Options"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="clr-namespace:CosmicVaults.NINA.Astraeus.Controls">
+
+    <!--
+        N.I.N.A. finds the options page by this key and merges this dictionary into
+        Application.Current.Resources. Nothing keyless can live here, since a keyless style would
+        restyle the whole of N.I.N.A.
+
+        The page is Controls/OptionsPageView, which merges the theme itself. A theme swapped in
+        DataTemplate.Resources notifies nothing. See the note on that view.
+    -->
+    <DataTemplate x:Key="Astraeus_Options">
+        <local:OptionsPageView />
+    </DataTemplate>
+</ResourceDictionary>

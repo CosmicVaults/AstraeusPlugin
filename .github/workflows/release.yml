@@ -1,0 +1,156 @@
+# Builds a release from a version tag: the N.I.N.A. plugin zip and its manifest, and the setup exe
+# for the download page, all from the same staged files and attached to one GitHub Release.
+#
+# The tag is the full four-part version (e.g. 1.0.1.278) and becomes the DLL's file version, so the
+# DLL, the zip, the installer and the manifest all carry it. Its first three parts must match
+# AstraeusReleaseVersion in Astraeus.csproj, and CHANGELOG.md must have a section for them.
+#
+# Never rebuild a tag that has been submitted to N.I.N.A.: the manifest holds the zip's checksum.
+# Fix forward with a new tag. Submitting is a separate, manual workflow (submit-to-nina.yml).
+#
+# Every release talks to the production server. One optional repository variable
+# (Settings > Secrets and variables > Actions > Variables):
+#   RELEASE_CHANNEL   beta (default) or release. Beta marks the manifest for N.I.N.A.'s beta
+#                     channel and the GitHub Release as a pre-release.
+name: Release
+
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+env:
+  DLL_NAME: CosmicVaults.NINA.Astraeus
+  # isbeorn/nina.plugin.manifests at the commit our use of its tools was checked against. Move it on
+  # deliberately, after reading what changed in tools/CreateManifest.ps1 and manifest.schema.json.
+  MANIFEST_TOOLS_SHA: f0131eb044653a2a4f97015a9d93e76541cc208f
+
+jobs:
+  release:
+    # The workflow travels with the source into the private development repository too, where it
+    # must never run.
+    if: github.repository == 'CosmicVaults/AstraeusPlugin'
+    runs-on: windows-latest
+    env:
+      VERSION: ${{ github.ref_name }}
+      CHANNEL: ${{ vars.RELEASE_CHANNEL || 'beta' }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out the tag
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Set up Inno Setup
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y }
+          if (-not (Test-Path $iscc)) { throw "Inno Setup is not at $iscc after installing it." }
+
+      - name: Read the release notes from CHANGELOG.md
+        run: |
+          $release = ($env:VERSION -split '\.')[0..2] -join '.'
+          $changelog = Get-Content CHANGELOG.md -Raw
+          $section = [regex]::Match($changelog, "(?ms)^## $([regex]::Escape($release))[ \t]*\r?\n(.*?)(?=^## |\z)")
+          if (-not $section.Success -or -not $section.Groups[1].Value.Trim()) {
+            throw "CHANGELOG.md has no '## $release' section. Add one before tagging $env:VERSION."
+          }
+          $section.Groups[1].Value.Trim() | Out-File release-notes.md -Encoding utf8
+
+      - name: Build the plugin and the setup exe
+        run: |
+          dotnet restore Astraeus.csproj
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          dotnet msbuild Astraeus.csproj -t:Installer -p:Configuration=Release "-p:AstraeusFileVersion=$env:VERSION" -p:AstraeusBackend=production -nologo -v:minimal
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $built = (Get-Item "stage\$env:DLL_NAME.dll").VersionInfo.FileVersion
+          if ($built -ne $env:VERSION) { throw "The staged DLL is version $built, not $env:VERSION." }
+          Get-ChildItem stage -File | Format-Table Name, Length -AutoSize
+          Get-ChildItem dist | Format-Table Name, Length -AutoSize
+
+      - name: Fetch N.I.N.A.'s manifest tools
+        run: |
+          New-Item -ItemType Directory manifest-tools | Out-Null
+          $base = "https://raw.githubusercontent.com/isbeorn/nina.plugin.manifests/$env:MANIFEST_TOOLS_SHA"
+          foreach ($file in 'tools/CreateManifest.ps1', 'manifest.schema.json', 'package.json') {
+            Invoke-WebRequest "$base/$file" -OutFile (Join-Path manifest-tools (Split-Path $file -Leaf))
+          }
+          Push-Location manifest-tools
+          npm install --no-audit --no-fund
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Pop-Location
+
+      - name: Create the zip and the manifest
+        run: |
+          $zip = "$env:DLL_NAME.$env:VERSION.zip"
+          $url = "https://github.com/${{ github.repository }}/releases/download/$env:VERSION/$zip"
+          $arguments = @('-NoProfile', '-File', 'manifest-tools/CreateManifest.ps1',
+                         '-file', "stage/$env:DLL_NAME.dll", '-installerUrl', $url,
+                         '-createArchive', '-includeAll', '-appendVersionToArchive')
+          if ($env:CHANNEL -ne 'release') { $arguments += '-beta' }
+          pwsh @arguments
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          if (-not (Test-Path $zip)) { throw "CreateManifest.ps1 did not write $zip." }
+          Move-Item manifest.json "$env:DLL_NAME.$env:VERSION.manifest.json"
+
+      - name: Check the manifest
+        run: |
+          $env:NODE_PATH = (Resolve-Path manifest-tools/node_modules).Path
+          $manifestFile = "$env:DLL_NAME.$env:VERSION.manifest.json"
+          $manifest = Get-Content $manifestFile -Raw | ConvertFrom-Json
+          $hash = (Get-FileHash "$env:DLL_NAME.$env:VERSION.zip" -Algorithm SHA256).Hash
+          if ($manifest.Installer.Checksum -ne $hash) { throw "The manifest's checksum is not the zip's ($hash)." }
+          node .github/scripts/validate-schema.js manifest-tools/manifest.schema.json $manifestFile
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ./.github/scripts/check-manifest.ps1 -Path $manifestFile -Channel $env:CHANNEL -Version $env:VERSION
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Publish the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Astraeus ${{ github.ref_name }}
+          body_path: release-notes.md
+          prerelease: ${{ (vars.RELEASE_CHANNEL || 'beta') != 'release' }}
+          fail_on_unmatched_files: true
+          files: |
+            ${{ env.DLL_NAME }}.${{ github.ref_name }}.zip
+            ${{ env.DLL_NAME }}.${{ github.ref_name }}.manifest.json
+            dist/Astraeus-Setup-${{ github.ref_name }}.exe
+            dist/Astraeus-Setup-${{ github.ref_name }}.exe.sha256
+
+      - name: Summary
+        run: |
+          $manifestFile = "$env:DLL_NAME.$env:VERSION.manifest.json"
+          $exe = Get-Item "dist/Astraeus-Setup-$env:VERSION.exe"
+          $exeHash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          $exeUrl = "https://github.com/${{ github.repository }}/releases/download/$env:VERSION/$($exe.Name)"
+          @(
+            "## Astraeus $env:VERSION ($env:CHANNEL channel)"
+            ''
+            "Submit it to N.I.N.A. with **Actions > Submit to N.I.N.A. > Run workflow**, version ``$env:VERSION``."
+            ''
+            '### PluginRelease (server admin)'
+            ''
+            '| Field | Value |'
+            '|---|---|'
+            "| Version | ``$env:VERSION`` |"
+            "| Download URL | $exeUrl |"
+            "| SHA-256 | ``$exeHash`` |"
+            "| Size bytes | $($exe.Length) |"
+            '| Minimum NINA version | `3.2.0.9001` |'
+            ''
+            '### Manifest'
+            ''
+            '```json'
+            (Get-Content $manifestFile -Raw).Trim()
+            '```'
+          ) | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append

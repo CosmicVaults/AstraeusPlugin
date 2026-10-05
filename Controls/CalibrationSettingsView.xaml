@@ -1,0 +1,87 @@
+<UserControl x:Class="CosmicVaults.NINA.Astraeus.Controls.CalibrationSettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:themes="clr-namespace:CosmicVaults.NINA.Astraeus.Themes">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <themes:AstraeusTheme />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <StackPanel>
+
+        <ContentControl Margin="0,0,0,20" Style="{DynamicResource Ast.Banner}">
+            <TextBlock Text="Point at a folder of raw dark/bias/flat frames. Astraeus stacks matching frames into masters (classified by FITS IMAGETYP), writes them to the output folder, and uploads the masters."
+                       TextWrapping="Wrap" />
+        </ContentControl>
+
+        <TextBlock Margin="0,0,0,6"
+                   Style="{DynamicResource Ast.Label}"
+                   Text="Raw calibration frames folder (scanned recursively)" />
+        <Grid Margin="0,0,0,18">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox Grid.Column="0"
+                     Margin="0,0,10,0"
+                     IsReadOnly="True"
+                     Text="{Binding ScanFolder, Mode=OneWay}"
+                     ToolTip="{Binding ScanFolder}" />
+            <Button Grid.Column="1"
+                    Margin="0,0,10,0"
+                    Command="{Binding BrowseScanFolderCommand}"
+                    Content="Browse..."
+                    Style="{DynamicResource Ast.ButtonNeutral}" />
+            <Button Grid.Column="2"
+                    Command="{Binding ClearScanFolderCommand}"
+                    Content="Clear"
+                    Style="{DynamicResource Ast.ButtonNeutral}" />
+        </Grid>
+
+        <TextBlock Margin="0,0,0,6"
+                   Style="{DynamicResource Ast.Label}"
+                   Text="Masters output folder (leave blank to write into the scan folder)" />
+        <Grid Margin="0,0,0,20">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox Grid.Column="0"
+                     Margin="0,0,10,0"
+                     IsReadOnly="True"
+                     Text="{Binding MastersOutputFolder, Mode=OneWay}"
+                     ToolTip="{Binding MastersOutputFolder}" />
+            <Button Grid.Column="1"
+                    Margin="0,0,10,0"
+                    Command="{Binding BrowseMastersOutputFolderCommand}"
+                    Content="Browse..."
+                    Style="{DynamicResource Ast.ButtonNeutral}" />
+            <Button Grid.Column="2"
+                    Command="{Binding ClearMastersOutputFolderCommand}"
+                    Content="Clear"
+                    Style="{DynamicResource Ast.ButtonNeutral}" />
+        </Grid>
+
+        <!--  Generate and upload is the card's primary action, so it stays gold.  -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0"
+                    Command="{Binding GenerateAndUploadMastersCommand}"
+                    Content="{Binding GenerateButtonText}" />
+            <TextBlock Grid.Column="1"
+                       Margin="14,0,0,0"
+                       VerticalAlignment="Center"
+                       Style="{DynamicResource Ast.Hint}"
+                       Text="{Binding GenerationStatus}" />
+        </Grid>
+
+    </StackPanel>
+</UserControl>

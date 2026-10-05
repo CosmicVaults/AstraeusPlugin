@@ -1,0 +1,97 @@
+<UserControl
+    x:Class="CosmicVaults.NINA.Astraeus.Controls.OptionsPageView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="clr-namespace:CosmicVaults.NINA.Astraeus.Controls"
+    xmlns:themes="clr-namespace:CosmicVaults.NINA.Astraeus.Themes">
+
+    <!--
+        The options page body. It's a UserControl instead of part of the Astraeus_Options DataTemplate
+        because a DataTemplate's Resources belong to no element. Swapping a dictionary there notifies
+        nobody, so the "Use N.I.N.A. theme" toggle seems to do nothing. A change in UserControl.Resources
+        walks the tree and re-resolves the DynamicResource references below.
+    -->
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <themes:AstraeusTheme />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <!--
+        The page ground. Opaque and brand-coloured under the Astraeus theme, since N.I.N.A.'s background
+        follows the profile colour schema and may be light. Nearly clear under the N.I.N.A. theme. The
+        style holds the rest so one key covers both. The two TextElement properties stay here because an
+        attached property is better set on the element than through a Setter.
+    -->
+    <Border HorizontalAlignment="Stretch"
+            SnapsToDevicePixels="True"
+            Style="{DynamicResource Ast.PageGround}"
+            TextElement.FontFamily="{DynamicResource Ast.Body}"
+            TextElement.Foreground="{DynamicResource Ast.Text}"
+            UseLayoutRounding="True">
+        <StackPanel>
+
+            <!--  ===== Brand band =====  -->
+            <Grid Margin="0,0,0,20">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
+                    <TextBlock Style="{DynamicResource Ast.PageTitle}" Text="Astraeus" />
+                    <TextBlock Margin="0,2,0,0"
+                               Style="{DynamicResource Ast.PageSub}"
+                               Text="Remote observatory control for N.I.N.A." />
+                </StackPanel>
+
+                <!--  Label then toggle, right-aligned, so the band reads inwards from the edge.  -->
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                        <TextBlock Margin="0,0,12,0"
+                                   VerticalAlignment="Center"
+                                   Style="{DynamicResource Ast.Label}"
+                                   Text="Plugin enabled" />
+                        <CheckBox IsChecked="{Binding IsPluginEnabled, Mode=TwoWay}" />
+                    </StackPanel>
+
+                    <StackPanel Margin="0,10,0,0" HorizontalAlignment="Right" Orientation="Horizontal">
+                        <TextBlock Margin="0,0,12,0"
+                                   VerticalAlignment="Center"
+                                   Style="{DynamicResource Ast.Label}"
+                                   Text="Use N.I.N.A. theme" />
+                        <CheckBox IsChecked="{Binding IsNinaThemeEnabled, Mode=TwoWay}" />
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+
+            <Border Height="1" Margin="0,0,0,24" Background="{DynamicResource Ast.Divider}" />
+
+            <!--  ===== Account =====  -->
+            <HeaderedContentControl Header="ACCOUNT" Style="{DynamicResource Ast.Card}">
+                <local:LoginView DataContext="{Binding LoginViewModel}" />
+            </HeaderedContentControl>
+
+            <!--  ===== Autopilot =====  -->
+            <HeaderedContentControl Header="AUTOPILOT" Style="{DynamicResource Ast.Card}">
+                <local:AutopilotSettingsView DataContext="{Binding AutopilotSettingsViewModel}" />
+            </HeaderedContentControl>
+
+            <!--  ===== Calibration masters =====  -->
+            <HeaderedContentControl Header="CALIBRATION MASTERS" Style="{DynamicResource Ast.Card}">
+                <local:CalibrationSettingsView DataContext="{Binding CalibrationSettingsViewModel}" />
+            </HeaderedContentControl>
+
+            <!--  ===== Feed (webcam) =====  -->
+            <!--  Last card, so it drops the bottom margin the Ast.Card style adds.  -->
+            <HeaderedContentControl Margin="0"
+                                    Header="FEED"
+                                    Style="{DynamicResource Ast.Card}">
+                <local:FeedSettingsView DataContext="{Binding FeedSettingsViewModel}" />
+            </HeaderedContentControl>
+
+        </StackPanel>
+    </Border>
+</UserControl>

@@ -1,0 +1,175 @@
+# Submits a release built by release.yml to N.I.N.A.'s plugin repository: adds its manifest to a
+# branch of the CosmicVaults/nina.plugin.manifests fork and opens a pull request on
+# isbeorn/nina.plugin.manifests. Run it from Actions > Submit to N.I.N.A. > Run workflow.
+#
+# A dry run checks everything it can and pushes nothing. A real run also needs this repository to be
+# public, because N.I.N.A.'s own check downloads the release zip and compares its checksum.
+#
+# Needs the secret PAT: a classic token of the CosmicVaults account with the public_repo scope.
+# Fine-grained tokens can't open pull requests on a repository the account isn't a member of.
+name: Submit to N.I.N.A.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The release to submit, by its tag (e.g. 1.0.1.278)
+        required: true
+        type: string
+      dry_run:
+        description: Dry run (check everything, push nothing, open no pull request)
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+env:
+  DLL_NAME: CosmicVaults.NINA.Astraeus
+  UPSTREAM: isbeorn/nina.plugin.manifests
+  FORK: CosmicVaults/nina.plugin.manifests
+  # N.I.N.A.'s folder for the plugin, by the minimum N.I.N.A. version. Must match the manifest's
+  # MinimumApplicationVersion (check-manifest.ps1 checks that at release time).
+  MANIFEST_DIR: manifests/a/Astraeus/3.2.0.9001
+  GIT_NAME: Cosmic Vaults
+  GIT_EMAIL: 336758399+CosmicVaults@users.noreply.github.com
+
+jobs:
+  submit:
+    if: github.repository == 'CosmicVaults/AstraeusPlugin'
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ inputs.version }}
+      IS_DRY_RUN: ${{ inputs.dry_run }}
+    steps:
+      - name: Check out the PR text
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github
+
+      - name: Check the version and the token
+        env:
+          PAT: ${{ secrets.PAT }}
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+            || { echo "::error::'$VERSION' is not a four-part version like 1.0.1.278."; exit 1; }
+          [ -n "$PAT" ] \
+            || { echo "::error::The PAT secret is missing (Settings > Secrets and variables > Actions)."; exit 1; }
+          scopes=$(curl -sfI -H "Authorization: token $PAT" https://api.github.com/user | tr -d '\r' \
+            | sed -n 's/^x-oauth-scopes: //Ip')
+          [[ ",$scopes," == *"public_repo"* || ",$scopes," == *",repo,"* || ",$scopes," == *", repo,"* ]] \
+            || { echo "::error::The PAT secret is not a classic token with the public_repo scope (it has: '$scopes')."; exit 1; }
+          is_fork=$(GH_TOKEN="$PAT" gh api "repos/$FORK" --jq .fork 2>/dev/null || echo missing)
+          [ "$is_fork" = "true" ] \
+            || { echo "::error::$FORK does not exist or is not a fork. Fork $UPSTREAM under CosmicVaults first."; exit 1; }
+
+      - name: Check this repository is public
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          visibility=$(gh api "repos/${{ github.repository }}" --jq .visibility)
+          if [ "$visibility" != "public" ]; then
+            if [ "$IS_DRY_RUN" = "true" ]; then
+              echo "::warning::${{ github.repository }} is $visibility. Make it public before the real run."
+            else
+              echo "::error::${{ github.repository }} is $visibility. N.I.N.A.'s check downloads the release, so make it public first (Settings > General > Danger Zone > Change visibility)."
+              exit 1
+            fi
+          fi
+
+      - name: Download the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$VERSION" --repo "${{ github.repository }}" --dir release \
+            --pattern "$DLL_NAME.$VERSION.zip" --pattern "$DLL_NAME.$VERSION.manifest.json"
+          ls -l release
+
+      - name: Check the manifest against the release
+        run: |
+          manifest="release/$DLL_NAME.$VERSION.manifest.json"
+          zip_url="https://github.com/${{ github.repository }}/releases/download/$VERSION/$DLL_NAME.$VERSION.zip"
+          version=$(jq -r '.Version | "\(.Major).\(.Minor).\(.Patch).\(.Build)"' "$manifest")
+          [ "$version" = "$VERSION" ] || { echo "::error::The manifest is for $version, not $VERSION."; exit 1; }
+          [ "$(jq -r .Installer.URL "$manifest")" = "$zip_url" ] \
+            || { echo "::error::The manifest's installer URL is not $zip_url."; exit 1; }
+          expected=$(jq -r .Installer.Checksum "$manifest" | tr 'A-F' 'a-f')
+          actual=$(sha256sum "release/$DLL_NAME.$VERSION.zip" | cut -d' ' -f1)
+          [ "$expected" = "$actual" ] || { echo "::error::The zip's SHA-256 is $actual, the manifest says $expected."; exit 1; }
+          echo "Channel: $(jq -r '.Channel // "release"' "$manifest")"
+          jq . "$manifest"
+
+      # The links into this repository (images, changelog, the zip) must work, and only do once it is
+      # public. The two off-site ones only warn, since a site's bot protection can refuse a runner.
+      - name: Check the manifest's links
+        run: |
+          manifest="release/$DLL_NAME.$VERSION.manifest.json"
+          failed=0
+          check() {
+            url=$(jq -r "$2 // empty" "$manifest")
+            if curl -sfL -o /dev/null --max-time 60 "$url"; then
+              echo "OK      $2 $url"
+            elif [ "$1" = "required" ]; then
+              echo "FAILED  $2 $url"; failed=1
+            else
+              echo "::warning::$2 $url did not answer from the runner. Check it opens in a browser."
+            fi
+          }
+          for field in .Repository .ChangelogURL .Descriptions.FeaturedImageURL .Descriptions.ScreenshotURL \
+                       .Descriptions.AltScreenshotURL .Installer.URL; do
+            check required "$field"
+          done
+          check optional .Homepage
+          check optional .LicenseURL
+          if [ "$failed" = "1" ]; then
+            if [ "$IS_DRY_RUN" = "true" ]; then
+              echo "::warning::Some links into this repository don't answer yet. They only work once it is public."
+            else
+              echo "::error::Every link into this repository must work before the manifest is submitted."
+              exit 1
+            fi
+          fi
+
+      - name: Add the manifest on a branch of N.I.N.A.'s manifests
+        run: |
+          git clone --quiet --filter=blob:none "https://github.com/$UPSTREAM.git" manifests
+          cd manifests
+          git checkout -b "Astraeus/$VERSION"
+          mkdir -p "$MANIFEST_DIR"
+          cp "../release/$DLL_NAME.$VERSION.manifest.json" "$MANIFEST_DIR/manifest.$VERSION.json"
+          git add "$MANIFEST_DIR/manifest.$VERSION.json"
+          git -c user.name="$GIT_NAME" -c user.email="$GIT_EMAIL" commit --quiet -m "Add manifest for Astraeus $VERSION"
+          git show --stat HEAD
+          npm install --no-audit --no-fund
+
+      - name: Validate (dry run, schema only)
+        if: ${{ inputs.dry_run }}
+        working-directory: manifests
+        run: NODE_PATH="$PWD/node_modules" node ../.github/scripts/validate-schema.js manifest.schema.json "$MANIFEST_DIR/manifest.$VERSION.json"
+
+      - name: Validate (N.I.N.A.'s own check, as its pull request CI runs it)
+        if: ${{ !inputs.dry_run }}
+        working-directory: manifests
+        run: node validate-latest-manifest.js
+
+      - name: Open the pull request
+        if: ${{ !inputs.dry_run }}
+        working-directory: manifests
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+        run: |
+          channel=$(jq -r '.Channel // "release" | ascii_downcase' "$MANIFEST_DIR/manifest.$VERSION.json")
+          sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{CHANNEL}}/$channel/g" ../.github/manifest-pr-body.md > ../pr-body.md
+          git push --quiet "https://x-access-token:$GH_TOKEN@github.com/$FORK.git" "Astraeus/$VERSION"
+          gh pr create --repo "$UPSTREAM" --base main --head "CosmicVaults:Astraeus/$VERSION" \
+            --title "Astraeus $VERSION" --body-file ../pr-body.md
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ "$IS_DRY_RUN" = "true" ]; then
+            echo "Dry run for Astraeus $VERSION finished. Nothing was pushed and no pull request was opened." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Astraeus $VERSION submitted. Follow the pull request at https://github.com/$UPSTREAM/pulls?q=is%3Apr+Astraeus" >> "$GITHUB_STEP_SUMMARY"
+          fi
