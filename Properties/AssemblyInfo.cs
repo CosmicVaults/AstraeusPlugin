@@ -12,8 +12,8 @@ using System.Runtime.Versioning;
 // in Astraeus.csproj. Declaring them here as well would collide (CS0579).
 
 [assembly: AssemblyTitle("Astraeus")]
-[assembly: AssemblyDescription("Astraeus by Cosmic Vaults: remote control, " +
-                               "an autopilot for unattended nights, calibration and image upload.")]
+[assembly: AssemblyDescription("Astraeus Plugin by Cosmic Vaults: Remote Control, Automated " +
+                               "Multi-Night Imaging, Image Cloud Storage, Image Calibration and much more.")]
 [assembly: AssemblyCompany("Cosmic Vaults")]
 [assembly: AssemblyProduct("Astraeus")]
 [assembly: AssemblyCopyright("Copyright © 2025-2026 Cosmic Vaults")]
@@ -32,21 +32,30 @@ using System.Runtime.Versioning;
 [assembly: AssemblyMetadata("ScreenshotURL", "https://raw.githubusercontent.com/CosmicVaults/AstraeusPlugin/main/assets/screenshot.png")]
 [assembly: AssemblyMetadata("AltScreenshotURL", "https://raw.githubusercontent.com/CosmicVaults/AstraeusPlugin/main/assets/screenshot-alt.png")]
 [assembly: AssemblyMetadata("LongDescription",
-    "Astraeus connects N.I.N.A. to the Astraeus dashboard at CosmicVaults.com, so you can watch and run " +
-    "your observatory from a browser, and leave it to image through the night on its own.\n\n" +
-    "- Dashboard: the camera, mount, dome or roof, focuser, filter wheel, rotator, flat panel, guider, " +
-    "safety monitor, weather station and switch hub report their state live, and most can be operated " +
-    "from the browser. N.I.N.A.'s log is shown alongside.\n" +
-    "- Control Hub: find a target, send it to the mount and take frames, with a preview of each one.\n" +
-    "- Autopilot: the server chooses targets from your projects and the plugin runs the night. It waits " +
-    "for dusk, opens the roof, slews, centres, focuses, guides and captures, and secures the observatory " +
-    "at dawn. Unsafe conditions, a closing roof and mount limits stop or secure it.\n" +
-    "- Autofocus on a schedule, on temperature or filter changes, or when the server recommends it.\n" +
-    "- Calibration with masters you generate in N.I.N.A., and background upload of frames to your cloud storage.\n" +
-    "- Email alerts for problems that need you, and an optional webcam feed on the dashboard.\n\n" +
+    "Monitor and control your observatory from any device, anywhere. Astraeus puts your whole N.I.N.A. " +
+    "rig in the browser on your phone, tablet or computer, live, with nothing else to install. Check in " +
+    "from the couch or from the other side of the world, then hand the night to the Autopilot and wake " +
+    "up to the night's frames waiting in your cloud storage.\n\n" +
+    "- Your whole observatory, live: camera, mount, dome or roof, focuser, filter wheel, rotator, flat " +
+    "panel, guider, safety monitor, weather station and switch hub, all updating in real time, and most " +
+    "of them yours to drive with a tap or a click. N.I.N.A.'s log streams alongside, so you always know " +
+    "what's happening.\n" +
+    "- Control Hub: search for any object, preview its field on the sky, send it to the mount and start " +
+    "shooting, with a preview of every frame as it lands.\n" +
+    "- Autopilot: set up your projects and let Astraeus run the night for you, night after night. The " +
+    "server picks what to image next, and the plugin waits for dusk, opens the roof, slews, centres, " +
+    "focuses, guides and captures, then secures everything at dawn. Bad weather, a closing roof or a mount " +
+    "limit, and it stops or makes the observatory safe on its own.\n" +
+    "- Sharp all night: autofocus on a schedule, on temperature or filter changes, or let Smart Autofocus " +
+    "decide when it's needed.\n" +
+    "- Calibrated and backed up: frames are calibrated on your PC with masters you generate in N.I.N.A., " +
+    "and uploaded to your cloud storage in the background.\n" +
+    "- Stay in the loop: an email when something needs you (a critical error, the roof opening or " +
+    "closing, cloud storage filling up), a note when an Autopilot session starts and ends or a project " +
+    "completes, and an optional Nightly Image Summary of everything captured while you slept.\n" +
+    "- See it for yourself: an optional all-sky or observatory webcam, live on the dashboard.\n\n" +
     "A Cosmic Vaults account is required. You sign in from the plugin's options page through your own " +
-    "browser, so the plugin never sees your password. What the plugin sends to the server is listed in " +
-    "the Privacy section of the README.\n\n" +
+    "browser.\n\n" +
     "This is a beta. Please report problems, with your N.I.N.A. log, at " +
     "https://github.com/CosmicVaults/AstraeusPlugin/issues")]
 
