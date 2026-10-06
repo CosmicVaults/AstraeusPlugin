@@ -13,6 +13,7 @@ First public beta, through N.I.N.A.'s plugin manager.
   this version, the plugin says so in N.I.N.A., on the options page and in the log, and stops
   talking to the server instead of failing over and over. A running Autopilot parks the mount,
   closes the roof and switches off.
+- **Roof safety.** The roof can open without a safety monitor when N.I.N.A.'s settings allow it. 
 - **Calibration masters.** Masters generated on this PC are found again after uploading, so frames
   are calibrated with them. Before, every master was skipped as "not generated on this PC". A
   regenerated master replaces the older file. Calibration frames without GAIN/OFFSET headers now

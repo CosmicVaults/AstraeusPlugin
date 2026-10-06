@@ -558,13 +558,21 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 return false;
             }
         }
-
+     
         ///////////// Helpers /////////////
+        
+        // Only a connected monitor that reads unsafe stops a manual open. Without one the observer
+        // decides, unless N.I.N.A. would refuse the open anyway, so the dashboard is told why.
         private string? WhyShutterCannotOpen() {
-            if (_safetyMonitor is not { IsConnected: true }) {
-                return "no safety monitor is connected, so conditions cannot be confirmed safe";
+            if (_safetyMonitor is { IsConnected: true } monitor) {
+                return monitor.IsSafe() ? null : "the safety monitor reports conditions are unsafe";
             }
-            return _safetyMonitor.IsSafe() ? null : "the safety monitor reports conditions are unsafe";
+            bool isRefusedWithoutMonitor = Observatory.Settings.ProfileService.ActiveProfile.DomeSettings
+                .RefuseUnsafeShutterOpenSansSafetyDevice;
+            return isRefusedWithoutMonitor
+                ? "no safety monitor is connected, and \"Refuse unsafe shutter open without safety device\" " +
+                  "is on in Roof Safety"
+                : null;
         }
 
     }
