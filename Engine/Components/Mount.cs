@@ -332,17 +332,18 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         private DateTime? _unparkedAtUtc;
         private bool _wasParked;
         
-        // Whether the mount was parked or still the last time it was connected. One that drops off
-        // while resting can't drive into a limit, so the autopilot's watcher doesn't count it as lost.
-        // Volatile, because the watcher reads it from its own task.
-        private bool _wasRestingWhenLastConnected;
+        // Whether the mount was tracking or slewing the last time it was connected. Only a mount seen
+        // moving can be lost: one that drops off while resting can't drive into a limit, and one never
+        // connected since N.I.N.A. started hasn't been seen moving at all, so neither is counted as
+        // lost. Volatile, because the watcher reads it from its own task.
+        private bool _wasMovingWhenLastConnected;
 
         private void TrackUnpark() {
             TelescopeInfo info = telescopeMediator.GetInfo();
             if (_wasParked && info.Connected && !info.AtPark) _unparkedAtUtc = Observatory.UtcNow;
             if (info.Slewing) _unparkedAtUtc = null;
             _wasParked = info.Connected && info.AtPark;
-            if (info.Connected) Volatile.Write(ref _wasRestingWhenLastConnected, IsRestingReading(info));
+            if (info.Connected) Volatile.Write(ref _wasMovingWhenLastConnected, !IsRestingReading(info));
         }
 
         private bool IsFreshlyUnparked =>
@@ -1035,17 +1036,18 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// <summary>
         /// Why the mount's position can't be judged against the limits right now (not connected, or no
         /// position), or null when it can or limits are off. Also null for a resting mount, including one
-        /// that was resting when it dropped off, since a mount that isn't moving can't drive into a limit.
+        /// that was resting when it dropped off, since a mount that isn't moving can't drive into a limit,
+        /// and for a mount never connected since N.I.N.A. started, which has not been seen moving either.
         /// </summary>
         public string? DescribeUnknownPosition() {
             if (!Observatory.Settings.IsMountLimitEnabled()) return null;
             TelescopeInfo info = telescopeMediator.GetInfo();
             if (!info.Connected) {
-                return Volatile.Read(ref _wasRestingWhenLastConnected) ? null : "the mount is not connected";
+                return Volatile.Read(ref _wasMovingWhenLastConnected) ? "the mount is not connected" : null;
             }
             // Refreshed here too, since LateUpdate can be a minute apart when nobody is watching.
             bool isResting = IsRestingReading(info);
-            Volatile.Write(ref _wasRestingWhenLastConnected, isResting);
+            Volatile.Write(ref _wasMovingWhenLastConnected, !isResting);
             if (isResting || IsPositionReadable(info)) return null;
             return "the mount reports no position";
         }

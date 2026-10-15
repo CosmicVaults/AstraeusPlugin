@@ -22,14 +22,15 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
             Assert.That(nina.Mount.DescribeUnknownPosition(), Is.Null);
         }
 
-        // A mount never seen connected can't be known to be resting, so with limits on it reads as not connected.
+        // A mount never connected since N.I.N.A. started has not been seen moving, so it isn't counted as lost. Reading
+        // it as lost gave a critical alert 30 s after every start where the mount wasn't connected yet.
         [Test]
-        public void AMountNeverSeenConnectedIsUnknownAsNotConnected() {
+        public void AMountNeverSeenConnectedIsNotCountedAsLost() {
             FakeNina nina = new FakeNina();
             nina.Settings.SetIsMountLimitEnabled(true);
             nina.SetMount(isConnected: false);
 
-            Assert.That(nina.Mount.DescribeUnknownPosition(), Is.EqualTo("the mount is not connected"));
+            Assert.That(nina.Mount.DescribeUnknownPosition(), Is.Null);
         }
 
         // A mount that dropped off while parked or still can't drive into a limit, so it isn't counted as lost.

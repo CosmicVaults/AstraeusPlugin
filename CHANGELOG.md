@@ -94,6 +94,10 @@
 - **A slew is judged on arrival.** Outside the Autopilot, the mount limit backstop no longer stops a
   slew part-way on a low reading. The slew's target was checked before it started, and where the
   driver takes the mount on the way is the driver's concern. The mount is judged once the slew ends.
+- **False alarm on N.I.N.A. connect.** No more critical alert 30 seconds after starting N.I.N.A.
+  with the mount not yet connected. The backstop only reports a mount it has seen moving, so a
+  mount never connected since N.I.N.A. started is not counted as lost. A mount that drops off
+  while tracking still gets the alert.
 
 ### Tests
 
