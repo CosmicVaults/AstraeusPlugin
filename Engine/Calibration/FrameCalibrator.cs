@@ -131,7 +131,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Calibration {
             }
         }
 
-        private static void AddCalibrationHeaders(ImageMetaData metadata, CalibrationPlan plan, bool hasFlat,
+        internal static void AddCalibrationHeaders(ImageMetaData metadata, CalibrationPlan plan, bool hasFlat,
             double flatNorm) {
             List<IGenericMetaDataHeader> headers = metadata.GenericHeaders;
             headers.Add(new StringMetaDataHeader("CREATOR", "Astraeus", "Calibrated by Astraeus"));
@@ -151,7 +151,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Calibration {
         private static CalibrationOutcome Skipped(string reason, Stopwatch stopwatch, List<string> warnings)
             => new CalibrationOutcome(null, null, reason, stopwatch.Elapsed.TotalSeconds, warnings);
 
-        private static ushort[] Apply(ushort[] light, ushort[]? bias, ushort[]? dark, ushort[]? flat,
+        internal static ushort[] Apply(ushort[] light, ushort[]? bias, ushort[]? dark, ushort[]? flat,
             double? darkScalingRatio, List<string> warnings, out double flatNorm) {
             int count = light.Length;
             flatNorm = 1.0;
@@ -198,14 +198,14 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Calibration {
             return result;
         }
 
-        private static ushort ClampToUShort(double value) {
+        internal static ushort ClampToUShort(double value) {
             if (value <= 0) return 0;
             if (value >= ushort.MaxValue) return ushort.MaxValue;
             return (ushort)value;
         }
 
         /// <summary>"LIGHT_0001" from LIGHT_0001.fits, LIGHT_0001.xisf or LIGHT_0001.fits.fz.</summary>
-        private static string Stem(string path) {
+        internal static string Stem(string path) {
             string name = Path.GetFileName(path);
             if (name.EndsWith(".fz", StringComparison.OrdinalIgnoreCase)) name = name[..^3];
             return Path.GetFileNameWithoutExtension(name);
@@ -213,7 +213,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Calibration {
 
         // A retried report can leave an earlier output behind. N.I.N.A. would then save beside it under
         // a numbered name, and the upload would pick that up.
-        private static void RemoveStaleOutput(string directory, string stem) {
+        internal static void RemoveStaleOutput(string directory, string stem) {
             try {
                 foreach (string stale in Directory.EnumerateFiles(directory, stem + ".*"))
                     File.Delete(stale);

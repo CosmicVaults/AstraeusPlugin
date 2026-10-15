@@ -44,7 +44,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
                 return AutopilotStateResult.Completed;
             }
             // Every path here has just seen the roof open, so this only bites if it has since stopped
-            // reading open, which the safety watcher will have noticed too.
+            // reading open, which the roof watcher will have noticed too.
             if (!FlatPanelControl.IsOperable(context)) {
                 return Fail(mode, panel.DeviceId, panel.CoverStateName,
                     "the roof does not read open, and the panel is set not to operate with the roof closed");

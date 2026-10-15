@@ -13,7 +13,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
             // A null dome is a misconfiguration. Treat it as not open so we keep waiting and never image
             // without a roof.
             bool isOpen = context.Dome?.IsShutterOpen() ?? false;
-            // From here the safety watcher treats the roof closing again as a surprise.
+            // From here the roof watcher treats the roof closing again as a surprise.
             if (isOpen) context.IsRoofExpectedOpen = true;
             return isOpen;
         }

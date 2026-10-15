@@ -65,6 +65,11 @@ jobs:
           }
           $section.Groups[1].Value.Trim() | Out-File release-notes.md -Encoding utf8
 
+      - name: Run the tests
+        run: |
+          dotnet test tests/Astraeus.Tests/Astraeus.Tests.csproj -p:Configuration=Release "-p:AstraeusFileVersion=$env:VERSION" -p:AstraeusBackend=production -nologo
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
       - name: Build the plugin and the setup exe
         run: |
           dotnet restore Astraeus.csproj

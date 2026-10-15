@@ -50,7 +50,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
             Dictionary<short, IncomingFilter> incomingFilters = new Dictionary<short, IncomingFilter>();
             foreach (JsonElement filterElement in filters.EnumerateArray()) {
-                JsonFieldState positionState = JsonFields.ReadShort(filterElement, "position", out short position);
+                JsonFieldState positionState = JsonFields.ReadShort(filterElement, "position", out short position, min: 0);
                 JsonFieldState nameState = JsonFields.ReadString(filterElement, "name", out string name);
                 JsonFieldState offsetState =
                     JsonFields.ReadRoundedInt(filterElement, "focus_offset", out int focusOffset);

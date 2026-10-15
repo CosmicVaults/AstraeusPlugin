@@ -29,20 +29,29 @@
                           SelectedValue="{Binding OperatingWindow, Mode=TwoWay}"
                           SelectedValuePath="Value" />
 
-                <TextBlock Margin="0,14,0,6" Style="{DynamicResource Ast.Label}" Text="Roof handling" />
+                <StackPanel Margin="0,14,0,6" Orientation="Horizontal">
+                    <TextBlock VerticalAlignment="Center" Style="{DynamicResource Ast.Label}" Text="Roof handling" />
+                    <ContentControl Margin="8,0,0,0" VerticalAlignment="Center" Style="{DynamicResource Ast.InfoIcon}">
+                        <ContentControl.ToolTip>
+                            <TextBlock MaxWidth="360"
+                                       TextWrapping="Wrap"
+                                       Text="'No roof' is for a pier with nothing overhead. The autopilot never connects to, opens, closes or checks a roof or dome, and unparks, slews, images and parks as if the sky were always open. Never choose it if anything can close over the telescope, including a roof you open by hand: use 'Wait for roof to open' instead.&#10;&#10;'Wait for roof to open': something else opens and closes the roof, and the autopilot images only while it reads open.&#10;&#10;'Operate roof automatically': the autopilot opens and closes the roof itself." />
+                        </ContentControl.ToolTip>
+                    </ContentControl>
+                </StackPanel>
                 <ComboBox DisplayMemberPath="DisplayName"
                           ItemsSource="{Binding RoofModes}"
                           SelectedValue="{Binding RoofMode, Mode=TwoWay}"
                           SelectedValuePath="Value" />
 
                 <StackPanel Margin="0,10,0,0" Orientation="Horizontal">
-                    <CheckBox IsChecked="{Binding ShouldParkMountToOpenRoof, Mode=TwoWay}" />
-                    <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="Park mount to open roof" />
+                    <CheckBox IsChecked="{Binding CanMountMoveUnderClosedRoof, Mode=TwoWay}" />
+                    <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Text="Mount can move under closed roof" />
                     <ContentControl Margin="8,0,0,0" VerticalAlignment="Center" Style="{DynamicResource Ast.InfoIcon}">
                         <ContentControl.ToolTip>
                             <TextBlock MaxWidth="360"
                                        TextWrapping="Wrap"
-                                       Text="Only applies when NINA is set to refuse shutter movement with the mount unparked (Dome settings -> 'Refuse open or close if mount is unparked'). Parking to satisfy that rule slews the mount while the roof is still closed. Enable only if your park position is reachable in that state." />
+                                       Text="Turn on only if the mount can reach its park position with the roof closed. When on, the autopilot parks so N.I.N.A. will open the roof, and parks while securing even if the roof is closing or closed. When off, it parks only under a roof that reads open, and otherwise stops the mount where it is and alerts. A roof that closes on its own still needs its own interlock to keep it off an unparked mount." />
                         </ContentControl.ToolTip>
                     </ContentControl>
                 </StackPanel>

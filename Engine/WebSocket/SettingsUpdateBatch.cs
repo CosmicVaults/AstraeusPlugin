@@ -25,26 +25,31 @@ namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket {
             return this;
         }
 
-        public SettingsUpdateBatch Double(string name, Action<double> apply) {
-            JsonFieldState state = JsonFields.ReadDouble(_data, name, out double value);
+        // The numeric readers take a range, passed straight to JsonFields. A value outside it fails the
+        // whole update like a wrong type would.
+        public SettingsUpdateBatch Double(string name, Action<double> apply,
+            double min = double.NegativeInfinity, double max = double.PositiveInfinity) {
+            JsonFieldState state = JsonFields.ReadDouble(_data, name, out double value, min, max);
             Collect(name, state, () => apply(value));
             return this;
         }
 
-        public SettingsUpdateBatch Int(string name, Action<int> apply) {
-            JsonFieldState state = JsonFields.ReadInt(_data, name, out int value);
+        public SettingsUpdateBatch Int(string name, Action<int> apply, int min = int.MinValue, int max = int.MaxValue) {
+            JsonFieldState state = JsonFields.ReadInt(_data, name, out int value, min, max);
             Collect(name, state, () => apply(value));
             return this;
         }
 
-        public SettingsUpdateBatch RoundedInt(string name, Action<int> apply) {
-            JsonFieldState state = JsonFields.ReadRoundedInt(_data, name, out int value);
+        public SettingsUpdateBatch RoundedInt(string name, Action<int> apply,
+            int min = int.MinValue, int max = int.MaxValue) {
+            JsonFieldState state = JsonFields.ReadRoundedInt(_data, name, out int value, min, max);
             Collect(name, state, () => apply(value));
             return this;
         }
 
-        public SettingsUpdateBatch Short(string name, Action<short> apply) {
-            JsonFieldState state = JsonFields.ReadShort(_data, name, out short value);
+        public SettingsUpdateBatch Short(string name, Action<short> apply,
+            short min = short.MinValue, short max = short.MaxValue) {
+            JsonFieldState state = JsonFields.ReadShort(_data, name, out short value, min, max);
             Collect(name, state, () => apply(value));
             return this;
         }

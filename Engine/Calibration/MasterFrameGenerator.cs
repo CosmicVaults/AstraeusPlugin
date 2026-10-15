@@ -198,7 +198,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Calibration {
             return descriptors;
         }
 
-        private static bool IsRawCalibrationFile(string path) {
+        internal static bool IsRawCalibrationFile(string path) {
             if (!SupportedExtensions.Contains(Path.GetExtension(path).ToLowerInvariant())) return false;
             return !Path.GetFileName(path).StartsWith(MasterFilePrefix, StringComparison.OrdinalIgnoreCase);
         }
@@ -250,7 +250,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Calibration {
             }
         }
 
-        private static MasterFrameType? ClassifyFrameType(string? imageType) {
+        internal static MasterFrameType? ClassifyFrameType(string? imageType) {
             if (string.IsNullOrWhiteSpace(imageType)) return null;
             string normalized = imageType.Trim().ToUpperInvariant();
             if (normalized.Contains("BIAS") || normalized == "OFFSET") return MasterFrameType.Bias;
@@ -264,14 +264,14 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Calibration {
 
         ///////////// Grouping /////////////
 
-        private sealed record FrameGroup(
+        internal sealed record FrameGroup(
             MasterFrameType Type,
             MasterFrameDescriptor Representative,
             List<MasterFrameDescriptor> Frames);
 
         // One master per server signature. The key follows the server's uniqueness rule, plus width and
         // height so frames of different sizes never end up in one stack.
-        private List<FrameGroup> BuildGroups(List<MasterFrameDescriptor> descriptors) {
+        internal static List<FrameGroup> BuildGroups(List<MasterFrameDescriptor> descriptors) {
             IEnumerable<IGrouping<string, MasterFrameDescriptor>> framesBySignature = descriptors.GroupBy(GroupKey);
             List<FrameGroup> groups = new List<FrameGroup>();
             foreach (IGrouping<string, MasterFrameDescriptor> signatureFrames in framesBySignature) {
@@ -385,7 +385,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Calibration {
             return (group.Representative, savedPath, buffers.Count);
         }
 
-        private static int MaxFramesWithinMemoryBudget(int width, int height) {
+        internal static int MaxFramesWithinMemoryBudget(int width, int height) {
             long frameBytes = Math.Max(1L, (long)width * height * sizeof(ushort));
             long maxFrames = StackingMemoryBudgetBytes / frameBytes;
             return (int)Math.Clamp(maxFrames, 1L, int.MaxValue);
@@ -404,7 +404,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Calibration {
             }
         }
 
-        private static ushort[] SigmaClipMeanStack(List<ushort[]> frames, int length,
+        internal static ushort[] SigmaClipMeanStack(List<ushort[]> frames, int length,
             CancellationToken cancellationToken) {
             int frameCount = frames.Count;
             ushort[] result = new ushort[length];
@@ -489,7 +489,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Calibration {
             _ => "DARK"
         };
 
-        private static string BuildMasterFileName(FrameGroup group) {
+        internal static string BuildMasterFileName(FrameGroup group) {
             MasterFrameDescriptor representative = group.Representative;
             string binning = $"bin{representative.BinX}x{representative.BinY}";
             string temperature = FormatTemperature(representative);
@@ -522,7 +522,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Calibration {
             return builder.ToString();
         }
 
-        private static string Describe(FrameGroup group) {
+        internal static string Describe(FrameGroup group) {
             MasterFrameDescriptor representative = group.Representative;
             string size = $"{representative.Width}x{representative.Height}";
             string temperature = FormatTemperature(representative);

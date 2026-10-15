@@ -41,7 +41,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         public override string DeviceType { get; } = "camera";
         public override string DisplayName { get; } = "Camera";
         protected override string? RegistrationEndpoint => "cameras";
-        
+
         private FilterWheel? _filterWheel;
         private FitsHeaderPatcher? _fitsHeaderPatcher;
 
@@ -68,6 +68,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         private static readonly TimeSpan SaveTimeout = TimeSpan.FromMinutes(2);
 
         private const int UseProfileGainOrOffset = -1;
+
+        // Bounds for dashboard captures. The camera's own ExposureMax wins when a driver reports one.
+        private const int MaxManualFrames = 999;
+        private const short MaxBinning = 4;
+        private const double MaxManualExposureSeconds = 3600;
 
         /// <summary>
         /// Cancels a whole dashboard run, not just the current frame. An abort between frames has
@@ -113,10 +118,12 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         // Set by the autopilot's thread, read when N.I.N.A. saves a frame on its own.
         private volatile string? _currentProjectName;
         private volatile string? _currentTargetName;
+
         public string? CurrentProjectName {
             get => _currentProjectName;
             set => _currentProjectName = value;
         }
+
         public string? CurrentTargetName {
             get => _currentTargetName;
             set => _currentTargetName = value;
@@ -162,6 +169,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 double secondsToEnd = (LastInfo.ExposureEndTime - DateTime.Now).TotalSeconds;
                 secondsRemaining = Math.Round(Math.Max(0.0, secondsToEnd), 2);
             }
+
             CameraPayload payload = new CameraPayload {
                 DeviceId = DeviceId,
                 Temperature = DevicePayload.CleanValue(LastInfo.Temperature),
@@ -254,16 +262,20 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                     SetDewHeaterCommandAsync(command.Id, command.Payload).ObserveFaults(LogCommandFault);
                     break;
             }
+
             return Task.CompletedTask;
         }
 
         private void StartCaptureCommand(WsCommand command) {
             JsonElement payload = command.Payload;
             if (JsonFields.ReadDouble(payload, "exposureTime", out double exposureTime) == JsonFieldState.Valid &&
-                JsonFields.ReadInt(payload, "count", out int count) == JsonFieldState.Valid &&
+                JsonFields.ReadInt(payload, "count", out int count, min: 1, max: MaxManualFrames) ==
+                JsonFieldState.Valid &&
                 TryOptionalString(payload, "imageType", out string? imageType) &&
-                JsonFields.ReadShort(payload, "binX", out short binX) == JsonFieldState.Valid &&
-                JsonFields.ReadShort(payload, "binY", out short binY) == JsonFieldState.Valid &&
+                JsonFields.ReadShort(payload, "binX", out short binX, min: 1, max: MaxBinning) ==
+                JsonFieldState.Valid &&
+                JsonFields.ReadShort(payload, "binY", out short binY, min: 1, max: MaxBinning) ==
+                JsonFieldState.Valid &&
                 JsonFields.ReadBool(payload, "save", out bool shouldSave) == JsonFieldState.Valid &&
                 TryOptionalInt(payload, "gain", out int gain) &&
                 TryOptionalInt(payload, "offset", out int offset) &&
@@ -277,7 +289,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                                         payload.TryGetProperty("plateSolve", out JsonElement plateSolveProperty) &&
                                         plateSolveProperty.ValueKind == JsonValueKind.True;
                 CaptureCommandAsync(command.Id, exposureTime, count, imageType ?? CaptureSequence.ImageTypes.LIGHT,
-                    binX, binY, shouldSave, shouldCalibrate, gain, offset, readoutMode, shouldPlateSolve)
+                        binX, binY, shouldSave, shouldCalibrate, gain, offset, readoutMode, shouldPlateSolve)
                     .ObserveFaults(LogCommandFault);
             } else {
                 // A silent drop leaves the dashboard waiting on a 5 s timeout with no reason.
@@ -380,6 +392,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 Log("Camera does not support temperature control, skipping cooling.");
                 return false;
             }
+
             AbortCooling();
             double target = targetTemperature ?? cameraMediator.TargetTemp;
             Log($"Cooling camera to {target}°C...");
@@ -397,6 +410,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                     LogWarning($"Camera could not reach {target}°C. It is at {temperature:F1}°C with the cooler " +
                                "still working towards it.");
                 }
+
                 return isAtTarget;
             } catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) {
                 Log("Cooling aborted.");
@@ -411,6 +425,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 Log("Camera does not support temperature control, skipping warming.");
                 return false;
             }
+
             if (!info.CoolerOn) return true;
             AbortCooling();
             Log("Warming camera...");
@@ -429,6 +444,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                         : $"Warming complete. Camera temperature: {temperature:F1}°C, but N.I.N.A. still " +
                           "reports the cooler on.");
                 }
+
                 return isWarmed;
             } catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) {
                 Log("Warming aborted.");
@@ -447,6 +463,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             while (cameraMediator.GetInfo().CoolerOn && DateTime.UtcNow < deadlineUtc) {
                 await Task.Delay(CoolerReadingPollInterval, cancellationToken);
             }
+
             return !cameraMediator.GetInfo().CoolerOn;
         }
 
@@ -458,16 +475,25 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 await BroadcastMessageReceivedAsync(id, false, "Camera not connected");
                 return;
             }
-            if (count < 1 || exposureTime <= 0) {
-                await BroadcastMessageReceivedAsync(id, false, "Invalid exposure time or frame count");
+
+            // Drivers that report no maximum give 0 or infinity, so only a positive finite value binds.
+            CameraInfo cameraInfo = cameraMediator.GetInfo();
+            double exposureMax = cameraInfo.ExposureMax is > 0 and < double.PositiveInfinity
+                ? cameraInfo.ExposureMax
+                : MaxManualExposureSeconds;
+            if (count < 1 || exposureTime <= 0 || exposureTime > exposureMax) {
+                await BroadcastMessageReceivedAsync(id, false,
+                    $"Exposure must be above 0 and at most {exposureMax:0} s, and the count at least 1");
                 return;
             }
+
             // A capture started over the autopilot's would cancel the frame it is taking.
             if (IsAutopilotRunning) {
                 await BroadcastMessageReceivedAsync(id, false,
                     "The autopilot is running; switch it off to capture by hand");
                 return;
             }
+
             // Refused, not ignored, since a frame on the wrong mode never matches its masters.
             short? readoutIndex = null;
             if (readoutMode != null) {
@@ -476,8 +502,10 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                     await BroadcastMessageReceivedAsync(id, false, $"Camera has no readout mode \"{readoutMode}\"");
                     return;
                 }
+
                 readoutIndex = (short)index;
             }
+
             Observatory.TryGetComponent<Mount>(out Mount? mount);
             if (mount?.PlanManualExposure(TimeSpan.FromSeconds(exposureTime)) is
                 { Action: ManualExposureAction.Refuse, Reason: var refusal }) {
@@ -485,6 +513,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 await BroadcastMessageReceivedAsync(id, false, refusal);
                 return;
             }
+
             if (Interlocked.Exchange(ref _manualRunActive, 1) == 1) {
                 await BroadcastMessageReceivedAsync(id, false, "A capture is already running");
                 return;
@@ -516,6 +545,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                     if (!await CaptureManualFrameAsync(request, frame, count, shouldCalibrate, runToken)) break;
                     completed++;
                 }
+
                 Log($"Manual capture finished: {completed}/{count} frame(s).");
             } catch (OperationCanceledException) {
                 string? stopReason = Interlocked.Exchange(ref _stopReason, null);
@@ -560,6 +590,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                     Log($"Meridian flip done ({outcome.Before} -> {outcome.After}); taking frame {index}/{count}.");
                     return true;
                 }
+
                 failReason = $"Meridian flip failed: {outcome.FailReason}";
             }
 
@@ -714,6 +745,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                         await Task.Delay(SnapshotMinInterval, ComponentToken);
                         continue;
                     }
+
                     Volatile.Write(ref _snapshotRelayRunning, 0);
                     // A frame that arrived between the exchange and the release saw the loop running
                     // and didn't start another, so pick it up here.
@@ -778,11 +810,12 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                     } else {
                         LogWarning($"Calibration of {fileName} failed: {outcome.Error} The raw frame stands.");
                     }
+
                     pending = pending with {
-                        CalibratedFilePath = outcome.OutputPath,
-                        Provenance = CalibrationProvenance.From(plan, outcome),
+                        CalibratedFilePath = outcome.OutputPath, Provenance = CalibrationProvenance.From(plan, outcome),
                     };
                 }
+
                 if (!shouldUpload) return;
 
                 // Check storage before the transfer, as the autopilot does. Nothing here can pause the
@@ -848,12 +881,21 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 // awaited, so a slow uplink can't hold up the autopilot. Not gated on viewers either,
                 // since the JPEG exists for R2 anyway and it's one per exposure.
                 if (result.IsSuccess)
-                    _ = SendPreviewAsync(ImagePreviewPayload.FromResult(result, PreviewSource.Autopilot, isSaved: true));
+                    _ = SendPreviewAsync(ImagePreviewPayload.FromResult(result, PreviewSource.Autopilot,
+                        isSaved: true));
 
                 return result;
+            } catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) {
+                // Something other than the caller cancelled the frame.
+                LogWarning("Capture was aborted outside the autopilot.");
+                return new CaptureResult {
+                    IsSuccess = false, FailReason = "the exposure was aborted outside the autopilot"
+                };
+
             } catch (OperationCanceledException) {
                 throw;
-            } catch (Exception ex) {
+            }
+            catch (Exception ex) {
                 LogError($"Capture failed: {ex.Message}");
                 return new CaptureResult { IsSuccess = false, FailReason = ex.Message };
             } finally {
@@ -918,23 +960,24 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
                 ///////////// Acquisition metadata /////////////
                 // From the frame's own headers, so it matches the masters.
-                CameraName         = AcquisitionMetadata.NullIfBlank(metadata?.Camera.Name),
-                Gain               = AcquisitionMetadata.NormalizeGainOrOffset(metadata?.Camera.Gain),
-                Offset             = AcquisitionMetadata.NormalizeGainOrOffset(metadata?.Camera.Offset),
-                ReadoutMode        = AcquisitionMetadata.NullIfBlank(metadata?.Camera.ReadoutModeName),
-                TemperatureC       = AcquisitionMetadata.MatchingTemperature(
-                                         metadata?.Camera.Temperature ?? double.NaN, metadata?.Camera.SetPoint ?? double.NaN),
+                CameraName = AcquisitionMetadata.NullIfBlank(metadata?.Camera.Name),
+                Gain = AcquisitionMetadata.NormalizeGainOrOffset(metadata?.Camera.Gain),
+                Offset = AcquisitionMetadata.NormalizeGainOrOffset(metadata?.Camera.Offset),
+                ReadoutMode = AcquisitionMetadata.NullIfBlank(metadata?.Camera.ReadoutModeName),
+                TemperatureC = AcquisitionMetadata.MatchingTemperature(
+                    metadata?.Camera.Temperature ?? double.NaN, metadata?.Camera.SetPoint ?? double.NaN),
                 SensorTemperatureC = NullIfNaN(metadata?.Camera.Temperature),
-                BinningX           = metadata?.Camera.BinX,
-                BinningY           = metadata?.Camera.BinY,
-                ExposureSeconds    = exposureTimeSeconds?.ToString("0.000", CultureInfo.InvariantCulture),
-                FilterName         = AcquisitionMetadata.NullIfBlank(metadata?.FilterWheel.Filter),
-                ObservedAt         = ResolveObservedAt(metadata, shutterOpenedAtUtc),
+                BinningX = metadata?.Camera.BinX,
+                BinningY = metadata?.Camera.BinY,
+                ExposureSeconds = exposureTimeSeconds?.ToString("0.000", CultureInfo.InvariantCulture),
+                FilterName = AcquisitionMetadata.NullIfBlank(metadata?.FilterWheel.Filter),
+                ObservedAt = ResolveObservedAt(metadata, shutterOpenedAtUtc),
                 // pierUnknown is the metadata default and also what a fork or alt-az reports. Either
                 // way there's nothing to pin to.
-                SideOfPier         = metadata?.Telescope.SideOfPier is PierSide side
-                                     && side is PierSide.pierEast or PierSide.pierWest
-                                        ? side.ToString() : null,
+                SideOfPier = metadata?.Telescope.SideOfPier is PierSide side
+                             && side is PierSide.pierEast or PierSide.pierWest
+                    ? side.ToString()
+                    : null,
             };
         }
 
@@ -962,6 +1005,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 LogWarning("Frames have no DATE-OBS, so the time each exposure was requested is reported as " +
                            "its start instead (slightly early).");
             }
+
             return requested.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture);
         }
 
@@ -1022,6 +1066,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 LogWarning("A capture was still in flight when a new one started, so abandoning the earlier frame.");
                 previous.Abandon();
             }
+
             return capture;
         }
 
@@ -1062,6 +1107,14 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         public void AbortCooling() => AbortOperation(ref _coolingCancellationSource);
 
         private async Task AbortCommandAsync(string? id) {
+            if (IsAutopilotRunning) {
+                // The autopilot's frame is the autopilot's to stop. User should not be able to get here without the server
+                // disabling autopilot first
+                await BroadcastMessageReceivedAsync(id, false,
+                    "The autopilot is running; switch it off to stop its exposure");
+                return;
+            }
+
             await BroadcastMessageReceivedAsync(id, true);
             StopExposure();
             LogWarning("Camera exposure aborted by the user.");
@@ -1073,6 +1126,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 await BroadcastMessageReceivedAsync(id, false, "Malformed setCooler command");
                 return;
             }
+
             if (await RejectUnlessTemperatureControlAsync(id)) return;
             await BroadcastMessageReceivedAsync(id, true);
             try {
@@ -1085,15 +1139,22 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         private async Task SetTemperatureCommandAsync(string? id, JsonElement payload) {
-            if (JsonFields.ReadDouble(payload, "temperature", out double temperatureCelsius) != JsonFieldState.Valid) {
-                await BroadcastMessageReceivedAsync(id, false, "Malformed setTemperature command");
+            // The same bounds the autopilot's cooling setting is clamped to.
+            if (JsonFields.ReadDouble(payload, "temperature", out double temperatureCelsius,
+                    min: AstraeusSettings.MinCameraCoolingTemperature,
+                    max: AstraeusSettings.MaxCameraCoolingTemperature) != JsonFieldState.Valid) {
+                await BroadcastMessageReceivedAsync(id, false,
+                    $"Temperature must be a number between {AstraeusSettings.MinCameraCoolingTemperature:0} and " +
+                    $"{AstraeusSettings.MaxCameraCoolingTemperature:0} °C");
                 return;
             }
+
             if (await RejectUnlessTemperatureControlAsync(id)) return;
             if (!TryGetDeviceViewModel<CameraVM>(out CameraVM? cameraViewModel)) {
                 await BroadcastMessageReceivedAsync(id, false, "Device view model not available");
                 return;
             }
+
             InvokeOnUiThread(() => cameraViewModel.SetTemperature(temperatureCelsius));
             await BroadcastMessageReceivedAsync(id, true);
         }
@@ -1103,14 +1164,17 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 await BroadcastMessageReceivedAsync(id, false, "Malformed setDewHeater command");
                 return;
             }
+
             if (!IsConnected) {
                 await BroadcastMessageReceivedAsync(id, false, "Camera not connected");
                 return;
             }
+
             if (!cameraMediator.GetInfo().HasDewHeater) {
                 await BroadcastMessageReceivedAsync(id, false, "This camera has no dew heater");
                 return;
             }
+
             cameraMediator.SetDewHeater(shouldHeaterBeOn);
             await BroadcastMessageReceivedAsync(id, true);
         }

@@ -14,6 +14,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
     internal sealed class IsMeridianFlipRequired(string name, Context context,
         Func<AutopilotNextResponse?, TimeSpan> window)
         : DecisionState(name) {
+        protected internal override bool ShouldWatchMountLimits => true;
 
         // What was last said, so an unchanged verdict isn't repeated at INFO every frame. The state
         // lives for one autopilot run, which is the lifetime the de-duplication needs.

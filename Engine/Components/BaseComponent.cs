@@ -6,6 +6,7 @@ using System;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using System.Windows;
 
 namespace CosmicVaults.NINA.Astraeus.Engine {
     /// <summary>Shared base for device and service components. DeviceComponent adds the NINA device side.</summary>
@@ -66,16 +67,29 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         protected static string UtcTimestampNow() =>
             DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
 
+        /// <summary>
+        /// Runs action on N.I.N.A.'s UI thread, where its view models and device choosers are bound.
+        /// Server commands arrive on the socket thread.
+        /// </summary>
+        protected static void InvokeOnUiThread(Action action) {
+            System.Windows.Threading.Dispatcher? dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher == null || dispatcher.CheckAccess()) {
+                action();
+                return;
+            }
+            dispatcher.Invoke(action);
+        }
+
         protected bool IsAutopilotRunning =>
             Observatory.TryGetComponent<Autopilot.Autopilot>(out Autopilot.Autopilot? autopilot) && autopilot.IsRunning;
 
         /// <summary>
-        /// Rejects a command with a missing or mistyped field, so the dashboard hears why instead of
-        /// waiting out its timeout.
+        /// Rejects a command with a missing, mistyped or out-of-range field, so the dashboard hears why
+        /// instead of waiting out its timeout.
         /// </summary>
         protected Task RejectMalformedCommandAsync(WsCommand command, string fieldName) =>
             BroadcastMessageReceivedAsync(command.Id, false,
-                $"Malformed {command.Action} command: '{fieldName}' is missing or the wrong type");
+                $"Malformed {command.Action} command: '{fieldName}' is missing, the wrong type or out of range");
 
         /// <summary>Mediators expect a non-null IProgress.</summary>
         protected static readonly IProgress<ApplicationStatus> NoProgress = new Progress<ApplicationStatus>(_ => { });

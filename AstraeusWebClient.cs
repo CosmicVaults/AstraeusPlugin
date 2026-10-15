@@ -46,6 +46,10 @@ namespace CosmicVaults.NINA.Astraeus {
         public AstraeusWebClient(Observatory observatory)
             : this(new BearerTokenHandler(), observatory) { }
 
+        /// <summary>For tests: every request goes to serverHandler instead of the network, bearer and all.</summary>
+        internal AstraeusWebClient(Observatory observatory, HttpMessageHandler serverHandler)
+            : this(new BearerTokenHandler(serverHandler), observatory) { }
+
       
         private AstraeusWebClient(BearerTokenHandler handler, Observatory observatory)
             : base(handler) {
@@ -169,7 +173,7 @@ namespace CosmicVaults.NINA.Astraeus {
         }
 
         /// <summary>ACP used -1 for "auto" and 0 for off, so any non-zero number is true.</summary>
-        private static bool? ParseFlag(JToken? token) {
+        internal static bool? ParseFlag(JToken? token) {
             if (token == null || token.Type == JTokenType.Null) return null;
             if (token.Type == JTokenType.Boolean) return (bool)token;
             if (token.Type is JTokenType.Integer or JTokenType.Float) return (double)token != 0;

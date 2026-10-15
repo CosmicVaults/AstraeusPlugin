@@ -27,10 +27,16 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
         ///////////// Watchers this state opts into /////////////
 
         /// <summary>
-        /// Runs this state under the safety watcher. It aborts with Unsafe when conditions turn, or with
-        /// RoofClosed when a roof we're imaging under stops reading open. Only risky states turn it on.
+        /// Runs this state under the safety watcher, which aborts it with Unsafe when conditions turn.
+        /// Only risky states turn it on.
         /// </summary>
         protected internal virtual bool ShouldWatchSafety => false;
+
+        /// <summary>
+        /// Runs this state under the roof watcher, which aborts it when a roof we're imaging under stops
+        /// reading open. On everywhere except the states that deal with the roof themselves.
+        /// </summary>
+        protected internal virtual bool ShouldWatchRoof => true;
 
         /// <summary>
         /// Runs this state under the mount-limit watcher, which aborts it with LimitReached. Only states

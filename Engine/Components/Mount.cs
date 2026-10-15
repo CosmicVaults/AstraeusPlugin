@@ -46,6 +46,9 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// <summary>Cancels an in-flight manual slew, park or home. StopMovement does the physical stop.</summary>
         public void AbortSlew() => AbortOperation(ref _slewCancellationSource);
 
+        protected override bool IsOwnConnectPrompt(System.Windows.Window dialog) =>
+            dialog.Content is TelescopeLatLongSyncVM;
+
         public override WsMessage? GetUpdateMessage() {
             if (LastInfo is null) {
                 return null;
@@ -124,15 +127,18 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         // stopping a breach doesn't then log a note saying the mount is stopped.
         private bool _isReportedRestingOutOfLimits;
 
+        // An unreadable position is never a breach, so it's watched on its own: since when, and whether
+        // it has been reported. Cleared once the position reads again or the mount rests.
+        private DateTime? _unknownPositionSinceUtc;
+        private bool _isReportedUnknownPosition;
+
         /// <summary>
         /// Parked, or still with tracking off. Check IsConnected first. The backstop leaves a resting mount
         /// alone, since stopping is its only remedy and a park position is often below the altitude limit.
         /// </summary>
-        public bool IsResting {
-            get {
-                TelescopeInfo info = telescopeMediator.GetInfo();
-                return info.AtPark || (!info.TrackingEnabled && !info.Slewing);
-            }
+        public bool IsResting => IsRestingReading(telescopeMediator.GetInfo());
+        private static bool IsRestingReading(TelescopeInfo info) {
+            return info.AtPark || (!info.TrackingEnabled && !info.Slewing);
         }
 
         /// <summary>
@@ -157,9 +163,16 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             if (IsFlipping
                 || (Observatory.TryGetComponent<Autopilot.Autopilot>(out Autopilot.Autopilot? autopilot)
                     && autopilot.IsRunning)) {
+                // The autopilot's limit watcher handles an unreadable position while it runs.
+                _unknownPositionSinceUtc = null;
                 return;
             }
 
+            await WatchUnknownPositionAsync();
+            // A slew in progress is judged on arrival, flips included. Its target passed the check that let it
+            // start, and the path a driver takes to get there is the driver's concern, not a mount tracking
+            // into a limit.
+            if (IsSlewing) return;
             if (TryStartBackstopFlip(breach) || breach == null) return;
 
             if (IsResting || IsFreshlyUnparked) {
@@ -177,6 +190,18 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 await ReportOutOfLimitsAsync(breach);
             }
         }
+        
+        /// <summary>
+        /// Returns a string describing if the mount is slewing or tracking.
+        /// used in reporting failed stopped conditions. 
+        /// </summary>
+        /// <returns></returns>
+        private string DescribeMotion() {
+            TelescopeInfo info = telescopeMediator.GetInfo();
+            if (info.Slewing && info.TrackingEnabled) return "is still slewing and tracking";
+            return info.Slewing ? "is still slewing" : "is still tracking";
+        }
+        
 
         private string DescribeRestingBreach(string breach) {
             if (!IsResting) {
@@ -306,16 +331,63 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         private static readonly TimeSpan UnparkGrace = TimeSpan.FromSeconds(60);
         private DateTime? _unparkedAtUtc;
         private bool _wasParked;
+        
+        // Whether the mount was parked or still the last time it was connected. One that drops off
+        // while resting can't drive into a limit, so the autopilot's watcher doesn't count it as lost.
+        // Volatile, because the watcher reads it from its own task.
+        private bool _wasRestingWhenLastConnected;
 
         private void TrackUnpark() {
             TelescopeInfo info = telescopeMediator.GetInfo();
-            if (_wasParked && info.Connected && !info.AtPark) _unparkedAtUtc = DateTime.UtcNow;
+            if (_wasParked && info.Connected && !info.AtPark) _unparkedAtUtc = Observatory.UtcNow;
             if (info.Slewing) _unparkedAtUtc = null;
             _wasParked = info.Connected && info.AtPark;
+            if (info.Connected) Volatile.Write(ref _wasRestingWhenLastConnected, IsRestingReading(info));
         }
 
         private bool IsFreshlyUnparked =>
-            _unparkedAtUtc is DateTime unparkedAt && DateTime.UtcNow - unparkedAt < UnparkGrace;
+            _unparkedAtUtc is DateTime unparkedAt && Observatory.UtcNow - unparkedAt < UnparkGrace;
+
+        /// <summary>
+        /// A mount last seen moving whose position stays unreadable for as long as the autopilot's watcher
+        /// allows can't be held to its limits, so it gets a stop and an alert, once. A disconnected mount
+        /// can't be told to stop, so it only gets the alert.
+        /// </summary>
+        private async Task WatchUnknownPositionAsync() {
+            if (DescribeUnknownPosition() is not string unknown) {
+                _unknownPositionSinceUtc = null;
+                _isReportedUnknownPosition = false;
+                return;
+            }
+            _unknownPositionSinceUtc ??= Observatory.UtcNow;
+            TimeSpan grace = TimeSpan.FromSeconds(Autopilot.Context.WatcherBlindGraceSeconds);
+            if (_isReportedUnknownPosition || Observatory.UtcNow - _unknownPositionSinceUtc < grace) return;
+            _isReportedUnknownPosition = true;
+
+            bool isConnected = telescopeMediator.GetInfo().Connected;
+            bool hasStopped = false;
+            if (isConnected) {
+                try {
+                    hasStopped = await StopMovementAsync();
+                } catch (Exception ex) {
+                    LogWarning($"Stopping the mount with its position unknown failed: {ex.Message}");
+                }
+                StopGuidingForMoveAsync(ComponentToken).ObserveFaults(exception =>
+                    LogWarning($"Stopping guiding with the position unknown failed: {exception.Message}"));
+            }
+            string tracking = !isConnected ? "could not be stopped, as the mount is not connected"
+                : hasStopped ? "stopped" : "could not be stopped";
+            // The server keys its alert cooldown on this first line, so the reason goes in the details.
+            const string headline = "Mount position unknown outside the autopilot.";
+            LogError($"{headline} It has been unreadable for {grace.TotalSeconds:F0} s ({unknown}), so its " +
+                     $"limits can't be enforced. Tracking {tracking}.");
+            Observatory.ReportEvent(NotificationKind.CriticalError, headline, new {
+                reason = unknown,
+                duration = $"{grace.TotalSeconds:F0} s",
+                tracking,
+                device = telescopeMediator.GetInfo().Name ?? DisplayName,
+            }, Guid.NewGuid().ToString("N"));
+        }
 
         /// <summary>
         /// Stops tracking and guiding and tells the observer. It never parks or closes the roof, since
@@ -365,12 +437,14 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                     SetTrackingCommandAsync(command.Id, trackingMode).ObserveFaults(LogCommandFault);
                     break;
                 case "slew":
-                    if (JsonFields.ReadDouble(command.Payload, "ra", out double rightAscension)
+                    // RA arrives in hours, see SlewCommandAsync.
+                    if (JsonFields.ReadDouble(command.Payload, "ra", out double rightAscension, min: 0, max: 24)
                         != JsonFieldState.Valid) {
                         RejectMalformedCommandAsync(command, "ra").ObserveFaults(LogCommandFault);
                         break;
                     }
-                    if (JsonFields.ReadDouble(command.Payload, "dec", out double declination) != JsonFieldState.Valid) {
+                    if (JsonFields.ReadDouble(command.Payload, "dec", out double declination, min: -90, max: 90)
+                        != JsonFieldState.Valid) {
                         RejectMalformedCommandAsync(command, "dec").ObserveFaults(LogCommandFault);
                         break;
                     }
@@ -390,6 +464,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         public bool IsParked => telescopeMediator.GetInfo().AtPark;
 
         public bool IsTracking => telescopeMediator.GetInfo() is { Connected: true, TrackingEnabled: true };
+
+        public bool IsSlewing => telescopeMediator.GetInfo() is { Connected: true, Slewing: true };
+        
+        private bool IsStopped =>
+            !telescopeMediator.GetInfo().Slewing && (!telescopeMediator.GetInfo().CanSetTrackingEnabled || !telescopeMediator.GetInfo().TrackingEnabled);
 
         /// <summary>
         /// pierUnknown when disconnected or not reported. Geometry alone can't tell a mount past the
@@ -461,7 +540,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 return false;
             }
             // Checked here so the limits hold whoever is calling.
-            if (DescribeLimitBreach(coordinates, DateTime.Now) is string breach) {
+            if (DescribeLimitBreach(coordinates, Observatory.LocalNow) is string breach) {
                 LogWarning($"Can't slew to {coordinates.RAString}, {coordinates.DecString}: {breach}");
                 return false;
             }
@@ -546,11 +625,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         public async Task<bool> WaitForPierSideAsync(PierSide wanted, TimeSpan timeout,
             CancellationToken cancellationToken = default) {
             if (wanted is PierSide.pierUnknown) return false;
-            DateTime deadline = DateTime.UtcNow + timeout;
+            DateTime deadline = Observatory.UtcNow + timeout;
             while (true) {
                 if (SideOfPier == wanted) return true;
-                if (DateTime.UtcNow >= deadline) return false;
-                await Task.Delay(PierSidePollInterval, cancellationToken);
+                if (Observatory.UtcNow >= deadline) return false;
+                await Task.Delay(PierSidePollInterval, Observatory.Clock, cancellationToken);
             }
         }
 
@@ -671,36 +750,41 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             Log($"Tracking set to {mode}.");
             return true;
         }
-
-        /// <summary>
-        /// Stops any slew and turns tracking off, then reads the driver straight back, so one that clears
-        /// Slewing a poll later reads as still moving. Callers that can wait should use StopMovementAsync.
-        /// </summary>
-        public bool StopMovement() {
-            if (!IssueStop()) return false;
-            bool hasStopped = !telescopeMediator.GetInfo().Slewing;
-            ReportStop(hasStopped);
-            return hasStopped;
-        }
-
+     
         // How long a stop gets to show up in the driver before we report it failed.
         private static readonly TimeSpan StopSettle = TimeSpan.FromSeconds(5);
         private static readonly TimeSpan StopPoll = TimeSpan.FromMilliseconds(250);
 
         /// <summary>
         /// StopMovement, but gives the driver time to report the stop and sends one more StopSlew if
-        /// it hasn't. False only when disconnected or still slewing after both.
+        /// it hasn't.
         /// </summary>
         public async Task<bool> StopMovementAsync() {
             if (!IssueStop()) return false;
-            bool hasStopped = await WaitUntilNotSlewingAsync();
+            bool hasStopped = await WaitUntilStoppedAsync();
             if (!hasStopped) {
                 LogWarning("Mount still slewing after StopSlew, so asking again.");
                 IssueStop();
-                hasStopped = await WaitUntilNotSlewingAsync();
+                hasStopped = await WaitUntilStoppedAsync();
             }
             ReportStop(hasStopped);
             return hasStopped;
+        }
+
+        /// <summary>
+        /// Stops a park part-way. Not every driver reports Slewing while it parks, so StopSlew is sent
+        /// regardless. True if stopped or already at park.
+        /// </summary>
+        public async Task<bool> StopParkAsync() {
+            TelescopeInfo info = telescopeMediator.GetInfo();
+            if (!info.Connected) return false;
+            if (info.AtPark) return true;
+            try {
+                telescopeMediator.StopSlew();
+            } catch (Exception ex) {
+                LogWarning($"StopSlew during the park failed: {ex.Message}");
+            }
+            return await StopMovementAsync();
         }
 
         // Both tracking calls are there to be safe.
@@ -715,28 +799,46 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             telescopeMediator.SetTrackingMode(TrackingMode.Stopped);
             return true;
         }
-
-        private async Task<bool> WaitUntilNotSlewingAsync() {
-            DateTime deadline = DateTime.UtcNow + StopSettle;
-            while (telescopeMediator.GetInfo().Slewing) {
-                if (DateTime.UtcNow >= deadline) return false;
-                await Task.Delay(StopPoll);
+        
+        /// <summary>
+        /// Confrims not slewing and not tracking either
+        /// </summary>
+        private async Task<bool> WaitUntilStoppedAsync() {
+            DateTime deadline = Observatory.UtcNow + StopSettle;
+            while (!IsStopped) {
+                if (Observatory.UtcNow >= deadline) return false;
+                await Task.Delay(StopPoll, Observatory.Clock);
             }
             return true;
         }
 
         private void ReportStop(bool hasStopped) {
-            if (hasStopped) Log("Mount movement stopped.");
-            else LogWarning("Mount still slewing after StopSlew");
+            if (hasStopped) {
+                Log("Mount movement and tracking stopped.");
+            } else {
+                LogWarning($"Mount {DescribeMotion()} after two stop requests. Check the mount.");
+            }
         }
 
-        public static TrackingMode ParseTrackingMode(string? trackingType) => trackingType?.ToLowerInvariant() switch {
-            "stopped" => TrackingMode.Stopped,
-            "lunar" => TrackingMode.Lunar,
-            "solar" => TrackingMode.Solar,
-            "king" => TrackingMode.King,
-            _ => TrackingMode.Sidereal
-        };
+        /// <summary>False for a word that isn't a tracking mode. The mode is Stopped then, so a caller that
+        /// ignores the result cannot start the mount tracking by accident.</summary>
+        public static bool TryParseTrackingMode(string? trackingType, out TrackingMode mode) {
+            switch (trackingType?.Trim().ToLowerInvariant()) {
+                case "stopped": mode = TrackingMode.Stopped; return true;
+                case "sidereal": mode = TrackingMode.Sidereal; return true;
+                case "lunar": mode = TrackingMode.Lunar; return true;
+                case "solar": mode = TrackingMode.Solar; return true;
+                case "king": mode = TrackingMode.King; return true;
+                default: mode = TrackingMode.Stopped; return false;
+            }
+        }
+
+        /// <summary>
+        /// For a target the server named, where Sidereal is the right reading of a missing or unknown
+        /// tracking type. The dashboard command uses TryParseTrackingMode and refuses instead.
+        /// </summary>
+        public static TrackingMode ParseTrackingMode(string? trackingType) =>
+            TryParseTrackingMode(trackingType, out TrackingMode mode) ? mode : TrackingMode.Sidereal;
 
         ///////////////////////////////////////////  Pointing / tracking limits  ////////////////////////////////////////////////
         // Optional guards against slewing below the horizon or tracking a German equatorial past the
@@ -747,11 +849,17 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         // trying, and what the mount actually did is read back live.
 
         /// <summary>
+        /// Local sidereal time now, in hours, for a longitude in degrees. N.I.N.A.'s own, which calls native
+        /// NOVAS. A test puts a fixed value here so the meridian maths runs without it.
+        /// </summary>
+        internal Func<double, double> LocalSiderealTimeNow { get; set; } = AstroUtil.GetLocalSiderealTimeNow;
+
+        /// <summary>
         /// Signed hours past the meridian for the target at a time (default now). West is positive,
         /// wrapped to (-12, +12]. Public because the flip logic needs the number, not just a verdict.
         /// </summary>
         public double HoursPastMeridianFor(Coordinates target, DateTime? at = null)
-            => PredictAt(target, at ?? DateTime.Now).hoursPastMeridian;
+            => PredictAt(target, at ?? Observatory.LocalNow).hoursPastMeridian;
 
         /// <summary>
         /// Clock seconds until the target's hour angle reaches hoursPastMeridian. Negative if it's already past.
@@ -788,7 +896,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
         // The hour angle each side breaches at. pierWest (or an unknown side) breaches west of the
         // limit, and pierEast east of its mirror. The mirror never goes west of the meridian.
-        private double MeridianThresholdHours(PierSide side)
+        internal double MeridianThresholdHours(PierSide side)
             => side == PierSide.pierEast ? -Math.Max(MeridianLimitHours, 0.0) : MeridianLimitHours;
 
         /// <summary>
@@ -807,7 +915,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         public bool WouldBreachMeridianOnCurrentSide(Coordinates target, TimeSpan window) {
             if (!Observatory.Settings.IsMountLimitEnabled() || !IsGermanEquatorial) return false;
             PierSide side = SideOfPier;
-            DateTime start = DateTime.Now;
+            DateTime start = Observatory.LocalNow;
             DateTime end = start + (window > TimeSpan.Zero ? window : TimeSpan.Zero);
             return DescribeMeridianBreach(HoursPastMeridianFor(target, start), side, "now") != null
                 || DescribeMeridianBreach(HoursPastMeridianFor(target, end), side, "shortly") != null;
@@ -818,16 +926,16 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// The real enforcement is DescribeCurrentPositionBreach, on the side the mount actually ends up on.
         /// </summary>
         public string? DescribeLimitBreach(Coordinates target, DateTime at, string when = "now",
-            bool shouldIncludeMeridian = true)
-            => DescribeLimitBreach(target, at, PierSideForTracking(target), when, shouldIncludeMeridian);
+            bool shouldIncludeMeridian = true, double marginDegrees = 0)
+            => DescribeLimitBreach(target, at, PierSideForTracking(target), when, shouldIncludeMeridian, marginDegrees);
 
         // The pier side is the slow part to work out and it doesn't change over a look-ahead window,
         // so the sampler works it out once and passes it in.
         private string? DescribeLimitBreach(Coordinates target, DateTime at, PierSide side, string when,
-            bool shouldIncludeMeridian) {
+            bool shouldIncludeMeridian, double marginDegrees) {
             if (!Observatory.Settings.IsMountLimitEnabled()) return null;
             (double altitude, double azimuth, double hoursPastMeridian) = PredictAt(target, at);
-            return DescribeAltitudeBreach(altitude, azimuth, when)
+            return DescribeAltitudeBreach(altitude, azimuth, when, marginDegrees)
                    ?? (shouldIncludeMeridian ? DescribeMeridianBreach(hoursPastMeridian, side, when) : null);
         }
 
@@ -837,7 +945,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         // Whether the result is safe is DescribeCurrentPositionBreach's job.
         private PierSide PierSideForTracking(Coordinates target) {
             if (IsPierSideKnown && IsPointingAt(target, PierSideSameFieldDegrees)) return SideOfPier;
-            double localSiderealTime = AstroUtil.GetLocalSiderealTimeNow(SiteLongitudeDegrees);
+            double localSiderealTime = LocalSiderealTimeNow(SiteLongitudeDegrees);
             return MeridianFlip.ExpectedPierSide(target, Angle.ByHours(localSiderealTime));
         }
 
@@ -849,10 +957,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
         /// <summary>
         /// The first limit the mount would break while tracking the target over the window. Pass
-        /// shouldIncludeMeridian false when the caller has a flip lined up.
+        /// shouldIncludeMeridian false when the caller has a flip lined up, and a marginDegrees to demand
+        /// that much clearance above the altitude floor, since this is a prediction.
         /// </summary>
         public string? DescribeTrackingBreach(Coordinates target, TimeSpan window,
-            bool shouldIncludeMeridian = true, TimeSpan? step = null) {
+            bool shouldIncludeMeridian = true, TimeSpan? step = null, double marginDegrees = 0) {
             if (!Observatory.Settings.IsMountLimitEnabled()) return null;
             TimeSpan sampleStep = step ?? DefaultTrackingSampleStep;
             if (sampleStep <= TimeSpan.Zero) sampleStep = DefaultTrackingSampleStep;
@@ -860,23 +969,36 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             // Once for the whole window. The mount doesn't change sides while tracking, and this is the
             // slow part of each sample.
             PierSide side = PierSideForTracking(target);
-            DateTime start = DateTime.Now;
+            DateTime start = Observatory.LocalNow;
             DateTime end = start + (window > TimeSpan.Zero ? window : TimeSpan.Zero);
             for (DateTime sampleTime = start; sampleTime < end; sampleTime += sampleStep) {
                 if (DescribeLimitBreach(target, sampleTime, side, WhenLabel(sampleTime - start),
-                        shouldIncludeMeridian) is string breach)
+                        shouldIncludeMeridian, marginDegrees) is string breach)
                     return breach;
             }
             // Always test the far end so a violation between the last step and the window end isn't missed.
-            return DescribeLimitBreach(target, end, side, WhenLabel(end - start), shouldIncludeMeridian);
+            return DescribeLimitBreach(target, end, side, WhenLabel(end - start), shouldIncludeMeridian, marginDegrees);
         }
 
-        private static string WhenLabel(TimeSpan ahead)
+        internal static string WhenLabel(TimeSpan ahead)
             => ahead.TotalMinutes >= 0.5 ? $"in {ahead.TotalMinutes:F0} min" : "now";
 
         /// <summary>
-        /// Polled by the autopilot's limit watcher. True when limits are off, or the mount is parked or
-        /// disconnected.
+        /// Whether the mount reports a position at all: coordinates with a finite RA and Dec. Altitude and
+        /// azimuth aren't required, since they're optional in ASCOM and N.I.N.A. reports NaN for a driver
+        /// without them.
+        /// </summary>
+        internal static bool IsPositionReadable(TelescopeInfo info) {
+            return info.Coordinates is { } coordinates
+                   && double.IsFinite(coordinates.RA) && double.IsFinite(coordinates.Dec);
+        }
+
+        /// <summary>
+        /// Polled by the autopilot's limit watcher. True when limits are off, the mount is parked, or its
+        /// position can't be read (disconnected, or no coordinates). Unknown isn't treated as safe: the
+        /// watcher (StateMachine.CheckMountLimits) and the backstop (WatchUnknownPositionAsync) both ask
+        /// DescribeUnknownPosition first, and stop and alert if it lasts 30 s. A single bad poll is no
+        /// breach, or it would end the night.
         /// </summary>
         public bool IsCurrentPositionWithinLimits(bool shouldIncludeMeridian = true)
             => DescribeCurrentPositionBreach(shouldIncludeMeridian) == null;
@@ -891,20 +1013,41 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
         // The live breach on geometry alone, whatever the mount is doing. Only the backstop uses
         // this, to tell a resting breach from a live one. Everything else uses DescribeCurrentPositionBreach.
-        private string? DescribePointingBreach(bool shouldIncludeMeridian) {
+        internal string? DescribePointingBreach(bool shouldIncludeMeridian) {
             if (!Observatory.Settings.IsMountLimitEnabled()) return null;
             TelescopeInfo info = telescopeMediator.GetInfo();
             if (!info.Connected) return null;
-            // A driver that briefly reports no coordinates would give HA = LST, which nearly always
-            // reads as past the limit, and the watcher would park, close the roof and end the night.
-            if (info.Coordinates == null) return null;
+            // No reading isn't a breach, or one bad poll would park, close the roof and end the night. A
+            // reading that stays missing is caught by DescribeUnknownPosition instead.
+            if (!IsPositionReadable(info)) return null;
 
-            string? altitude = DescribeAltitudeBreach(info.Altitude, info.Azimuth, "now");
+            // Only judged when the driver reports altitude and azimuth.
+            string? altitude = double.IsFinite(info.Altitude) && double.IsFinite(info.Azimuth)
+                ? DescribeAltitudeBreach(info.Altitude, info.Azimuth, "now")
+                : null;
             if (altitude != null || !shouldIncludeMeridian) return altitude;
 
-            double localSiderealTime = AstroUtil.GetLocalSiderealTimeNow(SiteLongitudeDegrees);
+            double localSiderealTime = LocalSiderealTimeNow(SiteLongitudeDegrees);
             double hourAngle = AstroUtil.GetHourAngle(localSiderealTime, info.Coordinates.RA); // hours, [0, 24)
             return DescribeMeridianBreach(HoursPastMeridian(hourAngle), SideOfPier, "now");
+        }
+        
+        /// <summary>
+        /// Why the mount's position can't be judged against the limits right now (not connected, or no
+        /// position), or null when it can or limits are off. Also null for a resting mount, including one
+        /// that was resting when it dropped off, since a mount that isn't moving can't drive into a limit.
+        /// </summary>
+        public string? DescribeUnknownPosition() {
+            if (!Observatory.Settings.IsMountLimitEnabled()) return null;
+            TelescopeInfo info = telescopeMediator.GetInfo();
+            if (!info.Connected) {
+                return Volatile.Read(ref _wasRestingWhenLastConnected) ? null : "the mount is not connected";
+            }
+            // Refreshed here too, since LateUpdate can be a minute apart when nobody is watching.
+            bool isResting = IsRestingReading(info);
+            Volatile.Write(ref _wasRestingWhenLastConnected, isResting);
+            if (isResting || IsPositionReadable(info)) return null;
+            return "the mount reports no position";
         }
 
         public bool IsPointingAt(Coordinates target, double toleranceDegrees) {
@@ -963,17 +1106,28 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return horizon?.GetAltitude(NormalizeAzimuth(azimuthDegrees)) ?? double.NegativeInfinity;
         }
 
-        // The two hard floors. Nothing waives them and no flip fixes them.
-        private string? DescribeAltitudeBreach(double altitudeDegrees, double azimuthDegrees, string when) {
+        // The two hard floors. Nothing waives them and no flip fixes them. A prediction passes a margin,
+        // since the mount's own reading differs from it by refraction and pointing error. The live check
+        // passes none. The altitude carries two decimals so a reading just under the floor doesn't print
+        // as equal to it.
+        internal string? DescribeAltitudeBreach(double altitudeDegrees, double azimuthDegrees, string when,
+            double marginDegrees = 0) {
             AstraeusSettings settings = Observatory.Settings;
-            if (settings.IsAltitudeLimitEnabled() && altitudeDegrees < settings.GetMountMinAltitudeDegrees())
-                return $"below altitude limit ({altitudeDegrees:F1}° {when}, " +
-                       $"minimum {settings.GetMountMinAltitudeDegrees():F1}°)";
+            if (settings.IsAltitudeLimitEnabled()) {
+                double minimum = settings.GetMountMinAltitudeDegrees();
+                if (altitudeDegrees < minimum)
+                    return $"below altitude limit ({altitudeDegrees:F2}° {when}, minimum {minimum:F1}°)";
+                if (altitudeDegrees < minimum + marginDegrees)
+                    return $"within {marginDegrees:F1}° of the altitude limit ({altitudeDegrees:F2}° {when}, " +
+                           $"minimum {minimum:F1}°)";
+            }
 
             double horizonAltitude = CustomHorizonAltitude(azimuthDegrees);
+            string atAzimuth = $"at azimuth {NormalizeAzimuth(azimuthDegrees):F0}°, horizon {horizonAltitude:F1}°";
             if (altitudeDegrees < horizonAltitude)
-                return $"below custom horizon ({altitudeDegrees:F1}° {when} at azimuth " +
-                       $"{NormalizeAzimuth(azimuthDegrees):F0}°, horizon {horizonAltitude:F1}°)";
+                return $"below custom horizon ({altitudeDegrees:F2}° {when} {atAzimuth})";
+            if (altitudeDegrees < horizonAltitude + marginDegrees)
+                return $"within {marginDegrees:F1}° of the custom horizon ({altitudeDegrees:F2}° {when} {atAzimuth})";
 
             return null;
         }
@@ -990,7 +1144,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         // A flip moves the mount from one row to the other, so a flipped mount tracking past +L is
         // fine. A GEM with an unknown side gets the pierWest row. A mount that isn't a GEM gets no
         // meridian rule.
-        private string? DescribeMeridianBreach(double hoursPastMeridian, PierSide side, string when) {
+        internal string? DescribeMeridianBreach(double hoursPastMeridian, PierSide side, string when) {
             if (!Observatory.Settings.IsMountLimitEnabled() || !IsGermanEquatorial) return null;
             double threshold = MeridianThresholdHours(side);
             string onSide = side is PierSide.pierEast or PierSide.pierWest ? $" on {side}" : "";
@@ -1016,10 +1170,10 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 : $"{-hoursPastMeridian * 60:0.#} min east of the meridian";
 
         // Convert an hour angle in [0, 24) hours to signed hours past the meridian (west positive).
-        private static double HoursPastMeridian(double hourAngleHours)
+        internal static double HoursPastMeridian(double hourAngleHours)
             => hourAngleHours <= 12.0 ? hourAngleHours : hourAngleHours - 24.0;
 
-        private static double NormalizeAzimuth(double azimuthDegrees) {
+        internal static double NormalizeAzimuth(double azimuthDegrees) {
             double wrappedAzimuth = azimuthDegrees % 360.0;
             return wrappedAzimuth < 0 ? wrappedAzimuth + 360.0 : wrappedAzimuth;
         }
@@ -1119,7 +1273,12 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         private async Task SetTrackingCommandAsync(string? id, string? trackingType) {
-            bool isTrackingSet = SetTracking(ParseTrackingMode(trackingType));
+            // Refused rather than read as Sidereal, which would start the mount tracking on a typo.
+            if (!TryParseTrackingMode(trackingType, out TrackingMode mode)) {
+                await BroadcastMessageReceivedAsync(id, false, $"Unknown tracking mode \"{trackingType}\"");
+                return;
+            }
+            bool isTrackingSet = SetTracking(mode);
             if (!isTrackingSet) {
                 await BroadcastMessageReceivedAsync(id, false,
                     "The mount is not connected or cannot change its tracking");
@@ -1139,7 +1298,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 await BroadcastMessageReceivedAsync(id, false, "Mount is parked");
                 return;
             }
-            if (DescribeLimitBreach(coordinates, DateTime.Now) is string breach) {
+            if (DescribeLimitBreach(coordinates, Observatory.LocalNow) is string breach) {
                 string refusal = $"Can't slew to {coordinates.RAString}, {coordinates.DecString}: {breach}";
                 LogWarning(refusal);
                 await BroadcastMessageReceivedAsync(id, false, refusal);
@@ -1160,9 +1319,14 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         private async Task StopSlewCommandAsync(string? id) {
-            await BroadcastMessageReceivedAsync(id, true);
             AbortSlew();
-            StopMovement();
+            if (!IsConnected) {
+                await BroadcastMessageReceivedAsync(id, false, "No device connected");
+                return;
+            }
+            bool hasStopped = await StopMovementAsync();
+            await BroadcastMessageReceivedAsync(id, hasStopped,
+                hasStopped ? null : "The mount did not confirm it stopped. Check the mount.");
         }
 
         /// <summary>

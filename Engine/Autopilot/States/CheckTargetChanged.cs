@@ -9,6 +9,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
     /// scheduler re-issues the same target for every sub-frame, so otherwise we'd solve before every one.
     /// </summary>
     internal sealed class CheckTargetChanged(string name, Context context) : DecisionState(name) {
+        protected internal override bool ShouldWatchMountLimits => true;
+
         protected override Task<bool> DecideAsync(CancellationToken cancellationToken) {
             AutopilotNextResponse? target = context.CurrentTarget;
 

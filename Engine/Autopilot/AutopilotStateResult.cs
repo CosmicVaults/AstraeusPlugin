@@ -5,7 +5,7 @@
         Unsafe,          // injected by the safety watcher, never returned by ExecuteAsync
         LimitReached,    // injected by the mount-limit watcher, never returned by ExecuteAsync
         WindowClosed,    // injected by the daylight watcher when the observing window closes
-        RoofClosed,      // injected by the safety watcher when the roof stops reading open mid-imaging
+        RoofClosed,      // injected by the roof watcher when the roof stops reading open mid-imaging
         Yes,
         No,
         Pass,            // a three-way decision's "doesn't apply" branch (see DomeControlSettingCheck)

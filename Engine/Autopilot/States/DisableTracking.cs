@@ -11,6 +11,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
         // A stop is always worth finishing. It's also the first step of the mount-limit abort, and if
         // cancelled at dawn a limit breach would pass for a routine end of night.
         protected internal override bool ShouldWatchObservingWindow => false;
+        // It's the first step of the limit abort, which mustn't be diverted onto the roof path.
+        protected internal override bool ShouldWatchRoof => false;
 
         public override async Task<AutopilotStateResult> ExecuteAsync(CancellationToken cancellationToken) {
             // A still or disconnected mount with no guiding running has nothing to stop. Otherwise we'd

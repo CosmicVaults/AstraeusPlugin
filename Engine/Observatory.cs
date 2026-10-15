@@ -23,6 +23,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 using System.Reflection;
+using System.Net.Http;
 using System.Net.WebSockets;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -81,7 +82,30 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
         public event Action? UpdateRequired;
 
+        /// <summary>An alert as it was reported, before the sign-in check that drops it when signed out.</summary>
+        internal sealed record ReportedEvent(string Kind, string Message, object? Details);
+
+        /// <summary>A log line as the dashboard would see it, socket up or not.</summary>
+        internal sealed record LogLine(string Severity, string Device, string Message);
+
+        /// <summary>Raised for every alert, signed in or not, so a test can see what the night would have emailed.</summary>
+        internal event Action<ReportedEvent>? EventReported;
+
+        /// <summary>Raised for every log line above DEBUG, socket up or not.</summary>
+        internal event Action<LogLine>? LogRecorded;
+
         public TelemetryCadence Cadence { get; private set; }
+
+        /// <summary>
+        /// Every decision about time goes through this, so a test can move the night along. Production
+        /// uses the system clock. Log timestamps and the server's own timeouts stay on the real one.
+        /// </summary>
+        public TimeProvider Clock { get; }
+
+        public DateTime UtcNow => Clock.GetUtcNow().UtcDateTime;
+
+        /// <summary>DateTime.Now from the clock, kind Local, for the twilight and sun maths that take local time.</summary>
+        public DateTime LocalNow => DateTime.SpecifyKind(Clock.GetLocalNow().DateTime, DateTimeKind.Local);
 
         /// <summary>
         /// What N.I.N.A.'s exposures are for while one of the plugin's routines drives them.
@@ -109,20 +133,25 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             IAutoFocusVMFactory? autoFocusFactory = null,
             IImageHistoryVM? imageHistory = null,
             Autopilot.SequenceRunner? sequenceRunner = null,
-            IMeridianFlipVMFactory? meridianFlipFactory = null) {
+            IMeridianFlipVMFactory? meridianFlipFactory = null,
+            TimeProvider? clock = null,
+            HttpMessageHandler? serverHandler = null) {
+            Clock = clock ?? TimeProvider.System;
             PlateSolverFactory = plateSolverFactory;
             NighttimeCalculator = nighttimeCalculator;
             Settings = settings;
             ImageDataFactory = imageDataFactory;
             SequenceRunner = sequenceRunner;
-            AstraeusWebClient = new AstraeusWebClient(this);
+            AstraeusWebClient = serverHandler == null
+                ? new AstraeusWebClient(this)
+                : new AstraeusWebClient(this, serverHandler);
             Authenticator = new Authenticator(AstraeusWebClient, Settings, this);
             AstraeusWebClient.Authenticator = Authenticator;
             WebSocketClient = new WebSocketClient(Authenticator);
             WebSocketClient.Disconnected += OnSocketDisconnected;
             WebSocketClient.UpdateRequired += MarkUpdateRequired;
             WebSocketBus = new WebSocketBus(WebSocketClient);
-            Cadence = new TelemetryCadence(WebSocketBus);
+            Cadence = new TelemetryCadence(WebSocketBus, Clock);
 
             if (SequenceRunner != null) SequenceRunner.Observatory = this;
 
@@ -236,6 +265,12 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
             // Sent before the components go, while the socket is still open and the update can still travel.
             await WebSocketBus.SendAsync(new NinaConnectionUpdate(false));
+            // The machine first, while everything it drives is still alive. Destroying the camera under a
+            // running capture cancels the frame from outside, which the machine reads as a fault and
+            // answers with a park and a roof close. A plain stop leaves the observatory as found.
+            if (TryGetComponent(out Autopilot.Autopilot? autopilot)) {
+                await autopilot.StopMachineAsync();
+            }
             foreach (IComponent component in _components) {
                 try {
                     await component.Destroy();
@@ -367,7 +402,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         public bool IsOutsideObservingWindow() {
             RiseAndSetEvent twilight = OperatingWindowTwilight();
             if (twilight.Set is DateTime dusk && twilight.Rise is DateTime dawn) {
-                return DateTime.Now < dusk || DateTime.Now > dawn;
+                return LocalNow < dusk || LocalNow > dawn;
             }
             // No dusk or dawn today means polar summer or polar night. The sun's current altitude
             // says which.
@@ -377,7 +412,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// <summary>Whether today's chosen dawn has passed. False on a day without one.</summary>
         public bool IsAfterDawn() {
             RiseAndSetEvent twilight = OperatingWindowTwilight();
-            return twilight.Rise is DateTime dawn && DateTime.Now > dawn;
+            return twilight.Rise is DateTime dawn && LocalNow > dawn;
         }
 
         private RiseAndSetEvent OperatingWindowTwilight() {
@@ -401,7 +436,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 Longitude = astrometry.Longitude,
                 Elevation = astrometry.Elevation
             };
-            double sunAltitudeDegrees = AstroUtil.GetSunAltitude(DateTime.Now, observer);
+            double sunAltitudeDegrees = AstroUtil.GetSunAltitude(LocalNow, observer);
             return sunAltitudeDegrees < windowAltitudeDegrees;
         }
 
@@ -444,6 +479,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         private void Publish(string device, LogCategory category, string message, string severity, bool isToast) {
+            LogRecorded?.Invoke(new LogLine(severity, device, message));
             if (!IsSocketOpen) return;
             string categoryName = category.ToString().ToLowerInvariant();
             string redactedMessage = UserProfilePath.Redact(message);
@@ -461,9 +497,10 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// path. The web client's 10-second timeout bounds it.
         /// </summary>
         public void ReportEvent(string kind, string message, object? details = null, string? clientRef = null) {
+            EventReported?.Invoke(new ReportedEvent(kind, message, details));
             _ = Task.Run(async () => {
                 try {
-                    await ReportEventAsync(kind, message, details, clientRef);
+                    await SendEventAsync(kind, message, details, clientRef);
                 } catch (Exception ex) {
                     LocalLog.Warning($"[alerts] Could not report {kind}: {ex.Message}");
                 }
@@ -476,6 +513,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// </summary>
         public async Task<bool> ReportEventAsync(string kind, string message, object? details = null,
             string? clientRef = null) {
+            EventReported?.Invoke(new ReportedEvent(kind, message, details));
+            return await SendEventAsync(kind, message, details, clientRef);
+        }
+
+        private async Task<bool> SendEventAsync(string kind, string message, object? details, string? clientRef) {
             if (Authenticator?.IsAuthenticated != true) {
                 LocalLog.Warning($"[alerts] Not signed in, so dropping {kind}: {message}");
                 return false;

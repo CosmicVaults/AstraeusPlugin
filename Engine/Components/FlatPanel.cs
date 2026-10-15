@@ -64,7 +64,12 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                     ToggleLightCommandAsync(command.Id, isLightOn).ObserveFaults(LogCommandFault);
                     break;
                 case "setBrightness":
-                    if (JsonFields.ReadInt(command.Payload, "brightness", out int brightness) != JsonFieldState.Valid) {
+                    // The panel's own range while it is connected. Disconnected, the command fails on its own.
+                    FlatDeviceInfo panelInfo = flatMediator.GetInfo();
+                    int minBrightness = panelInfo.Connected ? panelInfo.MinBrightness : 0;
+                    int maxBrightness = panelInfo.Connected ? panelInfo.MaxBrightness : int.MaxValue;
+                    if (JsonFields.ReadInt(command.Payload, "brightness", out int brightness,
+                            min: minBrightness, max: maxBrightness) != JsonFieldState.Valid) {
                         RejectMalformedCommandAsync(command, "brightness").ObserveFaults(LogCommandFault);
                         break;
                     }
@@ -177,9 +182,9 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         // A caller's cancel still throws. Our own timeout or a driver exception returns false.
         private async Task<bool> RunTimedAsync(Func<CancellationToken, Task> action, string what,
             CancellationToken cancellationToken) {
+            using CancellationTokenSource timeoutSource = new CancellationTokenSource(CoverMoveTimeout, Observatory.Clock);
             using CancellationTokenSource moveCancellationSource =
-                CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            moveCancellationSource.CancelAfter(CoverMoveTimeout);
+                CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutSource.Token);
             try {
                 await action(moveCancellationSource.Token);
                 return true;
@@ -194,11 +199,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             }
         }
 
-        private static async Task<bool> ReadBackAsync(Func<bool> isThere, CancellationToken cancellationToken) {
-            DateTime deadline = DateTime.UtcNow + ReadBackGrace;
+        private async Task<bool> ReadBackAsync(Func<bool> isThere, CancellationToken cancellationToken) {
+            DateTime deadline = Observatory.UtcNow + ReadBackGrace;
             while (!isThere()) {
-                if (DateTime.UtcNow >= deadline) return false;
-                await Task.Delay(ReadBackPollInterval, cancellationToken);
+                if (Observatory.UtcNow >= deadline) return false;
+                await Task.Delay(ReadBackPollInterval, Observatory.Clock, cancellationToken);
             }
             return true;
         }

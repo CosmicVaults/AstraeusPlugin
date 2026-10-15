@@ -17,9 +17,9 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
             IProfileService profileService = Observatory.Settings.ProfileService;
             SettingsUpdateBatch update = new SettingsUpdateBatch(data)
-                .Double("latitude", value => profileService.ChangeLatitude(value))
-                .Double("longitude", value => profileService.ChangeLongitude(value))
-                .Double("elevation", value => profileService.ChangeElevation(value));
+                .Double("latitude", value => profileService.ChangeLatitude(value), min: -90, max: 90)
+                .Double("longitude", value => profileService.ChangeLongitude(value), min: -180, max: 180)
+                .Double("elevation", value => profileService.ChangeElevation(value), min: -500, max: 9000);
             if (!await TryApplyServerUpdateAsync(update, "astrometry", PushAstrometrySettingsAsync)) return;
 
             IAstrometrySettings astrometrySettings = Profile!.AstrometrySettings;

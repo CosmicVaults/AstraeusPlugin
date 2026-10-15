@@ -348,7 +348,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages {
         public double? RotatorFallbackAngle { get; init; }
 
         [JsonPropertyName("park_mount_to_open_roof")]
-        public bool ShouldParkMountToOpenRoof { get; init; }
+        public bool CanMountMoveUnderClosedRoof { get; init; }
 
         /// <summary>Ignore, EnsureOpen or OpenAndClose, serialised by name like roof_mode.</summary>
         [JsonPropertyName("flat_panel_mode")]

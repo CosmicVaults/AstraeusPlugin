@@ -134,7 +134,8 @@ namespace CosmicVaults.NINA.Astraeus {
                 await Observatory.Start();
                 AutopilotSettingsViewModel.RefreshDevices();
             } catch (Exception ex) {
-                Logger.Error($"Astraeus could not finish starting: {ex}");
+                Logger.Error($"Astraeus could not finish starting: {ex.Message}");
+                Logger.Debug(ex.ToString());
             }
         }
 
@@ -145,7 +146,8 @@ namespace CosmicVaults.NINA.Astraeus {
                 } catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
                     throw;
                 } catch (Exception ex) {
-                    Logger.Error($"Astraeus background loop error: {ex}");
+                    Logger.Error($"Astraeus background loop error: {ex.Message}");
+                    Logger.Debug(ex.ToString());
                     await Task.Delay(ErrorRetryDelay, cancellationToken);
                 }
             }
@@ -175,7 +177,8 @@ namespace CosmicVaults.NINA.Astraeus {
                 try {
                     await _backgroundTask;
                 } catch (Exception ex) when (ex is not OperationCanceledException) {
-                    Logger.Error($"Astraeus background loop ended with an error: {ex}");
+                    Logger.Error($"Astraeus background loop ended with an error: {ex.Message}");
+                    Logger.Debug(ex.ToString());
                 } catch (OperationCanceledException) {
                     // Teardown.
                 }
@@ -199,7 +202,8 @@ namespace CosmicVaults.NINA.Astraeus {
                 }
                 RefreshOptionsPage();
             } catch (Exception ex) {
-                Logger.Error($"Astraeus could not reload after the profile change: {ex}");
+                Logger.Error($"Astraeus could not reload after the profile change: {ex.Message}");
+                Logger.Debug(ex.ToString());
             }
         }
 

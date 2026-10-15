@@ -14,9 +14,17 @@
     </PropertyGroup>
 
     <PropertyGroup>
-        <AstraeusReleaseVersion>1.0.1</AstraeusReleaseVersion>
+        <AstraeusReleaseVersion>1.0.2</AstraeusReleaseVersion>
         <AstraeusVersionEpoch>2026-01-01</AstraeusVersionEpoch>
     </PropertyGroup>
+
+    <!-- Do not compile tests into the plugin. -->
+    <ItemGroup>
+        <Compile Remove="tests\**"/>
+        <None Remove="tests\**"/>
+        <Page Remove="tests\**"/>
+        <EmbeddedResource Remove="tests\**"/>
+    </ItemGroup>
 
     <!--
         Packaging paths. stage\ is exactly what ships (see the Package target below); dist\ receives
@@ -60,8 +68,7 @@
     </PropertyGroup>
 
     <Target Name="CheckAstraeusBackend" BeforeTargets="BeforeBuild">
-        <Error Condition="'$(AstraeusBackend)' != 'dev' And '$(AstraeusBackend)' != 'staging' And '$(AstraeusBackend)' != 'production'"
-               Text="AstraeusBackend must be dev, production or staging, not '$(AstraeusBackend)'."/>
+        <Error Condition="'$(AstraeusBackend)' != 'dev' And '$(AstraeusBackend)' != 'staging' And '$(AstraeusBackend)' != 'production'" Text="AstraeusBackend must be dev, production or staging, not '$(AstraeusBackend)'." />
     </Target>
 
     <!-- NuGet Packages -->
@@ -72,11 +79,10 @@
         3rd-party-licenses.txt carries the required notice.
     -->
     <ItemGroup>
-        <PackageReference Include="NINA.Plugin" Version="3.2.0.9001"/>
-        <PackageReference Include="LibVLCSharp" Version="3.9.1"/>
-        <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.21"/>
+        <PackageReference Include="NINA.Plugin" Version="3.2.0.9001" />
+        <PackageReference Include="LibVLCSharp" Version="3.9.1" />
+        <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.21" />
     </ItemGroup>
-
 
     <!--
         Post-build: copy the plugin and its RTSP support files to the NINA Plugins folder. Not on a

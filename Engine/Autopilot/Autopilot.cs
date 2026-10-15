@@ -196,14 +196,15 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
         }
 
         /// <summary>
-        /// Only used when N.I.N.A.'s Dome setting "Refuse open or close if mount is unparked" is on. Off by
-        /// default, since parking slews under a closed roof and the park position may only be reachable
-        /// with the roof open.
+        /// "Mount can move under closed roof": the park position is reachable with the roof closed. Lets
+        /// OpenDome park so N.I.N.A. will open the roof, and lets a secure park whatever the roof reads,
+        /// skipping RoofAwarePark's roof check. Off by default, since a park position only reachable with
+        /// the roof open means a collision.
         /// </summary>
-        public bool ShouldParkMountToOpenRoof {
-            get => Observatory.Settings.ShouldParkMountToOpenRoof();
+        public bool CanMountMoveUnderClosedRoof {
+            get => Observatory.Settings.CanMountMoveUnderClosedRoof();
             set {
-                Observatory.Settings.SetShouldParkMountToOpenRoof(value);
+                Observatory.Settings.SetCanMountMoveUnderClosedRoof(value);
                 RaiseChanged("park_mount_to_open_roof");
             }
         }
@@ -401,14 +402,21 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
             Observatory.TryGetComponent<SwitchHub>(out _switchHub);
         }
 
-        public override async Task Destroy() {
-            WebSocketBus.Connected -= OnSocketConnected;
-            // NINA is closing or the plugin is being torn down, so stop the machine before its
-            // components are destroyed under it.
+        /// <summary>
+        /// Cancels the machine and waits, bounded, for it to unwind. Observatory.ShutDownAsync calls it
+        /// before any component is destroyed, so the stop runs with the camera, guider and mount still
+        /// alive. Destroy calls it again, which is harmless.
+        /// </summary>
+        public async Task StopMachineAsync() {
             _machineCancellation?.Cancel();
             // Long enough to stop the exposure, guider and tracking, but too short to hold NINA's
             // close for a park. We don't secure on close. The roof is left as found, like any stop.
             await Task.WhenAny(_machineTask, Task.Delay(MachineStopTimeoutOnDestroy));
+        }
+
+        public override async Task Destroy() {
+            WebSocketBus.Connected -= OnSocketConnected;
+            await StopMachineAsync();
             await base.Destroy();
         }
 

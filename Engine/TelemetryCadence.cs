@@ -41,9 +41,12 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         // release wakes only one waiter, so the feed and the background loop would steal each other's.
         private TaskCompletionSource _changed = NewChangeSource();
 
+        private readonly TimeProvider _clock;
+
         // Presence isn't logged. Who is watching and when is about the user, not the observatory,
         // and logs get pasted into forum posts.
-        public TelemetryCadence(IWebSocketBus bus) {
+        public TelemetryCadence(IWebSocketBus bus, TimeProvider clock) {
+            _clock = clock;
             bus.CommandReceived += OnCommandReceived;
             bus.Connected += OnConnected;
             bus.Disconnected += OnDisconnected;
@@ -96,11 +99,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// </summary>
         public async Task<bool> WaitUntilAsync(Func<bool> until, TimeSpan timeout,
             CancellationToken cancellationToken) {
-            DateTime deadline = DateTime.UtcNow + timeout;
+            DateTime deadline = _clock.GetUtcNow().UtcDateTime + timeout;
             while (true) {
                 Task changed = Changed;
                 if (until()) return true;
-                TimeSpan remaining = deadline - DateTime.UtcNow;
+                TimeSpan remaining = deadline - _clock.GetUtcNow().UtcDateTime;
                 if (remaining <= TimeSpan.Zero) return false;
                 if (!await WaitForChangeAsync(changed, remaining, cancellationToken)) return until();
             }
@@ -117,11 +120,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         /// <summary>True when the change came first, false when the delay ran out. Throws on cancellation.</summary>
-        private static async Task<bool> WaitForChangeAsync(Task changed, TimeSpan delay,
+        private async Task<bool> WaitForChangeAsync(Task changed, TimeSpan delay,
             CancellationToken cancellationToken) {
             using CancellationTokenSource delayCancellationSource =
                 CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            Task delayTask = Task.Delay(delay, delayCancellationSource.Token);
+            Task delayTask = Task.Delay(delay, _clock, delayCancellationSource.Token);
             Task winner = await Task.WhenAny(changed, delayTask);
             if (winner == delayTask) {
                 cancellationToken.ThrowIfCancellationRequested();

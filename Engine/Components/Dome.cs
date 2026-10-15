@@ -76,7 +76,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                     HomeCommandAsync(command.Id).ObserveFaults(LogCommandFault);
                     break;
                 case "slew":
-                    if (JsonFields.ReadDouble(command.Payload, "data", out double azimuthDegrees)
+                    if (JsonFields.ReadDouble(command.Payload, "data", out double azimuthDegrees, min: 0, max: 360)
                         != JsonFieldState.Valid) {
                         RejectMalformedCommandAsync(command, "data").ObserveFaults(LogCommandFault);
                         break;
@@ -84,7 +84,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                     SlewCommandAsync(command.Id, azimuthDegrees).ObserveFaults(LogCommandFault);
                     break;
                 case "clockwise_nudge":
-                    if (JsonFields.ReadDouble(command.Payload, "data", out double clockwiseDegrees)
+                    if (JsonFields.ReadDouble(command.Payload, "data", out double clockwiseDegrees, min: 0, max: 360)
                         != JsonFieldState.Valid) {
                         RejectMalformedCommandAsync(command, "data").ObserveFaults(LogCommandFault);
                         break;
@@ -92,7 +92,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                     MoveClockwiseCommand(command.Id, clockwiseDegrees);
                     break;
                 case "anticlockwise_nudge":
-                    if (JsonFields.ReadDouble(command.Payload, "data", out double anticlockwiseDegrees)
+                    if (JsonFields.ReadDouble(command.Payload, "data", out double anticlockwiseDegrees, min: 0, max: 360)
                         != JsonFieldState.Valid) {
                         RejectMalformedCommandAsync(command, "data").ObserveFaults(LogCommandFault);
                         break;
@@ -497,6 +497,10 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return IsConnected && domeMediator.GetInfo().ShutterStatus == ShutterState.ShutterClosed;
         }
 
+        public bool IsShutterOpening() {
+            return IsConnected && domeMediator.GetInfo().ShutterStatus == ShutterState.ShutterOpening;
+        }
+
         public string ShutterStatusName =>
             IsConnected ? domeMediator.GetInfo().ShutterStatus.ToString() : "disconnected";
 
@@ -543,9 +547,10 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         // A caller's cancel still throws. Our own timeout or a driver exception returns false.
         private async Task<bool> RunShutterMoveAsync(Func<CancellationToken, Task<bool>> move, string action,
             CancellationToken cancellationToken) {
+            // On the observatory's clock, so a test can run a stalled roof out of time.
+            using CancellationTokenSource timeoutSource = new CancellationTokenSource(RoofMoveTimeout, Observatory.Clock);
             using CancellationTokenSource moveCancellationSource =
-                CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            moveCancellationSource.CancelAfter(RoofMoveTimeout);
+                CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutSource.Token);
             try {
                 return await move(moveCancellationSource.Token);
             } catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {

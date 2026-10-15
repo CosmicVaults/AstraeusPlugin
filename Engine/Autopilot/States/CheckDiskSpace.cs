@@ -9,6 +9,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
     /// MarkImageStarted so a full disk leaves the image PENDING on the server, not stuck at CAPTURING.
     /// </summary>
     internal sealed class CheckDiskSpace(string name, Context context) : StateBase(name) {
+        protected internal override bool ShouldWatchMountLimits => true;
+
         public override Task<AutopilotStateResult> ExecuteAsync(CancellationToken cancellationToken) {
             string? path = context.Observatory.Settings.ProfileService.ActiveProfile.ImageFileSettings.FilePath;
             if (string.IsNullOrWhiteSpace(path)) {

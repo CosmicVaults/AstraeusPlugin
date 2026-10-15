@@ -6,7 +6,6 @@ using CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages;
 using System.ComponentModel;
 using System.Text.Json;
 using System.Threading.Tasks;
-using System.Windows;
 
 namespace CosmicVaults.NINA.Astraeus.Engine {
     public partial class Settings {
@@ -43,7 +42,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         // N.I.N.A. checks and saves the file patterns through its options view model, not the profile.
         private void SetFilePatternOnOptionsPage(string propertyName, string pattern) {
             IOptionsVM optionsViewModel = Observatory.Settings.OptionsViewModel;
-            Application.Current.Dispatcher.Invoke(
+            InvokeOnUiThread(
                 () => optionsViewModel.GetType().GetProperty(propertyName)?.SetValue(optionsViewModel, pattern));
         }
 

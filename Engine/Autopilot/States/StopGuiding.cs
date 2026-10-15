@@ -10,6 +10,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
     internal sealed class StopGuiding(string name, Context context) : StateBase(name) {
         // The roof is open and the mount on target, as in the other watched states.
         protected internal override bool ShouldWatchSafety => true;
+        protected internal override bool ShouldWatchMountLimits => true;
 
         public override async Task<AutopilotStateResult> ExecuteAsync(CancellationToken cancellationToken) {
             if (context.Guider is not { IsConnected: true } guider) {

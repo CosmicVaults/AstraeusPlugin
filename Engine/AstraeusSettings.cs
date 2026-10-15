@@ -34,7 +34,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         private const string SafeSettleSecondsKey = "Astraeus.SafeSettleSeconds";
         private const string AutopilotRotatorFallbackModeKey = "Astraeus.AutopilotRotatorFallbackMode";
         private const string AutopilotRotatorFallbackAngleKey = "Astraeus.AutopilotRotatorFallbackAngle";
-        private const string ShouldParkMountToOpenRoofKey = "Astraeus.ParkMountToOpenRoof";
+        // Keeps the option's old key, so existing settings carry over.
+        private const string CanMountMoveUnderClosedRoofKey = "Astraeus.ParkMountToOpenRoof";
         private const string AutopilotFlatPanelModeKey = "Astraeus.AutopilotFlatPanelMode";
         private const string ShouldOperateFlatPanelWithRoofClosedKey = "Astraeus.FlatPanelOperatesWithRoofClosed";
         private const string IsAutofocusEnabledKey = "Astraeus.IsAutofocusEnabled";
@@ -91,13 +92,16 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         ///////////// Safe profile-settings helpers /////////////
-        // NINA's PluginSettings.TryGetValue throws NullReferenceException until the plugin GUID is
-        // registered in the active profile, e.g. on the first load after install. These catch it.
+        // NINA's PluginSettings.TryGetValue throws NullReferenceException on a value stored as null, so
+        // nothing is stored as null and one already stored reads as unset.
 
         private bool TryGetSetting(string key, out string? value) {
             try {
                 if (ProfileService.ActiveProfile?.PluginSettings == null) { value = null; return false; }
                 return ProfileService.ActiveProfile.PluginSettings.TryGetValue(_pluginGuid, key, out value);
+            } catch (NullReferenceException) {
+                value = null;
+                return false;
             } catch (Exception ex) {
                 Logger.Warning($"[Astraeus] Failed to read setting '{key}': {ex.Message}");
                 value = null;
@@ -107,7 +111,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
         private void SetSetting(string key, string? value) {
             try {
-                ProfileService.ActiveProfile?.PluginSettings?.SetValue(_pluginGuid, key, value);
+                ProfileService.ActiveProfile?.PluginSettings?.SetValue(_pluginGuid, key, value ?? string.Empty);
             } catch (Exception ex) {
                 Logger.Warning($"[Astraeus] Failed to write setting '{key}': {ex.Message}");
             }
@@ -332,11 +336,15 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// The lowest altitude the mount may point at or track down to. Only enforced when IsAltitudeLimitEnabled.
         /// </summary>
         public double GetMountMinAltitudeDegrees() {
-            return GetDoubleSetting(MountMinAltitudeDegreesKey, DefaultMountMinAltitudeDegrees);
+            double degrees = GetDoubleSetting(MountMinAltitudeDegreesKey, DefaultMountMinAltitudeDegrees);
+            return Math.Clamp(degrees, 0, 90);
         }
 
+        // Clamped on both sides, like the cooling temperature, so a hand-edited profile can't put the
+        // floor below the horizon or above the zenith.
         public void SetMountMinAltitudeDegrees(double value) {
-            SetDoubleSetting(MountMinAltitudeDegreesKey, value);
+            if (double.IsNaN(value)) return;
+            SetDoubleSetting(MountMinAltitudeDegreesKey, Math.Clamp(value, 0, 90));
         }
 
         /// <summary>
@@ -369,12 +377,17 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// centring passed never reads as off target.
         /// </summary>
         public double GetRecenterToleranceArcmin() {
-            return GetDoubleSetting(RecenterToleranceArcminKey, DefaultRecenterToleranceArcmin);
+            double arcmin = GetDoubleSetting(RecenterToleranceArcminKey, DefaultRecenterToleranceArcmin);
+            return Math.Clamp(arcmin, 0, MaxRecenterToleranceArcmin);
         }
 
         public void SetRecenterToleranceArcmin(double value) {
-            SetDoubleSetting(RecenterToleranceArcminKey, value);
+            if (double.IsNaN(value)) return;
+            SetDoubleSetting(RecenterToleranceArcminKey, Math.Clamp(value, 0, MaxRecenterToleranceArcmin));
         }
+
+        /// <summary>Ten degrees. Past that the check would never slew again, whatever the solve said.</summary>
+        public const double MaxRecenterToleranceArcmin = 600;
 
         /// <summary>The same cap the server enforces.</summary>
         public const int MaxSafeSettleSeconds = 600;
@@ -416,15 +429,15 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         /// <summary>
-        /// For when N.I.N.A. refuses to move the shutter with the mount unparked. Parking slews the mount
-        /// with the roof still closed, so a park position not reachable in that state means a collision.
+        /// Whether the park position is reachable with the roof closed. Off by default, since one that
+        /// isn't means a collision.
         /// </summary>
-        public bool ShouldParkMountToOpenRoof() {
-            return GetBoolSetting(ShouldParkMountToOpenRoofKey, defaultValue: false);
+        public bool CanMountMoveUnderClosedRoof() {
+            return GetBoolSetting(CanMountMoveUnderClosedRoofKey, defaultValue: false);
         }
 
-        public void SetShouldParkMountToOpenRoof(bool value) {
-            SetBoolSetting(ShouldParkMountToOpenRoofKey, value);
+        public void SetCanMountMoveUnderClosedRoof(bool value) {
+            SetBoolSetting(CanMountMoveUnderClosedRoofKey, value);
         }
 
         public Autopilot.FlatPanelMode GetAutopilotFlatPanelMode() {
@@ -468,13 +481,22 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             SetBoolSetting(ShouldAutofocusOnTemperatureChangeKey, value);
         }
 
+        /// <summary>In °C. Below this the focuser would never rest between frames.</summary>
+        public const double MinAutofocusTemperatureThreshold = 0.1;
+
+        /// <summary>In °C. No night swings further than this.</summary>
+        public const double MaxAutofocusTemperatureThreshold = 50;
+
         /// <summary>Temperature change (°C, absolute) since the last autofocus that triggers a refocus.</summary>
         public double GetAutofocusTemperatureThreshold() {
-            return GetDoubleSetting(AutofocusTemperatureThresholdKey, DefaultAutofocusTemperatureThreshold);
+            double threshold = GetDoubleSetting(AutofocusTemperatureThresholdKey, DefaultAutofocusTemperatureThreshold);
+            return Math.Clamp(threshold, MinAutofocusTemperatureThreshold, MaxAutofocusTemperatureThreshold);
         }
 
         public void SetAutofocusTemperatureThreshold(double value) {
-            SetDoubleSetting(AutofocusTemperatureThresholdKey, value);
+            if (double.IsNaN(value)) return;
+            SetDoubleSetting(AutofocusTemperatureThresholdKey,
+                Math.Clamp(value, MinAutofocusTemperatureThreshold, MaxAutofocusTemperatureThreshold));
         }
 
         public bool ShouldAutofocusOnFilterChange() {

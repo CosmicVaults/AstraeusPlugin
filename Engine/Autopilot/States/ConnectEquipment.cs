@@ -6,15 +6,8 @@ using System.Threading.Tasks;
 namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
     /// <summary>
     /// When isRequired, a failure routes to the wait-for-manual-connection node. Otherwise the device is
-    /// skipped.
+    /// skipped. Either way a failed auto-connect sends a critical alert.
     /// </summary>
-    /// <param name="component">
-    /// Null when the plugin has no component for this device type, handled like a device set to "None".
-    /// </param>
-    /// <param name="isInUse">
-    /// Read when the state runs. False skips the device as if set to "None", for a device only needed
-    /// under some settings (the flat panel when its handling isn't Ignore).
-    /// </param>
     internal sealed class ConnectEquipment(string name, Context context, IDeviceComponent? component, bool isRequired,
         Func<bool>? isInUse = null)
         : StateBase(name) {
@@ -43,6 +36,13 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
                 return AutopilotStateResult.Completed;
             }
 
+            // A manual device would hold the night at its first change, so it makes way for the default.
+            if (Context.IsManualDevice(component.ConnectedDeviceId)) {
+                context.LogWarning($"{component.DisplayName} is N.I.N.A.'s manual one, which waits for someone " +
+                                   "at the PC on every change, so disconnecting it.");
+                await component.TryDisconnectAsync();
+            }
+
             if (component.IsConnected) {
                 // Whatever is connected is used as found, since somebody connected it on purpose. We warn
                 // so a simulator left connected instead of the real roof isn't a silent surprise.
@@ -65,6 +65,13 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
                 return AutopilotStateResult.Completed;
             }
 
+            // Both manual devices are optional, so the night carries on without one.
+            if (Context.IsManualDevice(component.DefaultDevice)) {
+                context.LogWarning($"The default {component.DisplayName} is N.I.N.A.'s manual one, so the night " +
+                                   "runs without it.");
+                return AutopilotStateResult.Completed;
+            }
+
             if (!context.ShouldAutoConnectEquipment) {
                 if (isRequired) {
                     context.LogWarning($"{component.DisplayName} is not connected and auto-connect is off, so " +
@@ -80,12 +87,14 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
                 return AutopilotStateResult.Completed;
             }
 
-            if (isRequired) {
-                context.LogWarning($"Could not connect {component.DisplayName}, so waiting for manual connection.");
-                return AutopilotStateResult.Failed;
-            }
-            context.Log($"Could not connect {component.DisplayName}, so skipped (optional).");
-            return AutopilotStateResult.Completed;
+            string next = isRequired ? "waiting for a manual connection" : "carrying on without it";
+            context.ReportCritical($"Autopilot: {component.DisplayName} did not connect, so {next}.",
+                new {
+                    device = component.DisplayName,
+                    default_device = component.DefaultDevice,
+                    blocked_by = component.FindOpenConnectPrompt()
+                });
+            return isRequired ? AutopilotStateResult.Failed : AutopilotStateResult.Completed;
         }
     }
 }

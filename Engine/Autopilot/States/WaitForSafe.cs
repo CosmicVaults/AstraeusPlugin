@@ -25,10 +25,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
         /// </summary>
         public override Task OnEntryAsync(CancellationToken cancellationToken) {
             context.IsStartupComplete = true;
-            // From here the machine works the roof, opening it when safe and closing it when not.
-            // SecureObservatory hands it back, and the Dome's watchdog covers the rest.
-            context.IsRoofUnderAutopilotControl = true;
-            // Nothing is imaging under the roof from here until it is seen open again.
+            context.IsRoofUnderAutopilotControl = context.RoofMode == RoofMode.Operate;
             context.IsRoofExpectedOpen = false;
             _lastRecloseAttemptUtc = DateTime.MinValue;
             SafeSinceUtc = null;
@@ -64,11 +61,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
             int settleSeconds = context.SafeSettleSeconds;
             if (settleSeconds <= 0) return true;
             if (SafeSinceUtc is not DateTime safeSince) {
-                SafeSinceUtc = DateTime.UtcNow;
+                SafeSinceUtc = context.UtcNow;
                 context.Log($"Conditions safe, so settling for {settleSeconds} s before resuming.");
                 return false;
             }
-            return (DateTime.UtcNow - safeSince).TotalSeconds >= settleSeconds;
+            return (context.UtcNow - safeSince).TotalSeconds >= settleSeconds;
         }
 
         // A roof the secure couldn't close gets another go every few minutes while it's unsafe, but only
@@ -77,8 +74,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
         private async Task RecloseRoofIfDueAsync(CancellationToken cancellationToken) {
             if (context.RoofMode != RoofMode.Operate) return;
             if (context.Dome is not { IsConnected: true } dome || dome.IsShutterClosed()) return;
-            if (DateTime.UtcNow - _lastRecloseAttemptUtc < Context.RoofRecloseCooldown) return;
-            _lastRecloseAttemptUtc = DateTime.UtcNow;
+            if (context.UtcNow - _lastRecloseAttemptUtc < Context.RoofRecloseCooldown) return;
+            _lastRecloseAttemptUtc = context.UtcNow;
 
             context.LogWarning("Roof is open while conditions are unsafe, so trying to close it.");
             if (await dome.TryCloseWhenParkedAsync("conditions unsafe", cancellationToken)) {
@@ -94,7 +91,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
         // does not wait on this line.
         protected override string WaitingMessage() {
             if (SafeSinceUtc is DateTime safeSince) {
-                int elapsedSeconds = (int)(DateTime.UtcNow - safeSince).TotalSeconds;
+                int elapsedSeconds = (int)(context.UtcNow - safeSince).TotalSeconds;
                 return $"Conditions safe for {elapsedSeconds} s of the {context.SafeSettleSeconds} s settle";
             }
             return "Waiting for conditions to become safe";

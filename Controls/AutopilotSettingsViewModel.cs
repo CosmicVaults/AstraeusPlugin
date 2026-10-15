@@ -160,13 +160,10 @@ namespace CosmicVaults.NINA.Astraeus.Controls {
             }
         }
 
-        /// <summary>
-        /// Only matters when N.I.N.A.'s "Refuse open or close if mount is unparked" dome setting is on.
-        /// </summary>
-        public bool ShouldParkMountToOpenRoof {
-            get => _autopilot.ShouldParkMountToOpenRoof;
+        public bool CanMountMoveUnderClosedRoof {
+            get => _autopilot.CanMountMoveUnderClosedRoof;
             set {
-                _autopilot.ShouldParkMountToOpenRoof = value;
+                _autopilot.CanMountMoveUnderClosedRoof = value;
                 OnPropertyChanged();
             }
         }
@@ -195,7 +192,8 @@ namespace CosmicVaults.NINA.Astraeus.Controls {
         };
 
         public IReadOnlyList<RoofModeOption> RoofModes { get; } = new[] {
-            new RoofModeOption(RoofMode.Ignore,      "Ignore roof"),
+            // Shown as "No roof". The value stays Ignore, since it's stored and sent to the server by name.
+            new RoofModeOption(RoofMode.Ignore,      "No roof"),
             new RoofModeOption(RoofMode.WaitForOpen, "Wait for roof to open"),
             new RoofModeOption(RoofMode.Operate,     "Operate roof automatically")
         };

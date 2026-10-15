@@ -10,6 +10,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
 
         // Runs at dusk, before the observing window opens.
         protected internal override bool ShouldWatchObservingWindow => false;
+        protected internal override bool ShouldWatchMountLimits => true;
 
         public override async Task<AutopilotStateResult> ExecuteAsync(CancellationToken cancellationToken) {
             if (!context.IsSmartAutofocusEnabled)

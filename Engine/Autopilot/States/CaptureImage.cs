@@ -30,6 +30,15 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
             short  binning  = target.Binning ?? 1;
             int    gain    = target.Gain ?? UseCameraCurrentValue;
             int    offset   = target.Offset ?? UseCameraCurrentValue;
+            // The server keeps these sensible, but they go straight to the camera, so a wrong one is
+            // refused here and reported as a failed frame rather than handed to the driver.
+            bool isCapturable = exposure > 0 && exposure <= Context.MaxExposureSeconds
+                                && binning >= 1 && binning <= Context.MaxBinning;
+            if (!isCapturable) {
+                context.LogError($"The server asked for {exposure}s at bin {binning}x{binning}, which the camera " +
+                                 "cannot take, so the frame is reported failed.");
+                return AutopilotStateResult.Failed;
+            }
             Coordinates? hint = target.Ra is double ra && target.Dec is double dec
                 ? new Coordinates(ra, dec, Epoch.J2000, Coordinates.RAType.Degrees)
                 : null;

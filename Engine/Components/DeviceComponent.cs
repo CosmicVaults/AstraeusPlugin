@@ -325,23 +325,46 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         /// <summary>
-        /// The title of a modal owned by N.I.N.A.'s main window, or null. Dispatcher.Invoke still
-        /// works while one is open because WPF's ShowDialog pumps a nested dispatcher loop.
+        /// A modal owned by N.I.N.A.'s main window, or null.
         /// </summary>
+        private static Window? FindBlockingDialog(Application application) {
+            // Only a modal holds up the connect. A tool window left open doesn't.
+            if (!System.Windows.Interop.ComponentDispatcher.IsThreadModal) return null;
+            foreach (Window window in application.Windows) {
+                if (ReferenceEquals(window, application.MainWindow)) continue;
+                if (!window.IsVisible) continue;
+                if (!ReferenceEquals(window.Owner, application.MainWindow)) continue;
+                return window;
+            }
+            return null;
+        }
+
+        private static string TitleOf(Window dialog) =>
+            string.IsNullOrWhiteSpace(dialog.Title) ? "a dialog" : dialog.Title;
+
         private string? FindBlockingDialogTitle() {
             Application? application = Application.Current;
             if (application is null) return null;
-            return application.Dispatcher.Invoke(() => {
-                // Only a modal holds up the connect. A tool window left open doesn't.
-                if (!System.Windows.Interop.ComponentDispatcher.IsThreadModal) return (string?)null;
-                foreach (Window window in application.Windows) {
-                    if (ReferenceEquals(window, application.MainWindow)) continue;
-                    if (!window.IsVisible) continue;
-                    if (!ReferenceEquals(window.Owner, application.MainWindow)) continue;
-                    return string.IsNullOrWhiteSpace(window.Title) ? "a dialog" : window.Title;
-                }
-                return (string?)null;
-            });
+            return application.Dispatcher.Invoke(() =>
+                FindBlockingDialog(application) is { } dialog ? TitleOf(dialog) : null);
+        }
+
+        /// <summary>
+        /// Returns true if the window is this specific devices connection prompt. Most devices ignore, only the mount returns true for sync VM
+        /// </summary>
+        protected virtual bool IsOwnConnectPrompt(Window dialog) => false;
+
+        public string? FindOpenConnectPrompt() {
+            try {
+                Application? application = Application.Current;
+                if (application is null) return null;
+                return application.Dispatcher.Invoke(() =>
+                    FindBlockingDialog(application) is { } dialog && IsOwnConnectPrompt(dialog)
+                        ? TitleOf(dialog) : null);
+            } catch (Exception ex) {
+                LogDebug($"Checking for a connect prompt failed: {ex.Message}");
+                return null;
+            }
         }
 
         private async Task ReportConnectFailedAsync(string message) {
@@ -407,19 +430,6 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             await WebSocketBus.SendAsync(new DeviceListUpdate(DeviceType, devices, chooser.SelectedDevice?.Id));
         }
 
-        /// <summary>
-        /// Runs action on N.I.N.A.'s UI thread, where its view models and device choosers are bound.
-        /// Server commands arrive on the socket thread.
-        /// </summary>
-        protected static void InvokeOnUiThread(Action action) {
-            System.Windows.Threading.Dispatcher? dispatcher = Application.Current?.Dispatcher;
-            if (dispatcher == null || dispatcher.CheckAccess()) {
-                action();
-                return;
-            }
-            dispatcher.Invoke(action);
-        }
-
         protected bool TryGetDeviceViewModel<TDeviceViewModel>(
             [NotNullWhen(true)] out TDeviceViewModel? deviceViewModel) where TDeviceViewModel : class {
             deviceViewModel = null;
@@ -457,12 +467,43 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
         public async Task<bool> TryConnectAsync(string deviceId) {
             if (IsConnectedToDevice(deviceId)) return true;
+            return await ConnectDevice(deviceId);
+        }
+
+        /// <summary>
+        /// How a device is connected by id: through N.I.N.A.'s device chooser, which is reached by reflection on
+        /// the mediator. A mocked mediator has no chooser, so a test puts its own connect here.
+        /// </summary>
+        internal Func<string, Task<bool>> ConnectDevice {
+            get => _connectDevice ?? ConnectThroughChooserAsync;
+            set => _connectDevice = value;
+        }
+        private Func<string, Task<bool>>? _connectDevice;
+
+        private async Task<bool> ConnectThroughChooserAsync(string deviceId) {
             if (!TryGetDeviceChooser(out IDeviceChooserVM? chooser) || chooser == null) return false;
+
+            // if a prompt is already open. stop and return - dont keep trying. stops silient queue bug.
+            if (FindOpenConnectPrompt() is { } prompt) {
+                LogWarning($"N.I.N.A.'s \"{prompt}\" window from an earlier connect is still open, so " +
+                           $"{DisplayName} cannot connect until somebody answers it in N.I.N.A.");
+                return false;
+            }
+
             if (!TryGetDeviceById(chooser.Devices, deviceId, out IDevice? device) || device == null) return false;
             try {
                 if (IsConnected) await Mediator.Disconnect();
                 InvokeOnUiThread(() => chooser.SelectedDevice = device);
-                await Mediator.Connect();
+
+                // Watch for blocking dialogs before connecting
+                using CancellationTokenSource dialogWatchCancellationSource = new CancellationTokenSource();
+                Task dialogWatch = WatchForBlockingDialogAsync(dialogWatchCancellationSource.Token);
+                try {
+                    await Mediator.Connect();
+                } finally {
+                    dialogWatchCancellationSource.Cancel();
+                    await dialogWatch;
+                }
                 return Mediator.GetInfo().Connected;
             } catch (Exception ex) {
                 LogWarning($"Connecting {DisplayName} failed: {ex.Message}");

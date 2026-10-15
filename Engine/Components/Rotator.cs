@@ -87,7 +87,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                     SetMechanicalRangeCommandAsync(command.Id, range).ObserveFaults(LogCommandFault);
                     break;
                 case "move":
-                    if (JsonFields.ReadDouble(command.Payload, "position", out double positionDegrees)
+                    // Bounded, so the float cast below cannot reach infinity.
+                    if (JsonFields.ReadDouble(command.Payload, "position", out double positionDegrees, min: 0, max: 360)
                         != JsonFieldState.Valid) {
                         RejectMalformedCommandAsync(command, "position").ObserveFaults(LogCommandFault);
                         break;

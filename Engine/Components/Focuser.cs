@@ -80,7 +80,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         protected override Task HandleCommandAsync(WsCommand command) {
             switch (command.Action) {
                 case "move":
-                    if (JsonFields.ReadInt(command.Payload, "position", out int position) != JsonFieldState.Valid) {
+                    // FocuserInfo carries no MaxStep, so only the floor is checked here. The driver refuses the rest.
+                    if (JsonFields.ReadInt(command.Payload, "position", out int position, min: 0) != JsonFieldState.Valid) {
                         RejectMalformedCommandAsync(command, "position").ObserveFaults(LogCommandFault);
                         break;
                     }

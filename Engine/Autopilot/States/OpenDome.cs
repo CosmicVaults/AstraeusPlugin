@@ -18,7 +18,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
         private int _consecutiveFailedOpens;
 
         public override async Task<AutopilotStateResult> ExecuteAsync(CancellationToken cancellationToken) {
-            // Not open until it reads open, so the safety watcher doesn't mistake a roof still opening
+            // Not open until it reads open, so the roof watcher doesn't mistake a roof still opening
             // for one that closed mid-night.
             context.IsRoofExpectedOpen = false;
             if (context.Dome == null) {
@@ -96,17 +96,17 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
             // Off by default, since parking here slews the mount under a closed roof. N.I.N.A. won't do
             // it for the same reason, as a park position only reachable with the roof open means a
             // collision. A stalled night can be recovered. Bent metal can't.
-            if (!context.ShouldParkMountToOpenRoof) {
+            if (!context.CanMountMoveUnderClosedRoof) {
                 context.LogError(
                     "The roof will not open: N.I.N.A. refuses shutter moves with the mount unparked. Park " +
-                    "the mount, or turn on 'Park mount to open roof' if the park position is safe under a " +
-                    "closed roof.");
+                    "the mount, or turn on 'Mount can move under closed roof' if the park position is safe " +
+                    "with the roof closed.");
                 return false;
             }
 
             context.LogWarning(
-                "Parking the mount under the closed roof so N.I.N.A. will open it ('Park mount to open " +
-                "roof' is on).");
+                "Parking the mount under the closed roof so N.I.N.A. will open it ('Mount can move under " +
+                "closed roof' is on).");
             try {
                 await mount.ParkAsync(cancellationToken);
             } catch (OperationCanceledException) {

@@ -5,16 +5,14 @@ namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket {
     internal enum JsonFieldState {
         /// <summary>Not sent, or sent as null. Whatever it would set is left alone.</summary>
         Absent,
-
         Valid,
-
-        /// <summary>Present, but the wrong type or too big for the C# type it's stored in.</summary>
-        Invalid
+        Invalid // Present, but the wrong type or too big for the C# type it's stored in.
     }
 
     /// <summary>
     /// Reads typed fields from a server message, checking each has the expected JSON type and fits its
-    /// C# type. Ranges aren't checked, since keeping values sensible is the server's job.
+    /// C# type. Callers that hand a value to a driver or a profile give a range as well. The server
+    /// keeps values sensible, but a wrong one would move hardware, so it is checked here too.
     /// </summary>
     internal static class JsonFields {
         public static JsonFieldState ReadBool(JsonElement parent, string name, out bool value) {
@@ -27,7 +25,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket {
             return JsonFieldState.Valid;
         }
 
-        public static JsonFieldState ReadDouble(JsonElement parent, string name, out double value) {
+        public static JsonFieldState ReadDouble(JsonElement parent, string name, out double value,
+            double min = double.NegativeInfinity, double max = double.PositiveInfinity) {
             value = 0;
             if (!TryGetPresent(parent, name, out JsonElement element)) return JsonFieldState.Absent;
             bool isFiniteNumber = element.ValueKind == JsonValueKind.Number
@@ -35,37 +34,40 @@ namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket {
                                   && double.IsFinite(number);
             if (!isFiniteNumber) return JsonFieldState.Invalid;
             value = element.GetDouble();
-            return JsonFieldState.Valid;
+            return value >= min && value <= max ? JsonFieldState.Valid : JsonFieldState.Invalid;
         }
 
-        public static JsonFieldState ReadInt(JsonElement parent, string name, out int value) {
+        public static JsonFieldState ReadInt(JsonElement parent, string name, out int value,
+            int min = int.MinValue, int max = int.MaxValue) {
             value = 0;
             if (!TryGetPresent(parent, name, out JsonElement element)) return JsonFieldState.Absent;
             if (element.ValueKind != JsonValueKind.Number || !element.TryGetInt32(out value)) {
                 value = 0;
                 return JsonFieldState.Invalid;
             }
-            return JsonFieldState.Valid;
+            return value >= min && value <= max ? JsonFieldState.Valid : JsonFieldState.Invalid;
         }
 
-        public static JsonFieldState ReadRoundedInt(JsonElement parent, string name, out int value) {
+        public static JsonFieldState ReadRoundedInt(JsonElement parent, string name, out int value,
+            int min = int.MinValue, int max = int.MaxValue) {
             value = 0;
             JsonFieldState state = ReadDouble(parent, name, out double number);
             if (state != JsonFieldState.Valid) return state;
             double rounded = Math.Round(number);
-            if (rounded < int.MinValue || rounded > int.MaxValue) return JsonFieldState.Invalid;
+            if (rounded < min || rounded > max) return JsonFieldState.Invalid;
             value = (int)rounded;
             return JsonFieldState.Valid;
         }
 
-        public static JsonFieldState ReadShort(JsonElement parent, string name, out short value) {
+        public static JsonFieldState ReadShort(JsonElement parent, string name, out short value,
+            short min = short.MinValue, short max = short.MaxValue) {
             value = 0;
             if (!TryGetPresent(parent, name, out JsonElement element)) return JsonFieldState.Absent;
             if (element.ValueKind != JsonValueKind.Number || !element.TryGetInt16(out value)) {
                 value = 0;
                 return JsonFieldState.Invalid;
             }
-            return JsonFieldState.Valid;
+            return value >= min && value <= max ? JsonFieldState.Valid : JsonFieldState.Invalid;
         }
 
         public static JsonFieldState ReadString(JsonElement parent, string name, out string value) {

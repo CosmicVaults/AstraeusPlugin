@@ -1,4 +1,5 @@
-﻿using System.Threading;
+﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
@@ -61,14 +62,14 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
                 string reason = next.Reason ?? "no reason given";
                 if (reason != _loggedReason) {
                     _loggedReason = reason;
-                    context.Log(DescribeNoWork(reason));
+                    context.Log($"{DescribeNoWork(reason)} Next poll in {DescribeWait(context.NextPollDelaySeconds)}.");
                 }
                 return AutopilotStateResult.Failed;
             }
 
             _loggedReason = null;
             context.CurrentTarget = next;
-            context.TargetAssignedAtUtc = System.DateTime.UtcNow;
+            context.TargetAssignedAtUtc = context.UtcNow;
             // The last "nothing ready" RetryAfter belongs to that answer. Left standing, a later "try
             // again shortly" edge (a failed /start/, say) would sleep for it.
             context.NextPollDelaySeconds = Context.DefaultRetryDelaySeconds;
@@ -93,9 +94,13 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
             return AutopilotStateResult.Completed;
         }
 
+        // The server's retry wait as a person reads it: seconds under two minutes, whole minutes above.
+        internal static string DescribeWait(int seconds) =>
+            seconds < 120 ? $"{seconds} s" : $"{(int)Math.Round(seconds / 60.0)} min";
+
         // The server's no-work reasons in plain words. An unknown one is shown raw, so a newer server
         // still says why.
-        private static string DescribeNoWork(string reason) => reason switch {
+        internal static string DescribeNoWork(string reason) => reason switch {
             "no_visible_targets" => "No visible targets. Waiting...",
             "wrong_pier_side" => "No targets reachable on this side of the pier. Waiting...",
             "no_pending_requests" => "Nothing scheduled to image right now. Waiting...",

@@ -20,6 +20,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
         // the server never hears about. The mount is still tracking the last target here.
         protected internal override bool ShouldWatchMountLimits => true;
         protected internal override bool ShouldWatchObservingWindow => false;
+        protected internal override bool ShouldWatchRoof => false;
 
         public override async Task<AutopilotStateResult> ExecuteAsync(CancellationToken cancellationToken) {
             context.AutopilotStatus = AutopilotStatus.Reporting;

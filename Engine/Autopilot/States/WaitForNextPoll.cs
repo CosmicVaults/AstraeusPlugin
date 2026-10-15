@@ -7,6 +7,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
     internal sealed class WaitForNextPoll(string name, Context context, int? fixedSeconds = null)
         : StateBase(name) {
         protected internal override bool ShouldWatchSafety => true;
+        protected internal override bool ShouldWatchMountLimits => true;
 
         private int _waitSeconds;
 
@@ -18,7 +19,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
         }
 
         public override async Task<AutopilotStateResult> ExecuteAsync(CancellationToken cancellationToken) {
-            await Task.Delay(TimeSpan.FromSeconds(_waitSeconds), cancellationToken);
+            await Task.Delay(TimeSpan.FromSeconds(_waitSeconds), context.Observatory.Clock, cancellationToken);
             return AutopilotStateResult.Completed;
         }
     }

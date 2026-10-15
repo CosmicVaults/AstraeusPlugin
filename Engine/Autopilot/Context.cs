@@ -11,20 +11,40 @@ using System.Threading.Tasks;
 
 namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
     internal sealed class Context {
+        // Manual devices - The autopilot will refuse to work with manual devices.
+        private static readonly HashSet<string> ManualDeviceIds = new() { "Manual Filter Wheel", "Manual Rotator" };
+        public static bool IsManualDevice(string? deviceId) => deviceId != null && ManualDeviceIds.Contains(deviceId);
+
         public const int DefaultRetryDelaySeconds = 60;
         public const int SafetyPollIntervalSeconds = 30;
         // Faster while the safe settle runs, so we resume close to when it ends.
         public const int SafetySettlePollIntervalSeconds = 10;
 
         public const int SafetyWatchIntervalSeconds = 5;
+        
+        // How long a watcher can go before a failed driver reading triggers the watcher. Allows for brief drops by the drivers.
+        public const int WatcherBlindGraceSeconds = 30;
+
+        // A longer silence between blind readings ends a watcher's blind spell.
+        public static readonly TimeSpan WatcherReadingGap = TimeSpan.FromSeconds(60);
 
         // Slewing, centring and focusing come before the shutter opens, so the limit look-ahead adds
         // this to the exposure. The server has its own setup margin and the two may drift apart, but
         // this is the one that decides whether the mount actually goes anywhere.
         public const int LimitLookAheadMarginSeconds = 300;
 
+        // A target is only committed to when the prediction puts it clear of the altitude floor by this
+        // much. The mount's own reading, which the live watcher goes by, differs from a prediction by
+        // refraction and pointing error, so a target on the floor would pass the checks and trip the watcher.
+        public const double LimitAltitudeMarginDegrees = 1.0;
+
         // Assumed exposure when a target has none, just so the look-ahead has a length.
         public const double DefaultExposureSeconds = 60.0;
+
+        // The most the server may ask of one frame. Anything past these is a server fault, not a plan,
+        // and CaptureImage reports the frame failed instead of handing it to the camera.
+        public const double MaxExposureSeconds = 7200.0;
+        public const short MaxBinning = 4;
 
         // How many times a secure tries to close the roof, and the pause between tries. N.I.N.A.
         // reports a close as done whatever the shutter did, so we read the shutter back after each
@@ -43,10 +63,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
         // on a driver's connect with no time limit.
         public static readonly TimeSpan ReconnectTimeout = TimeSpan.FromSeconds(60);
 
-        // The most a secure may take (see States.SecureObservatory). It covers N.I.N.A.'s ten-minute
-        // park, every roof close attempt at the Dome's move timeout, one flat panel cover move, a
-        // reconnect each for the mount, dome and panel, and some margin.
-        public static readonly TimeSpan SecureTimeout = TimeSpan.FromMinutes(35);
+        // The most a secure may take (see States.SecureObservatory). It covers two parks at N.I.N.A.'s
+        // ten-minute limit (the retry when the roof reads open again), each with its wait for a roof
+        // still opening and a park still under way, every roof close attempt at the Dome's move
+        // timeout, one flat panel cover move, a reconnect each for the mount, dome and panel, and margin.
+        public static readonly TimeSpan SecureTimeout = TimeSpan.FromMinutes(55);
 
         /// <summary>
         /// How far ahead a frame commits the mount, its exposure plus setup. The limit check and the
@@ -103,6 +124,9 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
         private const string Device = "autopilot";
 
         public Observatory Observatory { get; }
+
+        /// <summary>The time every decision here is made against. See Observatory.Clock.</summary>
+        public DateTime UtcNow => Observatory.UtcNow;
 
         public Mount? Mount { get; }
         public Camera? Camera { get; }
@@ -194,7 +218,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
         // Setup has outrun the margin the server allowed for, so a limit refusal now is a
         // timing miss for the server to re-judge, not a fault for the retry ladder.
         public bool HasServerWindowExpired =>
-            (DateTime.UtcNow - TargetAssignedAtUtc).TotalSeconds > LimitLookAheadMarginSeconds;
+            (UtcNow - TargetAssignedAtUtc).TotalSeconds > LimitLookAheadMarginSeconds;
 
         /// <summary>
         /// The mount's side of pier for the /next/ query, sent even with flips off. Null while parked or not
@@ -240,11 +264,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
         public bool IsRoofClosedOnUnsafe =>
             Observatory.Settings.ProfileService.ActiveProfile.DomeSettings.CloseOnUnsafe;
 
-        /// <summary>
-        /// Whether the autopilot may park the mount so the roof can open when
-        /// IsShutterMoveRefusedWithUnparkedMount is on. Off by default (see Autopilot.ShouldParkMountToOpenRoof).
-        /// </summary>
-        public bool ShouldParkMountToOpenRoof => Observatory.Settings.ShouldParkMountToOpenRoof();
+        /// <summary>See Autopilot.CanMountMoveUnderClosedRoof.</summary>
+        public bool CanMountMoveUnderClosedRoof => Observatory.Settings.CanMountMoveUnderClosedRoof();
 
         public FlatPanelMode FlatPanelMode => Observatory.Settings.GetAutopilotFlatPanelMode();
 
@@ -359,7 +380,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
         }
 
         public void RecordAutofocus() {
-            LastAutofocusTimeUtc = DateTime.UtcNow;
+            LastAutofocusTimeUtc = UtcNow;
             LastAutofocusTemperature = GetAmbientTemperature();
             LastAutofocusFilter = FilterWheel?.GetCurrentFilter()?.Name;
         }
@@ -558,7 +579,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
                 new { device = device.DisplayName, state = "disconnected", reconnect });
         }
 
-        public static string FormatElapsed(Stopwatch watch) => $"{watch.Elapsed.TotalSeconds:F1}s";
+        public static string FormatElapsed(Stopwatch watch) => FormatElapsed(watch.Elapsed);
+        public static string FormatElapsed(TimeSpan elapsed) => $"{elapsed.TotalSeconds:F1}s";
+
+        /// <summary>How long since a moment read from UtcNow, as "12.3s", for the log.</summary>
+        public string ElapsedSince(DateTime startedUtc) => FormatElapsed(UtcNow - startedUtc);
 
         /// <summary>False when there's nothing to run or it couldn't run.</summary>
         public async Task<bool> RunSequenceAsync(string? path, CancellationToken cancellationToken) {
@@ -595,7 +620,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
             if (device.IsConnected) return true;
             // No default device means it isn't used here, so there's nothing to reconnect or lose.
             if (!IsStartupComplete || !device.HasDefaultDevice) return false;
-            DateTime now = DateTime.UtcNow;
+            if (IsManualDevice(device.DefaultDevice)) return false;   // The night started without a manual default
+            DateTime now = UtcNow;
             if (_lastReconnectAttemptUtc.TryGetValue(device, out DateTime lastAttempt)
                 && now - lastAttempt < ReconnectCooldown) {
                 return false;
@@ -644,11 +670,12 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
         }
 
         // One connect, bounded by ReconnectTimeout and the caller's token. If it outlasts either we
-        // press N.I.N.A.'s own Cancel on it. A timeout returns false and a cancellation throws.
+        // press N.I.N.A.'s own Cancel on it, unless it waits on N.I.N.A.'s prompt. A timeout returns
+        // false and a cancellation throws.
         public async Task<bool> ConnectWithTimeoutAsync(IDeviceComponent device, CancellationToken cancellationToken) {
             Task<bool> connecting = device.TryConnectDefaultDeviceAsync();
             Task firstToFinish = await Task.WhenAny(connecting,
-                Task.Delay(ReconnectTimeout, cancellationToken).ContinueWith(_ => { }, TaskScheduler.Default));
+                Task.Delay(ReconnectTimeout, Observatory.Clock, cancellationToken).ContinueWith(_ => { }, TaskScheduler.Default));
             if (firstToFinish == connecting) {
                 try {
                     return await connecting;
@@ -661,8 +688,16 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
             // Observed here so a connect that fails after we stop waiting is not an unobserved fault.
             connecting.ObserveFaults(exception =>
                 LogDebug($"Connecting {device.DisplayName} failed after the wait: {exception.Message}"));
-            device.TryCancelConnect();
+
+            // Cancel can't close the prompt, and the answer is the user's.
+            string? prompt = device.FindOpenConnectPrompt();
+            if (prompt is null) device.TryCancelConnect();
             cancellationToken.ThrowIfCancellationRequested();
+            if (prompt is not null) {
+                LogWarning($"Connecting {device.DisplayName} is waiting on N.I.N.A.'s \"{prompt}\" window. " +
+                           "It is left open for somebody to answer in N.I.N.A.");
+                return false;
+            }
             LogWarning($"Connecting {device.DisplayName} did not finish within " +
                        $"{ReconnectTimeout.TotalSeconds:F0} s and was cancelled.");
             return false;
@@ -672,12 +707,17 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
         public int SafeSettleSeconds => Observatory.Settings.GetSafeSettleSeconds();
 
         /// <summary>
-        /// Whether the mount is inside its limits now. True when limits are off, it's parked or there's
-        /// no mount. The meridian is left out while a flip is coming, or the watcher would end the night
-        /// a minute before the flip fixes the breach.
+        /// Whether the mount is inside its limits now. True when limits are off, it's parked, there's no
+        /// mount, or its position can't be read, which the watcher checks separately with
+        /// DescribeUnknownMountPosition.
+        /// The meridian is left out while a flip is coming, or the watcher would end the night a minute before the flip fixes the breach. 
         /// </summary>
         public bool IsWithinLimits() =>
             Mount?.IsCurrentPositionWithinLimits(shouldIncludeMeridian: !IsMeridianWaived) ?? true;
+        
+   
+        public string? DescribeUnknownMountPosition() =>
+            IsStartupComplete && SessionStartedUtc != null ? Mount?.DescribeUnknownPosition() : null;
 
         /// <summary>When the committed frame's exposure window ends. Null until a frame is marked started.</summary>
         public DateTime? FrameWindowEndsAtUtc { get; set; }
@@ -692,7 +732,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
             get {
                 if (!CanFlipForCurrentTarget) return false;
                 if (FrameWindowEndsAtUtc is not DateTime windowEnd) return true;
-                return DateTime.UtcNow < windowEnd + MeridianWaiverGrace;
+                return UtcNow < windowEnd + MeridianWaiverGrace;
             }
         }
 
@@ -725,6 +765,23 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
 
         public DateTime? SessionSecuredAtUtc { get; set; }
 
+        /// <summary>
+        /// The secure's result checked again now, for anything that reports it later: the mount still reads
+        /// parked and the roof still reads closed or isn't ours. A device that has dropped since, or a mount
+        /// or roof moved by hand, makes it false, since unknown is never secured.
+        /// </summary>
+        public bool IsStillSecured =>
+            IsSessionSecured && Mount is { IsConnected: true, IsParked: true } && IsRoofClosedOrNotOurs();
+
+        /// <summary>
+        /// True for a roof this autopilot doesn't work. One it works counts only when it reads Closed: a dome
+        /// that isn't connected leaves the roof's state unknown, and unknown is never closed.
+        /// </summary>
+        public bool IsRoofClosedOrNotOurs() {
+            if (RoofMode != RoofMode.Operate && !HasOpenedRoofTonight) return true;
+            return Dome?.IsShutterClosed() == true;
+        }
+
         ///////////// Notification session (one night) /////////////
 
         /// <summary>
@@ -742,7 +799,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
         public DateTime? SessionStartedUtc => Volatile.Read(ref _session)?.StartedUtc;
 
         public async Task StartSessionAsync() {
-            Session session = new Session(Guid.NewGuid().ToString("N"), DateTime.UtcNow);
+            Session session = new Session(Guid.NewGuid().ToString("N"), UtcNow);
             if (Interlocked.Exchange(ref _session, session) is { } stale)
                 LogWarning($"Autopilot session {stale.Id} was still open when tonight's started.");
 
@@ -799,7 +856,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
                 session_started_at = sessionStartedAt,
                 reason = reason ?? "switched off",
                 // Drives the "mount is not parked, roof may still be open" warning in the email.
-                secured = IsSessionSecured ? "yes" : "no",
+                secured = IsStillSecured ? "yes" : "no",
                 roof = DescribeRoofNow(),
             };
             // A deliberate stop leaves the observatory as found. If the roof is open the first line says

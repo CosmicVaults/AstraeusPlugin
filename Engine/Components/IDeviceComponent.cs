@@ -33,6 +33,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Components {
         /// </summary>
         bool TryCancelConnect();
 
+        string? FindOpenConnectPrompt(); //autopilot needs to see if a device connection is hung or waiting on a dialog.
+
         /// <summary>Disconnects whatever is connected. True once nothing is. Never throws.</summary>
         Task<bool> TryDisconnectAsync();
     }

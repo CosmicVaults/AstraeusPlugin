@@ -5,6 +5,10 @@ VisualStudioVersion = 17.14.36518.9 d17.14
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Astraeus", "Astraeus.csproj", "{37C2A574-C9C9-44D0-A955-E6BC01F3ABB5}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Astraeus.Tests", "tests\Astraeus.Tests\Astraeus.Tests.csproj", "{54B6EA46-8E22-4B83-B7B2-14222036594B}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{B74F9482-58B0-4B1D-B7CC-B201160CCEC0}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +19,13 @@ Global
 		{37C2A574-C9C9-44D0-A955-E6BC01F3ABB5}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{37C2A574-C9C9-44D0-A955-E6BC01F3ABB5}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{37C2A574-C9C9-44D0-A955-E6BC01F3ABB5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{54B6EA46-8E22-4B83-B7B2-14222036594B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{54B6EA46-8E22-4B83-B7B2-14222036594B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{54B6EA46-8E22-4B83-B7B2-14222036594B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{54B6EA46-8E22-4B83-B7B2-14222036594B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{54B6EA46-8E22-4B83-B7B2-14222036594B} = {B74F9482-58B0-4B1D-B7CC-B201160CCEC0}
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

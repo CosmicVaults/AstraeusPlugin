@@ -15,8 +15,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
             ICameraSettings cameraSettings = Profile!.CameraSettings;
             SettingsUpdateBatch update = new SettingsUpdateBatch(data)
-                .Double("pixel_size", value => cameraSettings.PixelSize = value)
-                .Int("bit_depth", value => cameraSettings.BitDepth = value)
+                .Double("pixel_size", value => cameraSettings.PixelSize = value, min: 0.1, max: 100)
+                .Int("bit_depth", value => cameraSettings.BitDepth = value, min: 1, max: 32)
                 .EnumNumber<BayerPatternEnum>("bayer_pattern", value => cameraSettings.BayerPattern = value);
             if (!await TryApplyServerUpdateAsync(update, "camera", PushCameraSettingsAsync)) return;
 

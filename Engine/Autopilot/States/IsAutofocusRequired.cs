@@ -10,6 +10,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
     internal sealed class IsAutofocusRequired(string name, Context context) : DecisionState(name) {
         // Smart Autofocus asks the server, and the roof is open for the round trip.
         protected internal override bool ShouldWatchSafety => true;
+        protected internal override bool ShouldWatchMountLimits => true;
 
         protected override async Task<bool> DecideAsync(CancellationToken cancellationToken) {
             // Cleared so RunAutofocus and ApplyRecommendedFocus never act on a stale server response.
@@ -66,7 +67,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
             }
 
             if (context.ShouldAutofocusOnTimeInterval) {
-                TimeSpan elapsed = DateTime.UtcNow - context.LastAutofocusTimeUtc.Value;
+                TimeSpan elapsed = context.UtcNow - context.LastAutofocusTimeUtc.Value;
                 if (elapsed >= TimeSpan.FromMinutes(context.AutofocusIntervalMinutes)) {
                     context.Log($"Autofocus due: {elapsed.TotalMinutes:F0} min since last focus " +
                                 $"(>= {context.AutofocusIntervalMinutes} min).");

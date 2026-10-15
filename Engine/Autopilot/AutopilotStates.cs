@@ -154,17 +154,21 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
                 "this Astraeus version is no longer supported", isFault: true);
         // The start-up sequence is the observer's own and may have opened the roof or unparked the
         // mount before failing, so both get put back before switching off. The dome usually isn't
-        // connected yet, and the secure notes that quietly.
+        // connected yet, so the roof can't be confirmed open. Unless the mount can move under a closed
+        // roof, a mount the sequence unparked is stopped where it is rather than parked, with an alert.
         private SecureObservatory SecureForStartupFailure { get; } =
             new SecureObservatory("Secure (Start-up Failed)", context, "the start-up sequence failed", isFault: true);
         // A cover that won't open would be in every frame, so the night ends here.
         private SecureObservatory SecureForFlatPanel { get; } =
             new SecureObservatory("Secure (Flat Panel)", context,
                 "the flat panel cover could not be confirmed open", isFault: true);
-        // The roof stopped reading open mid-night. Everything stops where it is, since a park may not
-        // be reachable under a closed roof. Then it waits for the roof again (Wait-for-open) or
-        // disables (Operate, where nothing else should have moved it).
+        // The roof stopped reading open mid-night. Under Operate everything stops where it is and the
+        // autopilot disables, since nothing else should have moved the roof. A roof that isn't ours is
+        // handled like unsafe conditions, then waits for safe conditions and the roof again.
         private StopForRoofClosed StopForRoofClosed { get; } = new StopForRoofClosed("Stop (Roof Closed)", context);
+        private SecureObservatory SecureForRoofClosed { get; } =
+            new SecureObservatory("Secure (Roof Closed)", context, () => "the roof stopped reading open",
+                isEmergency: true);
         // Before the shutdown sequence, so a sequence that cuts switch power never does it to a cold camera.
         private WarmCamera WarmCamera { get; } = new WarmCamera("Warm Camera", context);
         private RunSequence RunShutdownSequence { get; } =
@@ -301,9 +305,10 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
             SecureForUpdateRequired.OnCompleted(DisableAutopilot); // Version refused: secure -> disable
             SecureForStartupFailure.OnCompleted(DisableAutopilot); // Start-up failed: secure -> disable
             SecureForFlatPanel.OnCompleted(DisableAutopilot);    // Flat panel would not open: secure -> disable
-            // RoofClosed: stop in place -> wait for safe and the roof again (Wait-for-open), or disable (Operate)
-            StopForRoofClosed.OnCompleted(WaitForSafe).OnFailed(DisableAutopilot)
+            // RoofClosed: secure like unsafe -> wait for safe and the roof again (Wait-for-open), or stop and disable (Operate)
+            StopForRoofClosed.OnCompleted(SecureForRoofClosed).OnFailed(DisableAutopilot)
                 .On(AutopilotStateResult.Resumed, PollForTarget);
+            SecureForRoofClosed.OnCompleted(WaitForSafe);
             SecureForShutdown.OnCompleted(WarmCamera);
             WarmCamera.OnCompleted(RunShutdownSequence);
             RunShutdownSequence.OnCompleted(DisconnectEquipment).OnFailed(DisconnectEquipment);

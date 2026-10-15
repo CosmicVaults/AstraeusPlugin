@@ -111,7 +111,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
             }
         }
 
-        private static int FindEndCardIndex(byte[] bytes) {
+        internal static int FindEndCardIndex(byte[] bytes) {
             int searchLimit = Math.Min(bytes.Length / CardSize, CardsPerBlock * MaxHeaderBlocksScanned);
             for (int i = 0; i < searchLimit; i++) {
                 int cardOffset = i * CardSize;
@@ -122,7 +122,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
             return -1;
         }
 
-        private static string[] BuildWcsCards(FrameWcs wcs) => new[] {
+        internal static string[] BuildWcsCards(FrameWcs wcs) => new[] {
             TextCard  ("CTYPE1", "RA---TAN", "Coordinate projection type"),
             TextCard  ("CTYPE2", "DEC--TAN", "Coordinate projection type"),
             NumberCard("CRVAL1", wcs.CrVal1, "[deg] RA at reference pixel"),

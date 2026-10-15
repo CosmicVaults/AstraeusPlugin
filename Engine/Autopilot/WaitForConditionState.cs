@@ -26,7 +26,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
             int pollCount = 0;
             while (!await IsSatisfiedAsync(cancellationToken)) {
                 if (pollCount++ % Context.WaitHeartbeatPolls == 0) RunContext.Log(WaitingMessage());
-                await Task.Delay(TimeSpan.FromSeconds(PollIntervalSeconds), cancellationToken);
+                await Task.Delay(TimeSpan.FromSeconds(PollIntervalSeconds), RunContext.Observatory.Clock, cancellationToken);
             }
             return AutopilotStateResult.Completed;
         }

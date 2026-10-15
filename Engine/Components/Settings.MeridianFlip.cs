@@ -24,11 +24,12 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             double? minimumMinutesAfter = null;
             double? maximumMinutesAfter = null;
             SettingsUpdateBatch update = new SettingsUpdateBatch(data)
-                .Double("minutes_after_meridian", value => minimumMinutesAfter = value)
-                .Double("max_minutes_after_meridian", value => maximumMinutesAfter = value)
-                .Double("pause_time_before_meridian", value => meridianFlipSettings.PauseTimeBeforeMeridian = value)
+                .Double("minutes_after_meridian", value => minimumMinutesAfter = value, min: 0, max: 720)
+                .Double("max_minutes_after_meridian", value => maximumMinutesAfter = value, min: 0, max: 720)
+                .Double("pause_time_before_meridian", value => meridianFlipSettings.PauseTimeBeforeMeridian = value,
+                    min: 0, max: 720)
                 .Bool("recenter", value => meridianFlipSettings.Recenter = value)
-                .RoundedInt("settle_time", value => meridianFlipSettings.SettleTime = value)
+                .RoundedInt("settle_time", value => meridianFlipSettings.SettleTime = value, min: 0, max: 600)
                 .Bool("use_side_of_pier", value => meridianFlipSettings.UseSideOfPier = value)
                 .Bool("auto_focus_after_flip", value => meridianFlipSettings.AutoFocusAfterFlip = value)
                 .Bool("rotate_image_after_flip", value => meridianFlipSettings.RotateImageAfterFlip = value);

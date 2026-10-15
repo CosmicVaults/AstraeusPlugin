@@ -48,7 +48,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
                 context.SessionEndReason =
                     "N.I.N.A. refuses to unpark the mount unless the roof is open, and the roof is not open.";
                 string ignoreModeNote = context.RoofMode == RoofMode.Ignore
-                    ? " (roof handling is set to Ignore, so the autopilot never opens it)"
+                    ? " (roof handling is set to No roof, so the autopilot never opens it)"
                     : "";
                 context.LogError(
                     "Not unparking: N.I.N.A. refuses to unpark the mount while the roof is not open" +

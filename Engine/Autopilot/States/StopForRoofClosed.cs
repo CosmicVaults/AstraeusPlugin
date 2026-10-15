@@ -4,13 +4,14 @@ using System.Threading.Tasks;
 
 namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
     /// <summary>
-    /// The roof stopped reading open while imaging, with the safety monitor still Safe. Stops the exposure,
-    /// guider and mount without parking, since the park position may only be reachable with the roof open.
-    /// In Operate mode only the autopilot should move this roof, so it disables instead of reopening it.
+    /// The roof stopped reading open while imaging, with the safety monitor still Safe. Under Operate only
+    /// the autopilot should move this roof, so it stops the exposure, guider and mount without parking
+    /// and disables. A roof that isn't ours goes on to the emergency secure, as for unsafe conditions.
     /// </summary>
     internal sealed class StopForRoofClosed(string name, Context context) : StateBase(name) {
         // It's the response to the roof, so it finishes whatever the clock says.
         protected internal override bool ShouldWatchObservingWindow => false;
+        protected internal override bool ShouldWatchRoof => false;
 
         public override async Task<AutopilotStateResult> ExecuteAsync(CancellationToken cancellationToken) {
             // A dome that dropped off reads as "not open", so it gets one reconnect first. If the roof
@@ -22,21 +23,19 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
                 return AutopilotStateResult.Resumed;
             }
 
+            if (context.RoofMode != RoofMode.Operate) return AutopilotStateResult.Completed;
+
             context.IsRoofExpectedOpen = false;
             string shutter = context.Dome?.ShutterStatusName ?? "no dome";
-            bool isOperated = context.RoofMode == RoofMode.Operate;
 
             StopExposure();
             // Before the mount stops, since a guider left running on a stopped mount chases the sky.
             await StopGuidingAsync(cancellationToken);
             string mount = await StopMountAsync();
-            // Wait-for-open carries on once the roof reopens, so the flat panel is left for
-            // PrepareFlatPanel to check then. Operate ends the night here, so it gets the end-of-night
-            // close, which with the roof already shut only moves a cover allowed to move under it.
-            if (isOperated) {
-                await FlatPanelControl.CloseAfterRoofAsync(context, "the roof closed", hasAlreadyTried: false,
-                    cancellationToken);
-            }
+            // The night ends here, so it gets the end-of-night close, which with the roof already shut
+            // only moves a cover allowed to move under it.
+            await FlatPanelControl.CloseAfterRoofAsync(context, "the roof closed", hasAlreadyTried: false,
+                cancellationToken);
 
             await context.ReportStartedImageFailedAsync("cycle aborted: the roof closed");
 
@@ -47,12 +46,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
                     shutter,
                     roof_mode = context.RoofMode.ToString(),
                     mount,
-                    action = isOperated
-                        ? "autopilot disabled (check the roof and the mount before imaging again)"
-                        : "waiting for safe conditions and for the roof to open again",
+                    action = "autopilot disabled (check the roof and the mount before imaging again)",
                 });
-
-            if (!isOperated) return AutopilotStateResult.Completed;
 
             context.SessionEndReason ??=
                 $"The roof closed on its own while imaging (shutter {shutter}). " +

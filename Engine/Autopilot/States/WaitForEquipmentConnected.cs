@@ -20,7 +20,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
         protected override AutopilotStatus Status => AutopilotStatus.WaitingEquipment;
 
         public override Task OnEntryAsync(CancellationToken cancellationToken) {
-            if (criticalHeadline != null && component is { IsConnected: false }) {
+            bool wasConnectTried = context.ShouldAutoConnectEquipment && component is { HasDefaultDevice: true };
+            if (criticalHeadline != null && component is { IsConnected: false } && !wasConnectTried) {
                 context.ReportCritical(criticalHeadline, criticalDetails?.Invoke());
             }
             return Task.CompletedTask;

@@ -10,6 +10,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
         // Part of the post-capture tail with CalibrateFrame and QueueUpload. The night's last frame must
         // still reach the upload queue after dawn.
         protected internal override bool ShouldWatchObservingWindow => false;
+        protected internal override bool ShouldWatchMountLimits => true;
 
         protected override Task<bool> DecideAsync(CancellationToken cancellationToken) {
             bool isEnabled = context.IsCloudUploadEnabled;

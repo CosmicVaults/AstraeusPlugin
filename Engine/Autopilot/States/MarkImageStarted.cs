@@ -10,6 +10,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
     internal sealed class MarkImageStarted(string name, Context context) : StateBase(name) {
         // The round trip is bounded by the web client's timeout, but the roof is open for all of it.
         protected internal override bool ShouldWatchSafety => true;
+        protected internal override bool ShouldWatchMountLimits => true;
 
         public override async Task<AutopilotStateResult> ExecuteAsync(CancellationToken cancellationToken) {
             if (context.CurrentTarget?.ImageId is not int imageId) {
@@ -26,7 +27,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
             }
 
             context.IsCurrentTargetStarted = true;
-            context.FrameWindowEndsAtUtc = DateTime.UtcNow + Context.ExposureWindow(context.CurrentTarget);
+            context.FrameWindowEndsAtUtc = context.UtcNow + Context.ExposureWindow(context.CurrentTarget);
             // One dispatch is one exposure under the frame-counting contract, so this ref identifies
             // the exposure for every report of it, including retries.
             context.CurrentClientRef = Guid.NewGuid().ToString();

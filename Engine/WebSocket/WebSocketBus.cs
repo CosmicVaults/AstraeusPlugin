@@ -74,7 +74,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket {
 
         // One-off messages are worth sending late, like notifications, command replies, device events
         // and connections. Telemetry ticks, feed frames and previews get re-sent or replaced anyway.
-        private static bool IsWorthReplaying(WsMessage wsMessage) {
+        internal static bool IsWorthReplaying(WsMessage wsMessage) {
             if (wsMessage is FeedFrameMessage or ImagePreviewMessage or DashboardUpdate or NinaConnectionUpdate)
                 return false;
             return wsMessage.Type != "update" || wsMessage.Context is not (null or "dashboard");

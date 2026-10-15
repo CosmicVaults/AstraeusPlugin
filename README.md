@@ -90,7 +90,7 @@ While the plugin is enabled and signed in, it keeps a connection to the Astraeus
   and autopilot, equipment, image file and meridian flip options. Folder locations are never sent
   in either direction. N.I.N.A.'s file name patterns are synced.
 - **Frames:** a small preview and the statistics of each frame you capture. Full frames, and
-  calibrated copies, are uploaded only when Upload to Cloud is on. Captures are identified to the
+  calibrated copies, are uploaded only when Upload to Cloud is on (upload is on by default, but reviewed in the web setup wizard). Captures are identified to the
   server by file name only, not by folder.
 - **Calibration masters** you generate with the "Generate & Upload Calibration Masters" instruction,
   together with the name of the N.I.N.A. profile they were made with. Masters are never downloaded.

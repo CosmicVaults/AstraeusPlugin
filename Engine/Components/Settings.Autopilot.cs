@@ -121,27 +121,32 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 .Bool("auto_connect_equipment", value => autopilot.ShouldAutoConnectEquipment = value)
                 .Bool("is_mount_limit_enabled", value => autopilot.IsMountLimitEnabled = value)
                 .Bool("is_altitude_limit_enabled", value => autopilot.IsAltitudeLimitEnabled = value)
-                .Double("min_altitude_degrees", value => autopilot.MinAltitudeDegrees = value)
+                .Double("min_altitude_degrees", value => autopilot.MinAltitudeDegrees = value, min: 0, max: 90)
                 .Bool("is_custom_horizon_limit_enabled", value => autopilot.IsCustomHorizonLimitEnabled = value)
                 .Bool("is_meridian_flip_enabled", value => autopilot.IsMeridianFlipEnabled = value)
-                .Double("recenter_tolerance_arcmin", value => autopilot.RecenterToleranceArcmin = value)
-                .RoundedInt("safe_settle_seconds", value => autopilot.SafeSettleSeconds = value)
+                .Double("recenter_tolerance_arcmin", value => autopilot.RecenterToleranceArcmin = value,
+                    min: 0, max: AstraeusSettings.MaxRecenterToleranceArcmin)
+                .RoundedInt("safe_settle_seconds", value => autopilot.SafeSettleSeconds = value,
+                    min: 0, max: AstraeusSettings.MaxSafeSettleSeconds)
                 .EnumName<Autopilot.RotatorFallbackMode>("rotator_fallback_mode",
                     value => autopilot.RotatorFallbackMode = value)
-                .Double("rotator_fallback_angle", value => autopilot.RotatorFallbackAngle = value)
-                .Bool("park_mount_to_open_roof", value => autopilot.ShouldParkMountToOpenRoof = value)
+                .Double("rotator_fallback_angle", value => autopilot.RotatorFallbackAngle = value, min: -360, max: 360)
+                .Bool("park_mount_to_open_roof", value => autopilot.CanMountMoveUnderClosedRoof = value)
                 .EnumName<Autopilot.FlatPanelMode>("flat_panel_mode", value => autopilot.FlatPanelMode = value)
                 .Bool("flat_panel_operates_with_roof_closed",
                     value => autopilot.ShouldOperateFlatPanelWithRoofClosed = value)
                 .EnumName<Autopilot.OperatingWindow>("operating_window", value => autopilot.OperatingWindow = value)
                 .Bool("is_camera_cooling_enabled", value => autopilot.IsCameraCoolingEnabled = value)
-                .Double("camera_cooling_temperature_celsius", value => autopilot.CameraCoolingTemperature = value)
+                .Double("camera_cooling_temperature_celsius", value => autopilot.CameraCoolingTemperature = value,
+                    min: AstraeusSettings.MinCameraCoolingTemperature, max: AstraeusSettings.MaxCameraCoolingTemperature)
                 .Bool("is_autofocus_enabled", value => autopilot.IsAutofocusEnabled = value)
                 .Bool("autofocus_on_temperature_change", value => autopilot.ShouldAutofocusOnTemperatureChange = value)
-                .Double("autofocus_temperature_threshold", value => autopilot.AutofocusTemperatureThreshold = value)
+                .Double("autofocus_temperature_threshold", value => autopilot.AutofocusTemperatureThreshold = value,
+                    min: AstraeusSettings.MinAutofocusTemperatureThreshold,
+                    max: AstraeusSettings.MaxAutofocusTemperatureThreshold)
                 .Bool("autofocus_on_filter_change", value => autopilot.ShouldAutofocusOnFilterChange = value)
                 .Bool("autofocus_on_time_interval", value => autopilot.ShouldAutofocusOnTimeInterval = value)
-                .Int("autofocus_interval_minutes", value => autopilot.AutofocusIntervalMinutes = value)
+                .Int("autofocus_interval_minutes", value => autopilot.AutofocusIntervalMinutes = value, min: 1, max: 1440)
                 .Bool("is_smart_autofocus_enabled", value => autopilot.IsSmartAutofocusEnabled = value)
                 // Absent fields are never applied, so an older server block without this one leaves the
                 // local default (on) alone.
@@ -222,7 +227,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 SafeSettleSeconds = Observatory.Settings.GetSafeSettleSeconds(),
                 RotatorFallbackMode = Observatory.Settings.GetAutopilotRotatorFallbackMode().ToString(),
                 RotatorFallbackAngle = Observatory.Settings.GetAutopilotRotatorFallbackAngle(),
-                ShouldParkMountToOpenRoof = Observatory.Settings.ShouldParkMountToOpenRoof(),
+                CanMountMoveUnderClosedRoof = Observatory.Settings.CanMountMoveUnderClosedRoof(),
                 FlatPanelMode = Observatory.Settings.GetAutopilotFlatPanelMode().ToString(),
                 ShouldOperateFlatPanelWithRoofClosed = Observatory.Settings.ShouldOperateFlatPanelWithRoofClosed(),
                 IsAutofocusEnabled = Observatory.Settings.IsAutofocusEnabled(),

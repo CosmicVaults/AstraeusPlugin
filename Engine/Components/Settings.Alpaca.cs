@@ -14,10 +14,10 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
             IAlpacaSettings alpacaSettings = Profile!.AlpacaSettings;
             SettingsUpdateBatch update = new SettingsUpdateBatch(data)
-                .Int("number_of_polls", value => alpacaSettings.NumberOfPolls = value)
-                .Int("poll_interval", value => alpacaSettings.PollInterval = value)
-                .Int("discovery_port", value => alpacaSettings.DiscoveryPort = value)
-                .Double("discovery_duration", value => alpacaSettings.DiscoveryDuration = value)
+                .Int("number_of_polls", value => alpacaSettings.NumberOfPolls = value, min: 1, max: 1000)
+                .Int("poll_interval", value => alpacaSettings.PollInterval = value, min: 1, max: 600000)
+                .Int("discovery_port", value => alpacaSettings.DiscoveryPort = value, min: 1, max: 65535)
+                .Double("discovery_duration", value => alpacaSettings.DiscoveryDuration = value, min: 0, max: 600)
                 .Bool("resolve_dns_name", value => alpacaSettings.ResolveDnsName = value)
                 .Bool("use_ipv4", value => alpacaSettings.UseIPv4 = value)
                 .Bool("use_ipv6", value => alpacaSettings.UseIPv6 = value)

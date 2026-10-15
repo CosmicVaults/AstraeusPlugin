@@ -13,6 +13,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
         : StateBase(name) {
         // A refusal is reported to the server, and the roof is open for that round trip.
         protected internal override bool ShouldWatchSafety => true;
+        protected internal override bool ShouldWatchMountLimits => true;
 
         public override async Task<AutopilotStateResult> ExecuteAsync(CancellationToken cancellationToken) {
             if (!context.IsMountLimitEnabled || context.Mount == null) {
@@ -30,20 +31,31 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
             // Shared with the flip decision so both look over the same window. The meridian is left out
             // when a flip is available, since refusing here would skip the target before the flip ran.
             TimeSpan lookAhead = window(target);
-            string? breach = context.Mount.DescribeTrackingBreach(
-                coordinates, lookAhead, shouldIncludeMeridian: !context.CanFlipForCurrentTarget);
+            bool shouldIncludeMeridian = !context.CanFlipForCurrentTarget;
+            string? breach = context.Mount.DescribeTrackingBreach(coordinates, lookAhead, shouldIncludeMeridian,
+                marginDegrees: Context.LimitAltitudeMarginDegrees);
             if (breach == null) {
                 return AutopilotStateResult.Yes;
             }
 
+            // Clear of the floor but not by the margin. The live watcher goes by the mount's own reading, which
+            // differs from this prediction by refraction and pointing error, so a target this close is deferred
+            // for the server to offer again once it has risen clear, not failed.
+            bool isInsideTheMargin =
+                context.Mount.DescribeTrackingBreach(coordinates, lookAhead, shouldIncludeMeridian) == null;
+
             // Past the server's margin the target ran into the limit while setup went on, so nothing is
             // misconfigured and the server schedules it again.
             if (context.HasServerWindowExpired) {
-                double setupMinutes = (DateTime.UtcNow - context.TargetAssignedAtUtc).TotalMinutes;
+                double setupMinutes = (context.UtcNow - context.TargetAssignedAtUtc).TotalMinutes;
                 context.LogWarning($"Skipping {target.TargetName}: {breach}. Setup took {setupMinutes:F1} min " +
                                    "since the server assigned it, more than the " +
                                    $"{Context.LimitLookAheadMarginSeconds / 60} min it allows, so the server will " +
                                    "schedule it again.");
+            } else if (isInsideTheMargin) {
+                context.LogWarning($"Skipping {target.TargetName}: {breach}. Too close to the limit to trust the " +
+                                   "prediction against the mount's own reading, so the server will offer it again " +
+                                   "once it is clear.");
             } else {
                 string label = target.ImageId is int imageId
                     ? $"{target.TargetName} (image {imageId})"
@@ -58,7 +70,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
             if (target.ImageId is int failedImageId) {
                 await context.Observatory.AstraeusWebClient.PostAutopilotFailAsync(
                     failedImageId, $"Can't slew to {target.TargetName}: {breach}", null,
-                    isDeferred: context.HasServerWindowExpired);
+                    isDeferred: context.HasServerWindowExpired || isInsideTheMargin);
             }
             return AutopilotStateResult.No;
         }

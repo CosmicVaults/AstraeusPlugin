@@ -21,7 +21,10 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Auth {
         /// <summary>Raised on each 426 from the Astraeus server: this plugin version is no longer supported.</summary>
         public event Action? UpdateRequired;
 
-        public BearerTokenHandler() : base(new HttpClientHandler()) { }
+        public BearerTokenHandler() : this(new HttpClientHandler()) { }
+
+        /// <summary>The handler that reaches the network, or a test's stand-in for the server.</summary>
+        public BearerTokenHandler(HttpMessageHandler innerHandler) : base(innerHandler) { }
 
         protected override async Task<HttpResponseMessage> SendAsync(
                 HttpRequestMessage request, CancellationToken cancellationToken) {

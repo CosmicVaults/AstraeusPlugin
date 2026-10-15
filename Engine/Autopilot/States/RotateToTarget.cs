@@ -31,8 +31,13 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
                 context.Log($"Rotating to mechanical angle {mechanical:F2}°.");
                 try {
                     await rotator.MoveMechanicalAsync((float)mechanical, cancellationToken);
-                } catch (OperationCanceledException) {
+                } catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
                     throw;
+                } catch (OperationCanceledException) {
+                    // Cancelled from outside the machine, a dashboard rotator move for instance. A
+                    // failed rotation, not a fault, so the frame is reported and the night carries on.
+                    context.LogWarning($"Rotator move to mechanical {mechanical:F2}° was aborted outside the autopilot.");
+                    return AutopilotStateResult.Failed;
                 } catch (Exception ex) {
                     context.LogError($"Rotator move to mechanical {mechanical:F2}° failed: {ex.Message}");
                     return AutopilotStateResult.Failed;
@@ -100,8 +105,13 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
                         return AutopilotStateResult.Failed;
                     }
                 } while (true);
+            } catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+                throw; // a watcher (safety, mount limit or daylight) or a stop aborted, so let the machine handle it
             } catch (OperationCanceledException) {
-                throw; // a watcher (safety, mount limit or daylight) aborted, so let the machine handle it
+                // Cancelled from outside the machine, see above. The capture and solve share this path, so a
+                // dashboard capture abort mid-solve lands here too.
+                context.LogWarning($"Rotation to {requested:F2}° was aborted outside the autopilot.");
+                return AutopilotStateResult.Failed;
             } catch (Exception ex) {
                 // The capture solver throws on failure, and GetTargetPosition throws when the rotator is
                 // unsynced. Treat both as recoverable.

@@ -1,4 +1,4 @@
-using System.Diagnostics;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -17,7 +17,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
         /// <summary>
         /// A panel that has dropped still counts, since the close reconnects it or reports that it couldn't.
         /// </summary>
-        private static bool IsCloseWanted(Context context) =>
+        internal static bool IsCloseWanted(Context context) =>
             context.FlatPanelMode == FlatPanelMode.OpenAndClose &&
             context.FlatPanel is { } panel && (panel.IsConnected || panel.HasDefaultDevice);
 
@@ -63,19 +63,19 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
 
             context.AutopilotStatus = AutopilotStatus.ClosingFlatPanel;
             context.Log($"Closing the flat panel ({reason}).");
-            Stopwatch watch = Stopwatch.StartNew();
+            DateTime started = context.UtcNow;
             if (await panel.CloseCoverAsync(cancellationToken)) {
-                context.Log($"Flat panel closed in {Context.FormatElapsed(watch)}.");
+                context.Log($"Flat panel closed in {context.ElapsedSince(started)}.");
                 return;
             }
-            ReportLeftOpen(context, reason, $"the cover did not read closed after {Context.FormatElapsed(watch)}");
+            ReportLeftOpen(context, reason, $"the cover did not read closed after {context.ElapsedSince(started)}");
         }
 
         // Only a log warning. A cover left open for the day is worth knowing about but not worth
         // waking anyone for.
         private static void ReportLeftOpen(Context context, string reason, string why) {
-            string cover = context.FlatPanel?.CoverStateName ?? "none";
-            context.LogWarning($"Flat panel cover not closed ({reason}): {why}. Cover {cover}. Close it by hand.");
+            string cover = context.FlatPanel is { IsConnected: true } panel ? $" Cover {panel.CoverStateName}." : "";
+            context.LogWarning($"Flat panel cover not closed ({reason}): {why}.{cover} Close it by hand.");
         }
     }
 }
