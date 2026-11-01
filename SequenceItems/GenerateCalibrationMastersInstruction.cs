@@ -8,7 +8,8 @@ using System.ComponentModel.Composition;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.SequenceItems {
+namespace CosmicVaults.NINA.Astraeus.SequenceItems
+{
     /// <summary>
     /// Builds and uploads calibration masters with the same engine as the settings-page button. Put it at
     /// the end of a calibration sequence.
@@ -20,19 +21,23 @@ namespace CosmicVaults.NINA.Astraeus.SequenceItems {
     [ExportMetadata("Category", "Astraeus")]
     [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
-    public class GenerateCalibrationMastersInstruction : SequenceItem {
+    public class GenerateCalibrationMastersInstruction : SequenceItem
+    {
 
         [ImportingConstructor]
         public GenerateCalibrationMastersInstruction() { }
 
-        public GenerateCalibrationMastersInstruction(GenerateCalibrationMastersInstruction copyMe) : this() {
+        public GenerateCalibrationMastersInstruction(GenerateCalibrationMastersInstruction copyMe) : this()
+        {
             CopyMetaData(copyMe);
         }
 
         public override async Task Execute(IProgress<ApplicationStatus> progress,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken)
+        {
             MasterFrameGenerator? generator = MasterFrameGenerator.Active;
-            if (generator == null) {
+            if (generator == null)
+            {
                 Notification.ShowWarning("Astraeus: calibration generator unavailable (plugin disabled?).");
                 return;
             }

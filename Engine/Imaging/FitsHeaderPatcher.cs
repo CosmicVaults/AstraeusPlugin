@@ -6,13 +6,15 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
+namespace CosmicVaults.NINA.Astraeus.Engine.Imaging
+{
     /// <summary>
     /// Patches WCS keywords into the primary header of a saved FITS file. N.I.N.A.'s PopulateHeaderCards
     /// doesn't write WorldCoordinateSystem to FITS headers, so we edit the file once the save is done.
     /// Never throws. Failures are logged and leave the file untouched.
     /// </summary>
-    internal sealed class FitsHeaderPatcher(Action<string> log, Action<string> logWarning) {
+    internal sealed class FitsHeaderPatcher(Action<string> log, Action<string> logWarning)
+    {
         private const int CardSize = 80;
         private const int KeywordLength = 8;
         private const int BlockSize = 2880;
@@ -35,9 +37,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
         /// Writes the patched file beside the original and swaps it in whole, so a crash part-way leaves the
         /// science frame as it was.
         /// </summary>
-        public async Task InjectWcsAsync(string path, FrameWcs wcs, CancellationToken cancellationToken) {
+        public async Task InjectWcsAsync(string path, FrameWcs wcs, CancellationToken cancellationToken)
+        {
             string temporaryPath = path + TemporaryFileSuffix;
-            try {
+            try
+            {
                 if (!IsPatchable(path)) return;
 
                 // ImageSaved can fire before N.I.N.A.'s finalize/history pipeline or an AV scanner lets
@@ -45,14 +49,16 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
                 byte[] bytes = await WithIoRetryAsync(() => File.ReadAllBytes(path), cancellationToken);
 
                 int endCardIndex = FindEndCardIndex(bytes);
-                if (endCardIndex < 0) {
+                if (endCardIndex < 0)
+                {
                     logWarning("WCS injection skipped: FITS END card not found.");
                     return;
                 }
 
                 // The data starts at the block after the one holding END.
                 int dataOffset = (endCardIndex / CardsPerBlock + 1) * BlockSize;
-                if (dataOffset > bytes.Length) {
+                if (dataOffset > bytes.Length)
+                {
                     logWarning("WCS injection skipped: the FITS header block is incomplete.");
                     return;
                 }
@@ -62,9 +68,13 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
                     cancellationToken);
                 await RunWithIoRetryAsync(() => File.Replace(temporaryPath, path, null), cancellationToken);
                 log($"WCS injected into FITS header: {Path.GetFileName(path)}");
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 logWarning($"Failed to inject WCS into FITS file: {ex.Message}");
-            } finally {
+            }
+            finally
+            {
                 DeleteIfPresent(temporaryPath);
             }
         }
@@ -73,12 +83,14 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
         /// Drops old WCS cards so patching the same file twice doesn't duplicate them. Kept cards are copied
         /// as raw bytes, never round-tripped through text.
         /// </summary>
-        private static byte[] BuildPatchedHeader(byte[] original, int endCardIndex, string[] wcsCards) {
+        private static byte[] BuildPatchedHeader(byte[] original, int endCardIndex, string[] wcsCards)
+        {
             HashSet<string> wcsKeys = new HashSet<string>(StringComparer.Ordinal);
             foreach (string card in wcsCards) wcsKeys.Add(card[..KeywordLength].TrimEnd());
 
             using MemoryStream header = new MemoryStream();
-            for (int cardIndex = 0; cardIndex < endCardIndex; cardIndex++) {
+            for (int cardIndex = 0; cardIndex < endCardIndex; cardIndex++)
+            {
                 int cardOffset = cardIndex * CardSize;
                 string keyword = Encoding.ASCII.GetString(original, cardOffset, KeywordLength).TrimEnd();
                 if (wcsKeys.Contains(keyword)) continue;
@@ -88,14 +100,16 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
             header.Write(Encoding.ASCII.GetBytes("END".PadRight(CardSize)));
 
             long partialBlockBytes = header.Length % BlockSize;
-            if (partialBlockBytes > 0) {
+            if (partialBlockBytes > 0)
+            {
                 for (long paddingIndex = partialBlockBytes; paddingIndex < BlockSize; paddingIndex++)
                     header.WriteByte((byte)' ');
             }
             return header.ToArray();
         }
 
-        private static void WriteTemporaryFile(string temporaryPath, byte[] header, byte[] original, int dataOffset) {
+        private static void WriteTemporaryFile(string temporaryPath, byte[] header, byte[] original, int dataOffset)
+        {
             using FileStream output = new FileStream(temporaryPath, FileMode.Create, FileAccess.Write, FileShare.None);
             output.Write(header, 0, header.Length);
             output.Write(original, dataOffset, original.Length - dataOffset);
@@ -103,17 +117,23 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
             output.Flush(flushToDisk: true);
         }
 
-        private static void DeleteIfPresent(string path) {
-            try {
+        private static void DeleteIfPresent(string path)
+        {
+            try
+            {
                 if (File.Exists(path)) File.Delete(path);
-            } catch (Exception) {
+            }
+            catch (Exception)
+            {
                 // A stray temporary file is harmless, and the next patch of this frame overwrites it.
             }
         }
 
-        internal static int FindEndCardIndex(byte[] bytes) {
+        internal static int FindEndCardIndex(byte[] bytes)
+        {
             int searchLimit = Math.Min(bytes.Length / CardSize, CardsPerBlock * MaxHeaderBlocksScanned);
-            for (int i = 0; i < searchLimit; i++) {
+            for (int i = 0; i < searchLimit; i++)
+            {
                 int cardOffset = i * CardSize;
                 if (bytes[cardOffset] == 'E' && bytes[cardOffset + 1] == 'N' && bytes[cardOffset + 2] == 'D' &&
                     (cardOffset + 3 >= bytes.Length || bytes[cardOffset + 3] == ' ' || bytes[cardOffset + 3] == 0))
@@ -144,18 +164,24 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
         private static string ToCard(string line)
             => line.Length > CardSize ? line[..CardSize] : line.PadRight(CardSize);
 
-        private static async Task<T> WithIoRetryAsync<T>(Func<T> operation, CancellationToken cancellationToken) {
-            for (int attempt = 1; ; attempt++) {
-                try {
+        private static async Task<T> WithIoRetryAsync<T>(Func<T> operation, CancellationToken cancellationToken)
+        {
+            for (int attempt = 1; ; attempt++)
+            {
+                try
+                {
                     return operation();
-                } catch (IOException) when (attempt < MaxIoAttempts) {
+                }
+                catch (IOException) when (attempt < MaxIoAttempts)
+                {
                     await Task.Delay(IoRetryDelay, cancellationToken);
                 }
             }
         }
 
         private static Task RunWithIoRetryAsync(Action operation, CancellationToken cancellationToken)
-            => WithIoRetryAsync<object?>(() => {
+            => WithIoRetryAsync<object?>(() =>
+            {
                 operation();
                 return null;
             }, cancellationToken);

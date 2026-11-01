@@ -25,7 +25,8 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine {
+namespace CosmicVaults.NINA.Astraeus.Engine
+{
     public class Mount(
         Observatory observatory,
         IWebSocketBus webSocketBus,
@@ -35,7 +36,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         IDomeMediator domeMediator,
         IDomeFollower domeFollower,
         IMeridianFlipVMFactory? meridianFlipVMFactory) :
-        DeviceComponent<ITelescopeVM, ITelescopeConsumer, TelescopeInfo>(telescopeMediator, observatory, webSocketBus) {
+        DeviceComponent<ITelescopeVM, ITelescopeConsumer, TelescopeInfo>(telescopeMediator, observatory, webSocketBus)
+    {
         public override string DeviceType { get; } = "mount";
         public override string DisplayName { get; } = "Telescope Mount";
         protected override string? RegistrationEndpoint => "telescopes";
@@ -49,12 +51,15 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         protected override bool IsOwnConnectPrompt(System.Windows.Window dialog) =>
             dialog.Content is TelescopeLatLongSyncVM;
 
-        public override WsMessage? GetUpdateMessage() {
-            if (LastInfo is null) {
+        public override WsMessage? GetUpdateMessage()
+        {
+            if (LastInfo is null)
+            {
                 return null;
             }
 
-            MountPayload payload = new MountPayload {
+            MountPayload payload = new MountPayload
+            {
                 DeviceId = DeviceId,
                 Ra = DevicePayload.CleanValue(LastInfo.RightAscension),
                 Dec = DevicePayload.CleanValue(LastInfo.Declination),
@@ -72,9 +77,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return new MountUpdate(payload);
         }
 
-        public override WsMessage? GetDeviceStaticInfo() {
+        public override WsMessage? GetDeviceStaticInfo()
+        {
             TelescopeInfo info = telescopeMediator.GetInfo();
-            MountPayload payload = new MountPayload() {
+            MountPayload payload = new MountPayload()
+            {
                 DeviceId = DeviceId,
                 Name = info.Name,
                 IsConnected = info.Connected,
@@ -98,22 +105,28 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return new MountUpdate(payload);
         }
 
-        public override async Task Start() {
+        public override async Task Start()
+        {
             await base.Start();
             WebSocketBus.Connected += OnSocketConnected;
         }
 
-        public override Task Destroy() {
+        public override Task Destroy()
+        {
             WebSocketBus.Connected -= OnSocketConnected;
             return base.Destroy();
         }
 
         // The server needs alignment_mode to know whether the meridian rule applies.
-        private async void OnSocketConnected() {
-            try {
+        private async void OnSocketConnected()
+        {
+            try
+            {
                 await Task.Delay(PushOnConnectDelay);
                 if (IsConnected) await SendStaticInfoAsync();
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 LogWarning($"Sending the mount's static info on connect failed: {ex.Message}");
             }
         }
@@ -137,7 +150,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// alone, since stopping is its only remedy and a park position is often below the altitude limit.
         /// </summary>
         public bool IsResting => IsRestingReading(telescopeMediator.GetInfo());
-        private static bool IsRestingReading(TelescopeInfo info) {
+        private static bool IsRestingReading(TelescopeInfo info)
+        {
             return info.AtPark || (!info.TrackingEnabled && !info.Slewing);
         }
 
@@ -145,24 +159,28 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Limit backstop for when the autopilot isn't driving, since the driver may have no hour-angle
         /// limit set. It's in LateUpdate because Observatory.Update returns early when signed out or offline.
         /// </summary>
-        public override async Task LateUpdate() {
+        public override async Task LateUpdate()
+        {
             TrackUnpark();
             await EnforceLimitsAsync();
             await base.LateUpdate();
         }
 
-        private async Task EnforceLimitsAsync() {
+        private async Task EnforceLimitsAsync()
+        {
             // Not DescribeCurrentPositionBreach, which skips a parked mount. A resting breach still
             // gets a log line here, just no alarm.
             string? breach = DescribePointingBreach(shouldIncludeMeridian: true);
-            if (breach == null) {
+            if (breach == null)
+            {
                 _isReportedOutOfLimits = false;
                 _isReportedRestingOutOfLimits = false;
             }
 
             if (IsFlipping
                 || (Observatory.TryGetComponent<Autopilot.Autopilot>(out Autopilot.Autopilot? autopilot)
-                    && autopilot.IsRunning)) {
+                    && autopilot.IsRunning))
+            {
                 // The autopilot's limit watcher handles an unreadable position while it runs.
                 _unknownPositionSinceUtc = null;
                 return;
@@ -175,36 +193,42 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             if (IsSlewing) return;
             if (TryStartBackstopFlip(breach) || breach == null) return;
 
-            if (IsResting || IsFreshlyUnparked) {
+            if (IsResting || IsFreshlyUnparked)
+            {
                 // Logged once, since where it rests matters for the next slew. Skipped if the alert
                 // already fired, because then we stopped it and it's been reported.
-                if (!_isReportedOutOfLimits && !_isReportedRestingOutOfLimits) {
+                if (!_isReportedOutOfLimits && !_isReportedRestingOutOfLimits)
+                {
                     _isReportedRestingOutOfLimits = true;
                     Log(DescribeRestingBreach(breach));
                 }
                 return;
             }
 
-            if (!_isReportedOutOfLimits) {
+            if (!_isReportedOutOfLimits)
+            {
                 _isReportedOutOfLimits = true;
                 await ReportOutOfLimitsAsync(breach);
             }
         }
-        
+
         /// <summary>
         /// Returns a string describing if the mount is slewing or tracking.
         /// used in reporting failed stopped conditions. 
         /// </summary>
         /// <returns></returns>
-        private string DescribeMotion() {
+        private string DescribeMotion()
+        {
             TelescopeInfo info = telescopeMediator.GetInfo();
             if (info.Slewing && info.TrackingEnabled) return "is still slewing and tracking";
             return info.Slewing ? "is still slewing" : "is still tracking";
         }
-        
 
-        private string DescribeRestingBreach(string breach) {
-            if (!IsResting) {
+
+        private string DescribeRestingBreach(string breach)
+        {
+            if (!IsResting)
+            {
                 return $"Mount has just unparked outside the limits: {breach}. Left alone for up to " +
                        $"{UnparkGrace.TotalSeconds:F0} s, because the limits apply to the slew that follows " +
                        "an unpark.";
@@ -226,7 +250,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// when this tick has nothing more to do. A running N.I.N.A. sequence has its own
         /// MeridianFlipTrigger, so it only gets the stop.
         /// </summary>
-        private bool TryStartBackstopFlip(string? breach) {
+        private bool TryStartBackstopFlip(string? breach)
+        {
             AstraeusSettings settings = Observatory.Settings;
             if (!settings.IsMountLimitEnabled() || !settings.IsMeridianFlipEnabled() || !IsGermanEquatorial
                 || !IsPierSideKnown || !IsMeridianFlipAvailable || !IsTracking || IsResting || IsFreshlyUnparked)
@@ -234,7 +259,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
             Coordinates target = CurrentFlipTarget();
             bool isPastLimit = breach != null;
-            if (!isPastLimit && !WouldBreachMeridianOnCurrentSide(target, BackstopFlipLookAhead)) {
+            if (!isPastLimit && !WouldBreachMeridianOnCurrentSide(target, BackstopFlipLookAhead))
+            {
                 _isBackstopFlipAttempted = false;
                 return false;
             }
@@ -242,7 +268,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 || Observatory.SequenceRunner?.IsNinaSequenceRunning() == true)
                 return false;
 
-            if (Observatory.TryGetComponent<Camera>(out Camera? camera) && camera.IsExposing) {
+            if (Observatory.TryGetComponent<Camera>(out Camera? camera) && camera.IsExposing)
+            {
                 // Let the exposure finish unless the mount is already past the limit.
                 if (!isPastLimit) return true;
                 camera.StopExposure("the mount reached the meridian limit and is flipping");
@@ -253,29 +280,40 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return true;
         }
 
-        private async Task BackstopFlipAsync(Coordinates target) {
-            try {
+        private async Task BackstopFlipAsync(Coordinates target)
+        {
+            try
+            {
                 Log($"Mount is reaching the meridian limit ({DescribeMeridianLimit()}) outside the autopilot, so " +
                     "flipping it.");
                 MeridianFlipOutcome outcome = await FlipAsync(target, null, ComponentToken);
-                if (outcome.HasReachedTargetSide) {
+                if (outcome.HasReachedTargetSide)
+                {
                     Log($"Meridian flip outside the autopilot done: {outcome.Before} -> {outcome.After}.");
                     return;
                 }
                 await FailBackstopFlipAsync(outcome.FailReason ?? "the flip did not complete");
-            } catch (OperationCanceledException) when (ComponentToken.IsCancellationRequested) {
+            }
+            catch (OperationCanceledException) when (ComponentToken.IsCancellationRequested)
+            {
                 // Shutting down.
-            } catch (Exception ex) {
-                try {
+            }
+            catch (Exception ex)
+            {
+                try
+                {
                     await FailBackstopFlipAsync(ex.Message);
-                } catch (Exception reportException) {
+                }
+                catch (Exception reportException)
+                {
                     LogError($"Meridian flip outside the autopilot failed ({ex.Message}), and so did the stop: " +
                              $"{reportException.Message}");
                 }
             }
         }
 
-        private Task FailBackstopFlipAsync(string reason) {
+        private Task FailBackstopFlipAsync(string reason)
+        {
             string breach = DescribePointingBreach(shouldIncludeMeridian: true)
                             ?? $"approaching the meridian limit ({DescribeMeridianLimit()})";
             _isReportedOutOfLimits = true;
@@ -292,7 +330,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         // Look-ahead past a hub exposure, for the readout and the start of the next frame.
         private static readonly TimeSpan ManualExposureMargin = TimeSpan.FromSeconds(30);
 
-        public Coordinates CurrentFlipTarget() {
+        public Coordinates CurrentFlipTarget()
+        {
             if (_lastManualSlewTarget is { } slewTarget && IsPointingAt(slewTarget, PierSideSameFieldDegrees))
                 return slewTarget;
             return telescopeMediator.GetCurrentPosition();
@@ -304,7 +343,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                    && autopilot.IsRunning)
                || Observatory.SequenceRunner?.IsNinaSequenceRunning() == true;
 
-        public ManualExposurePlan PlanManualExposure(TimeSpan exposure) {
+        public ManualExposurePlan PlanManualExposure(TimeSpan exposure)
+        {
             if (!Observatory.Settings.IsMountLimitEnabled() || !IsConnected || IsResting || IsFreshlyUnparked
                 || ShouldStandAside() || !IsGermanEquatorial
                 || !WouldBreachMeridianOnCurrentSide(CurrentFlipTarget(), exposure + ManualExposureMargin))
@@ -314,11 +354,16 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 return new ManualExposurePlan(ManualExposureAction.Flip);
 
             string whyNot;
-            if (!Observatory.Settings.IsMeridianFlipEnabled()) {
+            if (!Observatory.Settings.IsMeridianFlipEnabled())
+            {
                 whyNot = "meridian flips are off (Astraeus Settings → Meridian, or the plugin's Autopilot options)";
-            } else if (!IsMeridianFlipAvailable) {
+            }
+            else if (!IsMeridianFlipAvailable)
+            {
                 whyNot = "this N.I.N.A. did not supply its meridian flip workflow";
-            } else {
+            }
+            else
+            {
                 whyNot = $"the mount reports its side of pier as {SideOfPier}, so it cannot be flipped";
             }
             return new ManualExposurePlan(ManualExposureAction.Refuse,
@@ -331,14 +376,15 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         private static readonly TimeSpan UnparkGrace = TimeSpan.FromSeconds(60);
         private DateTime? _unparkedAtUtc;
         private bool _wasParked;
-        
+
         // Whether the mount was tracking or slewing the last time it was connected. Only a mount seen
         // moving can be lost: one that drops off while resting can't drive into a limit, and one never
         // connected since N.I.N.A. started hasn't been seen moving at all, so neither is counted as
         // lost. Volatile, because the watcher reads it from its own task.
         private bool _wasMovingWhenLastConnected;
 
-        private void TrackUnpark() {
+        private void TrackUnpark()
+        {
             TelescopeInfo info = telescopeMediator.GetInfo();
             if (_wasParked && info.Connected && !info.AtPark) _unparkedAtUtc = Observatory.UtcNow;
             if (info.Slewing) _unparkedAtUtc = null;
@@ -354,23 +400,29 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// allows can't be held to its limits, so it gets a stop and an alert, once. A disconnected mount
         /// can't be told to stop, so it only gets the alert.
         /// </summary>
-        private async Task WatchUnknownPositionAsync() {
-            if (DescribeUnknownPosition() is not string unknown) {
+        private async Task WatchUnknownPositionAsync()
+        {
+            if (DescribeUnknownPosition() is not string unknown)
+            {
                 _unknownPositionSinceUtc = null;
                 _isReportedUnknownPosition = false;
                 return;
             }
             _unknownPositionSinceUtc ??= Observatory.UtcNow;
-            TimeSpan grace = TimeSpan.FromSeconds(Autopilot.Context.WatcherBlindGraceSeconds);
+            TimeSpan grace = TimeSpan.FromSeconds(Autopilot.AutopilotConstants.WatcherBlindGraceSeconds);
             if (_isReportedUnknownPosition || Observatory.UtcNow - _unknownPositionSinceUtc < grace) return;
             _isReportedUnknownPosition = true;
 
             bool isConnected = telescopeMediator.GetInfo().Connected;
             bool hasStopped = false;
-            if (isConnected) {
-                try {
+            if (isConnected)
+            {
+                try
+                {
                     hasStopped = await StopMovementAsync();
-                } catch (Exception ex) {
+                }
+                catch (Exception ex)
+                {
                     LogWarning($"Stopping the mount with its position unknown failed: {ex.Message}");
                 }
                 StopGuidingForMoveAsync(ComponentToken).ObserveFaults(exception =>
@@ -382,7 +434,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             const string headline = "Mount position unknown outside the autopilot.";
             LogError($"{headline} It has been unreadable for {grace.TotalSeconds:F0} s ({unknown}), so its " +
                      $"limits can't be enforced. Tracking {tracking}.");
-            Observatory.ReportEvent(NotificationKind.CriticalError, headline, new {
+            Observatory.ReportEvent(NotificationKind.CriticalError, headline, new
+            {
                 reason = unknown,
                 duration = $"{grace.TotalSeconds:F0} s",
                 tracking,
@@ -394,11 +447,15 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Stops tracking and guiding and tells the observer. It never parks or closes the roof, since
         /// someone may be driving the mount by hand.
         /// </summary>
-        private async Task ReportOutOfLimitsAsync(string breach) {
+        private async Task ReportOutOfLimitsAsync(string breach)
+        {
             bool hasStopped;
-            try {
+            try
+            {
                 hasStopped = await StopMovementAsync();
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 LogWarning($"Stopping the mount at its limit failed: {ex.Message}");
                 hasStopped = false;
             }
@@ -410,7 +467,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             const string headline = "Mount limit reached outside the autopilot.";
             LogError($"{headline} The mount is {breach}. Tracking " +
                      (hasStopped ? "stopped." : "could NOT be stopped. Check the mount now."));
-            Observatory.ReportEvent(NotificationKind.CriticalError, headline, new {
+            Observatory.ReportEvent(NotificationKind.CriticalError, headline, new
+            {
                 breach,
                 tracking = hasStopped ? "stopped" : "could not be stopped",
                 side_of_pier = SideOfPier.ToString(),
@@ -418,8 +476,10 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             }, Guid.NewGuid().ToString("N"));
         }
 
-        protected override Task HandleCommandAsync(WsCommand command) {
-            switch (command.Action) {
+        protected override Task HandleCommandAsync(WsCommand command)
+        {
+            switch (command.Action)
+            {
                 case "park":
                     ParkCommandAsync(command.Id).ObserveFaults(LogCommandFault);
                     break;
@@ -431,7 +491,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                     break;
                 case "set_tracking":
                     if (JsonFields.ReadString(command.Payload, "data", out string trackingMode)
-                        != JsonFieldState.Valid) {
+                        != JsonFieldState.Valid)
+                    {
                         RejectMalformedCommandAsync(command, "data").ObserveFaults(LogCommandFault);
                         break;
                     }
@@ -440,12 +501,14 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 case "slew":
                     // RA arrives in hours, see SlewCommandAsync.
                     if (JsonFields.ReadDouble(command.Payload, "ra", out double rightAscension, min: 0, max: 24)
-                        != JsonFieldState.Valid) {
+                        != JsonFieldState.Valid)
+                    {
                         RejectMalformedCommandAsync(command, "ra").ObserveFaults(LogCommandFault);
                         break;
                     }
                     if (JsonFields.ReadDouble(command.Payload, "dec", out double declination, min: -90, max: 90)
-                        != JsonFieldState.Valid) {
+                        != JsonFieldState.Valid)
+                    {
                         RejectMalformedCommandAsync(command, "dec").ObserveFaults(LogCommandFault);
                         break;
                     }
@@ -467,7 +530,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         public bool IsTracking => telescopeMediator.GetInfo() is { Connected: true, TrackingEnabled: true };
 
         public bool IsSlewing => telescopeMediator.GetInfo() is { Connected: true, Slewing: true };
-        
+
         private bool IsStopped =>
             !telescopeMediator.GetInfo().Slewing && (!telescopeMediator.GetInfo().CanSetTrackingEnabled || !telescopeMediator.GetInfo().TrackingEnabled);
 
@@ -475,8 +538,10 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// pierUnknown when disconnected or not reported. Geometry alone can't tell a mount past the
         /// meridian and not yet flipped from one that flipped an hour ago.
         /// </summary>
-        public PierSide SideOfPier {
-            get {
+        public PierSide SideOfPier
+        {
+            get
+            {
                 TelescopeInfo info = telescopeMediator.GetInfo();
                 return info.Connected ? info.SideOfPier : PierSide.pierUnknown;
             }
@@ -503,7 +568,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// <summary>
         /// True if it was already parked or the park worked. False when disconnected or the park fails.
         /// </summary>
-        public async Task<bool> ParkAsync(CancellationToken cancellationToken = default) {
+        public async Task<bool> ParkAsync(CancellationToken cancellationToken = default)
+        {
             if (!telescopeMediator.GetInfo().Connected) return false;
             if (telescopeMediator.GetInfo().AtPark) return true;
 
@@ -516,7 +582,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// <summary>
         /// True if it was already unparked or the unpark worked. False when disconnected or the unpark fails.
         /// </summary>
-        public async Task<bool> UnparkAsync(CancellationToken cancellationToken = default) {
+        public async Task<bool> UnparkAsync(CancellationToken cancellationToken = default)
+        {
             if (!telescopeMediator.GetInfo().Connected) return false;
             if (!telescopeMediator.GetInfo().AtPark) return true;
 
@@ -526,7 +593,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return hasUnparked;
         }
 
-        public async Task<bool> FindHomeAsync(CancellationToken cancellationToken = default) {
+        public async Task<bool> FindHomeAsync(CancellationToken cancellationToken = default)
+        {
             if (!telescopeMediator.GetInfo().Connected) return false;
 
             Log("Finding Home...");
@@ -534,14 +602,17 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         /// <summary>False when disconnected, parked, outside the limits or the slew fails.</summary>
-        public async Task<bool> SlewToAsync(Coordinates coordinates, CancellationToken cancellationToken = default) {
+        public async Task<bool> SlewToAsync(Coordinates coordinates, CancellationToken cancellationToken = default)
+        {
             if (!telescopeMediator.GetInfo().Connected) return false;
-            if (telescopeMediator.GetInfo().AtPark) {
+            if (telescopeMediator.GetInfo().AtPark)
+            {
                 LogWarning("Unable to Slew. Telescope is Parked.");
                 return false;
             }
             // Checked here so the limits hold whoever is calling.
-            if (DescribeLimitBreach(coordinates, Observatory.LocalNow) is string breach) {
+            if (DescribeLimitBreach(coordinates, Observatory.LocalNow) is string breach)
+            {
                 LogWarning($"Can't slew to {coordinates.RAString}, {coordinates.DecString}: {breach}");
                 return false;
             }
@@ -550,9 +621,12 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             MountPayload slewingPayload = new MountPayload() { IsSlewing = true, IsConnected = true };
             await WebSocketBus.SendAsync(new MountUpdate(slewingPayload, "event"));
             bool hasSlewed = await telescopeMediator.SlewToCoordinatesAsync(coordinates, cancellationToken);
-            if (hasSlewed) {
+            if (hasSlewed)
+            {
                 Log("Slew to target complete.");
-            } else {
+            }
+            else
+            {
                 LogError("Failed to slew to the target.");
             }
 
@@ -571,16 +645,20 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// false as a mount that never moved. Confirm the side with WaitForPierSideAsync whatever this returns.
         /// </summary>
         private async Task<bool> MeridianFlipAsync(Coordinates coordinates, TimeSpan wait,
-            CancellationToken cancellationToken = default) {
-            if (!telescopeMediator.GetInfo().Connected) {
+            CancellationToken cancellationToken = default)
+        {
+            if (!telescopeMediator.GetInfo().Connected)
+            {
                 LogWarning("Unable to flip: mount is not connected.");
                 return false;
             }
-            if (telescopeMediator.GetInfo().AtPark) {
+            if (telescopeMediator.GetInfo().AtPark)
+            {
                 LogWarning("Unable to flip: mount is parked.");
                 return false;
             }
-            if (meridianFlipVMFactory == null) {
+            if (meridianFlipVMFactory == null)
+            {
                 LogWarning("Meridian flip unavailable. N.I.N.A. meridian flip factory not present.");
                 return false;
             }
@@ -597,23 +675,31 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             flipCancellationSource.CancelAfter(timeout);
             // Labels the flip's re-centre and autofocus exposures, which N.I.N.A. takes itself.
             using IDisposable frameLabel = Observatory.FrameLabel.Begin(PreviewSource.MeridianFlip);
-            try {
+            try
+            {
                 IMeridianFlipVM flip = meridianFlipVMFactory.Create();
                 bool isFinished = await flip.MeridianFlip(coordinates, wait, flipCancellationSource.Token);
                 // N.I.N.A. swallows a cancellation and reports success, so check the tokens ourselves.
                 // A caller's cancel unwinds. Our own timeout counts as a failed flip.
                 cancellationToken.ThrowIfCancellationRequested();
-                if (flipCancellationSource.IsCancellationRequested) {
+                if (flipCancellationSource.IsCancellationRequested)
+                {
                     LogError($"Meridian flip gave up after {timeout.TotalMinutes:F0} minutes.");
                     return false;
                 }
                 return isFinished;
-            } catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
                 throw;
-            } catch (OperationCanceledException) {
+            }
+            catch (OperationCanceledException)
+            {
                 LogError($"Meridian flip gave up after {timeout.TotalMinutes:F0} minutes.");
                 return false;
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 LogError($"Meridian flip threw: {ex.Message}");
                 return false;
             }
@@ -624,10 +710,12 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// side it's already on, and nothing else tells that apart from a real flip.
         /// </summary>
         public async Task<bool> WaitForPierSideAsync(PierSide wanted, TimeSpan timeout,
-            CancellationToken cancellationToken = default) {
+            CancellationToken cancellationToken = default)
+        {
             if (wanted is PierSide.pierUnknown) return false;
             DateTime deadline = Observatory.UtcNow + timeout;
-            while (true) {
+            while (true)
+            {
                 if (SideOfPier == wanted) return true;
                 if (Observatory.UtcNow >= deadline) return false;
                 await Task.Delay(PierSidePollInterval, Observatory.Clock, cancellationToken);
@@ -648,7 +736,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
         public bool IsFlipping => _flipLock.CurrentCount == 0;
 
-        public async Task WaitForFlipAsync(CancellationToken cancellationToken) {
+        public async Task WaitForFlipAsync(CancellationToken cancellationToken)
+        {
             await _flipLock.WaitAsync(cancellationToken);
             _flipLock.Release();
         }
@@ -658,9 +747,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// target is past N.I.N.A.'s minutes-after-meridian. Confirms by reading the side back.
         /// </summary>
         public async Task<MeridianFlipOutcome> FlipAsync(Coordinates target, PierSide? wanted,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken)
+        {
             await _flipLock.WaitAsync(cancellationToken);
-            try {
+            try
+            {
                 PierSide before = SideOfPier;
                 MeridianFlipOutcome Failed(string reason, bool isDeferred = false)
                     => new MeridianFlipOutcome(false, false, before, SideOfPier, reason, isDeferred);
@@ -677,7 +768,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                                   "aimed nor confirmed");
 
                 PierSide side = wanted ?? (before == PierSide.pierWest ? PierSide.pierEast : PierSide.pierWest);
-                if (side == before) {
+                if (side == before)
+                {
                     // Another caller's flip got there while this one waited for the lock.
                     Log($"Mount is already on {side}, so no flip needed.");
                     return new MeridianFlipOutcome(true, false, before, before, null, false);
@@ -686,7 +778,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 // N.I.N.A. only flips to counterweight-down, which is pierEast past the meridian. pierWest
                 // there can only be reached by tracking in from the east, so defer for the caller to re-judge.
                 double hoursPastMeridian = HoursPastMeridianFor(target);
-                if (side == PierSide.pierWest && hoursPastMeridian > 0.0) {
+                if (side == PierSide.pierWest && hoursPastMeridian > 0.0)
+                {
                     return Failed(
                         $"pierWest was asked for, but the target is {hoursPastMeridian:F2} h past the " +
                         "meridian, where N.I.N.A. only flips to pierEast",
@@ -705,7 +798,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 TimeSpan confirmWindow = isReportedComplete && SideOfPier == before
                     ? MeridianFlipUnchangedSideGrace
                     : MeridianFlipConfirmWindow;
-                if (!await WaitForPierSideAsync(side, confirmWindow, cancellationToken)) {
+                if (!await WaitForPierSideAsync(side, confirmWindow, cancellationToken))
+                {
                     return new MeridianFlipOutcome(false, isReportedComplete, before, SideOfPier,
                         $"mount did not reach {side} within {confirmWindow.TotalSeconds:F0} s " +
                         $"(still reporting {SideOfPier})" +
@@ -716,7 +810,9 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                         false);
                 }
                 return new MeridianFlipOutcome(true, isReportedComplete, before, SideOfPier, null, false);
-            } finally {
+            }
+            finally
+            {
                 _flipLock.Release();
             }
         }
@@ -725,22 +821,26 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Stopped turns tracking off, and an unsupported mode falls back to Sidereal. False when
         /// disconnected or the mount can't set tracking.
         /// </summary>
-        public bool SetTracking(TrackingMode mode) {
+        public bool SetTracking(TrackingMode mode)
+        {
             TelescopeInfo info = telescopeMediator.GetInfo();
             if (!info.Connected) return false;
-            if (!info.CanSetTrackingEnabled) {
+            if (!info.CanSetTrackingEnabled)
+            {
                 Log("This mount cannot change its tracking.");
                 return false;
             }
 
-            if (mode == TrackingMode.Stopped) {
+            if (mode == TrackingMode.Stopped)
+            {
                 telescopeMediator.SetTrackingEnabled(false);
                 telescopeMediator.SetTrackingMode(TrackingMode.Stopped);
                 Log("Tracking stopped.");
                 return true;
             }
 
-            if (!info.TrackingModes.Contains(mode)) {
+            if (!info.TrackingModes.Contains(mode))
+            {
                 LogWarning(
                     $"Unable to set tracking mode to {mode}. Defaulting to Sidereal instead.");
                 mode = TrackingMode.Sidereal;
@@ -751,7 +851,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             Log($"Tracking set to {mode}.");
             return true;
         }
-     
+
         // How long a stop gets to show up in the driver before we report it failed.
         private static readonly TimeSpan StopSettle = TimeSpan.FromSeconds(5);
         private static readonly TimeSpan StopPoll = TimeSpan.FromMilliseconds(250);
@@ -760,10 +860,12 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// StopMovement, but gives the driver time to report the stop and sends one more StopSlew if
         /// it hasn't.
         /// </summary>
-        public async Task<bool> StopMovementAsync() {
+        public async Task<bool> StopMovementAsync()
+        {
             if (!IssueStop()) return false;
             bool hasStopped = await WaitUntilStoppedAsync();
-            if (!hasStopped) {
+            if (!hasStopped)
+            {
                 LogWarning("Mount still slewing after StopSlew, so asking again.");
                 IssueStop();
                 hasStopped = await WaitUntilStoppedAsync();
@@ -776,23 +878,29 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Stops a park part-way. Not every driver reports Slewing while it parks, so StopSlew is sent
         /// regardless. True if stopped or already at park.
         /// </summary>
-        public async Task<bool> StopParkAsync() {
+        public async Task<bool> StopParkAsync()
+        {
             TelescopeInfo info = telescopeMediator.GetInfo();
             if (!info.Connected) return false;
             if (info.AtPark) return true;
-            try {
+            try
+            {
                 telescopeMediator.StopSlew();
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 LogWarning($"StopSlew during the park failed: {ex.Message}");
             }
             return await StopMovementAsync();
         }
 
         // Both tracking calls are there to be safe.
-        private bool IssueStop() {
+        private bool IssueStop()
+        {
             TelescopeInfo? info = telescopeMediator.GetInfo();
             if (!info.Connected) return false;
-            if (info.Slewing) {
+            if (info.Slewing)
+            {
                 Log("Stopping Slew");
                 telescopeMediator.StopSlew();
             }
@@ -800,31 +908,39 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             telescopeMediator.SetTrackingMode(TrackingMode.Stopped);
             return true;
         }
-        
+
         /// <summary>
         /// Confrims not slewing and not tracking either
         /// </summary>
-        private async Task<bool> WaitUntilStoppedAsync() {
+        private async Task<bool> WaitUntilStoppedAsync()
+        {
             DateTime deadline = Observatory.UtcNow + StopSettle;
-            while (!IsStopped) {
+            while (!IsStopped)
+            {
                 if (Observatory.UtcNow >= deadline) return false;
                 await Task.Delay(StopPoll, Observatory.Clock);
             }
             return true;
         }
 
-        private void ReportStop(bool hasStopped) {
-            if (hasStopped) {
+        private void ReportStop(bool hasStopped)
+        {
+            if (hasStopped)
+            {
                 Log("Mount movement and tracking stopped.");
-            } else {
+            }
+            else
+            {
                 LogWarning($"Mount {DescribeMotion()} after two stop requests. Check the mount.");
             }
         }
 
         /// <summary>False for a word that isn't a tracking mode. The mode is Stopped then, so a caller that
         /// ignores the result cannot start the mount tracking by accident.</summary>
-        public static bool TryParseTrackingMode(string? trackingType, out TrackingMode mode) {
-            switch (trackingType?.Trim().ToLowerInvariant()) {
+        public static bool TryParseTrackingMode(string? trackingType, out TrackingMode mode)
+        {
+            switch (trackingType?.Trim().ToLowerInvariant())
+            {
                 case "stopped": mode = TrackingMode.Stopped; return true;
                 case "sidereal": mode = TrackingMode.Sidereal; return true;
                 case "lunar": mode = TrackingMode.Lunar; return true;
@@ -865,7 +981,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// <summary>
         /// Clock seconds until the target's hour angle reaches hoursPastMeridian. Negative if it's already past.
         /// </summary>
-        public double SecondsUntilHourAngle(Coordinates target, double hoursPastMeridian, DateTime? at = null) {
+        public double SecondsUntilHourAngle(Coordinates target, double hoursPastMeridian, DateTime? at = null)
+        {
             double hours = hoursPastMeridian - HoursPastMeridianFor(target, at);
             return hours / SiderealShiftTrackingRate.SIDEREAL_SEC_PER_SI_SEC * 3600.0;
         }
@@ -877,8 +994,10 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Minus N.I.N.A.'s Pause before meridian when one is set, else its Maximum minutes after meridian.
         /// Must match the server's effective_meridian_limit_hours.
         /// </summary>
-        public double MeridianLimitHours {
-            get {
+        public double MeridianLimitHours
+        {
+            get
+            {
                 IMeridianFlipSettings meridianFlip = MeridianFlipSettings;
                 return meridianFlip.PauseTimeBeforeMeridian > 0
                     ? -meridianFlip.PauseTimeBeforeMeridian / 60.0
@@ -888,7 +1007,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
         public double EarliestFlipHours => MeridianFlipSettings.MinutesAfterMeridian / 60.0;
 
-        public string DescribeMeridianLimit() {
+        public string DescribeMeridianLimit()
+        {
             IMeridianFlipSettings meridianFlip = MeridianFlipSettings;
             return meridianFlip.PauseTimeBeforeMeridian > 0
                 ? $"pause {meridianFlip.PauseTimeBeforeMeridian:0.#} min before the meridian"
@@ -904,7 +1024,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Negative by how far the target is already past the westward limit. Keep the sign, since that's
         /// how we spot a mount that was asked to flip and didn't. Null when limits are off or it isn't a GEM.
         /// </summary>
-        public double? SecondsToMeridianLimit(Coordinates target, DateTime? at = null) {
+        public double? SecondsToMeridianLimit(Coordinates target, DateTime? at = null)
+        {
             if (!Observatory.Settings.IsMountLimitEnabled() || !IsGermanEquatorial) return null;
             return SecondsUntilHourAngle(target, MeridianLimitHours, at);
         }
@@ -913,7 +1034,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Works before a slew as well as while tracking, since the side of pier is read live. Only the
         /// window's ends are tested, because hour angle only rises and each side has a single threshold.
         /// </summary>
-        public bool WouldBreachMeridianOnCurrentSide(Coordinates target, TimeSpan window) {
+        public bool WouldBreachMeridianOnCurrentSide(Coordinates target, TimeSpan window)
+        {
             if (!Observatory.Settings.IsMountLimitEnabled() || !IsGermanEquatorial) return false;
             PierSide side = SideOfPier;
             DateTime start = Observatory.LocalNow;
@@ -933,7 +1055,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         // The pier side is the slow part to work out and it doesn't change over a look-ahead window,
         // so the sampler works it out once and passes it in.
         private string? DescribeLimitBreach(Coordinates target, DateTime at, PierSide side, string when,
-            bool shouldIncludeMeridian, double marginDegrees) {
+            bool shouldIncludeMeridian, double marginDegrees)
+        {
             if (!Observatory.Settings.IsMountLimitEnabled()) return null;
             (double altitude, double azimuth, double hoursPastMeridian) = PredictAt(target, at);
             return DescribeAltitudeBreach(altitude, azimuth, when, marginDegrees)
@@ -944,7 +1067,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         // the counterweight-down side a slew would normally land on. That's a guess, since some
         // drivers slew on whatever side they're on, so it only decides whether to try the slew.
         // Whether the result is safe is DescribeCurrentPositionBreach's job.
-        private PierSide PierSideForTracking(Coordinates target) {
+        private PierSide PierSideForTracking(Coordinates target)
+        {
             if (IsPierSideKnown && IsPointingAt(target, PierSideSameFieldDegrees)) return SideOfPier;
             double localSiderealTime = LocalSiderealTimeNow(SiteLongitudeDegrees);
             return MeridianFlip.ExpectedPierSide(target, Angle.ByHours(localSiderealTime));
@@ -962,7 +1086,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// that much clearance above the altitude floor, since this is a prediction.
         /// </summary>
         public string? DescribeTrackingBreach(Coordinates target, TimeSpan window,
-            bool shouldIncludeMeridian = true, TimeSpan? step = null, double marginDegrees = 0) {
+            bool shouldIncludeMeridian = true, TimeSpan? step = null, double marginDegrees = 0)
+        {
             if (!Observatory.Settings.IsMountLimitEnabled()) return null;
             TimeSpan sampleStep = step ?? DefaultTrackingSampleStep;
             if (sampleStep <= TimeSpan.Zero) sampleStep = DefaultTrackingSampleStep;
@@ -972,7 +1097,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             PierSide side = PierSideForTracking(target);
             DateTime start = Observatory.LocalNow;
             DateTime end = start + (window > TimeSpan.Zero ? window : TimeSpan.Zero);
-            for (DateTime sampleTime = start; sampleTime < end; sampleTime += sampleStep) {
+            for (DateTime sampleTime = start; sampleTime < end; sampleTime += sampleStep)
+            {
                 if (DescribeLimitBreach(target, sampleTime, side, WhenLabel(sampleTime - start),
                         shouldIncludeMeridian, marginDegrees) is string breach)
                     return breach;
@@ -989,7 +1115,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// azimuth aren't required, since they're optional in ASCOM and N.I.N.A. reports NaN for a driver
         /// without them.
         /// </summary>
-        internal static bool IsPositionReadable(TelescopeInfo info) {
+        internal static bool IsPositionReadable(TelescopeInfo info)
+        {
             return info.Coordinates is { } coordinates
                    && double.IsFinite(coordinates.RA) && double.IsFinite(coordinates.Dec);
         }
@@ -1014,7 +1141,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
         // The live breach on geometry alone, whatever the mount is doing. Only the backstop uses
         // this, to tell a resting breach from a live one. Everything else uses DescribeCurrentPositionBreach.
-        internal string? DescribePointingBreach(bool shouldIncludeMeridian) {
+        internal string? DescribePointingBreach(bool shouldIncludeMeridian)
+        {
             if (!Observatory.Settings.IsMountLimitEnabled()) return null;
             TelescopeInfo info = telescopeMediator.GetInfo();
             if (!info.Connected) return null;
@@ -1032,17 +1160,19 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             double hourAngle = AstroUtil.GetHourAngle(localSiderealTime, info.Coordinates.RA); // hours, [0, 24)
             return DescribeMeridianBreach(HoursPastMeridian(hourAngle), SideOfPier, "now");
         }
-        
+
         /// <summary>
         /// Why the mount's position can't be judged against the limits right now (not connected, or no
         /// position), or null when it can or limits are off. Also null for a resting mount, including one
         /// that was resting when it dropped off, since a mount that isn't moving can't drive into a limit,
         /// and for a mount never connected since N.I.N.A. started, which has not been seen moving either.
         /// </summary>
-        public string? DescribeUnknownPosition() {
+        public string? DescribeUnknownPosition()
+        {
             if (!Observatory.Settings.IsMountLimitEnabled()) return null;
             TelescopeInfo info = telescopeMediator.GetInfo();
-            if (!info.Connected) {
+            if (!info.Connected)
+            {
                 return Volatile.Read(ref _wasMovingWhenLastConnected) ? "the mount is not connected" : null;
             }
             // Refreshed here too, since LateUpdate can be a minute apart when nobody is watching.
@@ -1052,7 +1182,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return "the mount reports no position";
         }
 
-        public bool IsPointingAt(Coordinates target, double toleranceDegrees) {
+        public bool IsPointingAt(Coordinates target, double toleranceDegrees)
+        {
             TelescopeInfo info = telescopeMediator.GetInfo();
             if (!info.Connected || info.AtPark || info.Slewing || !info.TrackingEnabled) return false;
             if (info.Coordinates == null) return false;
@@ -1064,14 +1195,16 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         /// <summary>Parked counts too, since the next slew starts from the park position anyway.</summary>
-        public Coordinates? CurrentCoordinatesJ2000() {
+        public Coordinates? CurrentCoordinatesJ2000()
+        {
             TelescopeInfo info = telescopeMediator.GetInfo();
             if (!info.Connected || info.Coordinates == null) return null;
             return info.Coordinates.Transform(Epoch.J2000);
         }
 
         // Haversine, because it's stable for the small separations we test.
-        internal static double AngularSeparationDegrees(Coordinates first, Coordinates second) {
+        internal static double AngularSeparationDegrees(Coordinates first, Coordinates second)
+        {
             const double degreesToRadians = Math.PI / 180.0;
             double firstRa = first.RADegrees * degreesToRadians;
             double firstDec = first.Dec * degreesToRadians;
@@ -1086,7 +1219,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
         // Predicted altitude, azimuth (degrees) and signed hours past the meridian for a target at a
         // given time.
-        private (double altitude, double azimuth, double hoursPastMeridian) PredictAt(Coordinates target, DateTime at) {
+        private (double altitude, double azimuth, double hoursPastMeridian) PredictAt(Coordinates target, DateTime at)
+        {
             IAstrometrySettings astrometry = Observatory.Settings.ProfileService.ActiveProfile.AstrometrySettings;
             TopocentricCoordinates topocentric = target.Transform(
                 Angle.ByDegree(astrometry.Latitude),
@@ -1101,7 +1235,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         // The custom horizon's altitude at an azimuth, or NegativeInfinity when it is off or not loaded.
-        private double CustomHorizonAltitude(double azimuthDegrees) {
+        private double CustomHorizonAltitude(double azimuthDegrees)
+        {
             AstraeusSettings settings = Observatory.Settings;
             if (!settings.IsCustomHorizonLimitEnabled()) return double.NegativeInfinity;
             CustomHorizon? horizon = settings.ProfileService.ActiveProfile?.AstrometrySettings?.Horizon;
@@ -1113,9 +1248,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         // passes none. The altitude carries two decimals so a reading just under the floor doesn't print
         // as equal to it.
         internal string? DescribeAltitudeBreach(double altitudeDegrees, double azimuthDegrees, string when,
-            double marginDegrees = 0) {
+            double marginDegrees = 0)
+        {
             AstraeusSettings settings = Observatory.Settings;
-            if (settings.IsAltitudeLimitEnabled()) {
+            if (settings.IsAltitudeLimitEnabled())
+            {
                 double minimum = settings.GetMountMinAltitudeDegrees();
                 if (altitudeDegrees < minimum)
                     return $"below altitude limit ({altitudeDegrees:F2}° {when}, minimum {minimum:F1}°)";
@@ -1146,12 +1283,14 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         // A flip moves the mount from one row to the other, so a flipped mount tracking past +L is
         // fine. A GEM with an unknown side gets the pierWest row. A mount that isn't a GEM gets no
         // meridian rule.
-        internal string? DescribeMeridianBreach(double hoursPastMeridian, PierSide side, string when) {
+        internal string? DescribeMeridianBreach(double hoursPastMeridian, PierSide side, string when)
+        {
             if (!Observatory.Settings.IsMountLimitEnabled() || !IsGermanEquatorial) return null;
             double threshold = MeridianThresholdHours(side);
             string onSide = side is PierSide.pierEast or PierSide.pierWest ? $" on {side}" : "";
 
-            if (side == PierSide.pierEast) {
+            if (side == PierSide.pierEast)
+            {
                 if (hoursPastMeridian >= threshold) return null;
                 string eastLimit = threshold < 0
                     ? $"limit {-threshold * 60:0.#} min east of the meridian"
@@ -1175,7 +1314,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         internal static double HoursPastMeridian(double hourAngleHours)
             => hourAngleHours <= 12.0 ? hourAngleHours : hourAngleHours - 24.0;
 
-        internal static double NormalizeAzimuth(double azimuthDegrees) {
+        internal static double NormalizeAzimuth(double azimuthDegrees)
+        {
             double wrappedAzimuth = azimuthDegrees % 360.0;
             return wrappedAzimuth < 0 ? wrappedAzimuth + 360.0 : wrappedAzimuth;
         }
@@ -1190,10 +1330,12 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         // Only the command handlers do this. The autopilot shares the core operations and guides itself.
 
         /// <summary>Never throws except on cancellation.</summary>
-        private async Task<GuidingStopOutcome> StopGuidingForMoveAsync(CancellationToken cancellationToken) {
+        private async Task<GuidingStopOutcome> StopGuidingForMoveAsync(CancellationToken cancellationToken)
+        {
             if (!Observatory.TryGetComponent<Guider>(out Guider? guider)) return GuidingStopOutcome.NotRunning;
             GuidingStopOutcome outcome = await guider.StopGuidingAsync(cancellationToken);
-            if (outcome == GuidingStopOutcome.NotConfirmed) {
+            if (outcome == GuidingStopOutcome.NotConfirmed)
+            {
                 LogWarning("Guider did not confirm it stopped. Moving the mount anyway.");
             }
             return outcome;
@@ -1203,9 +1345,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Restarts guiding after a hub slew it was stopped for, as N.I.N.A.'s sequencer does. The hub
         /// has no guiding controls, so it would otherwise stay off.
         /// </summary>
-        private async Task ResumeGuidingAfterSlewAsync(CancellationToken cancellationToken) {
+        private async Task ResumeGuidingAfterSlewAsync(CancellationToken cancellationToken)
+        {
             if (!Observatory.TryGetComponent<Guider>(out Guider? guider)) return;
-            if (!await guider.StartGuidingAsync(cancellationToken)) {
+            if (!await guider.StartGuidingAsync(cancellationToken))
+            {
                 LogWarning("Guiding was running before the slew and did not start again. Start it from N.I.N.A.");
             }
         }
@@ -1213,75 +1357,100 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         ///////////// Command Handlers /////////////
 
         /// <summary>Toggles the park state: unparks when parked, parks otherwise.</summary>
-        private async Task ParkCommandAsync(string? id) {
-            if (!IsConnected) {
+        private async Task ParkCommandAsync(string? id)
+        {
+            if (!IsConnected)
+            {
                 await BroadcastMessageReceivedAsync(id, false, "No device connected");
                 return;
             }
 
             await BroadcastMessageReceivedAsync(id, true);
-            try {
+            try
+            {
                 CancellationToken cancellationToken = BeginOperation(ref _slewCancellationSource);
-                if (IsParked) {
+                if (IsParked)
+                {
                     await UnparkAsync(cancellationToken);
-                } else {
+                }
+                else
+                {
                     await StopGuidingForMoveAsync(cancellationToken);
                     await ParkAsync(cancellationToken);
                 }
-            } catch (OperationCanceledException) {
+            }
+            catch (OperationCanceledException)
+            {
                 Log("Park/unpark aborted.");
             }
         }
 
-        private async Task SetParkCommandAsync(string? id) {
-            if (!IsConnected) {
+        private async Task SetParkCommandAsync(string? id)
+        {
+            if (!IsConnected)
+            {
                 await BroadcastMessageReceivedAsync(id, false, "No device connected");
                 return;
             }
-            if (IsAutopilotRunning) {
+            if (IsAutopilotRunning)
+            {
                 await BroadcastMessageReceivedAsync(id, false,
                     "The autopilot is running; the park position cannot be changed now");
                 return;
             }
-            if (!telescopeMediator.GetInfo().CanSetPark) {
+            if (!telescopeMediator.GetInfo().CanSetPark)
+            {
                 await BroadcastMessageReceivedAsync(id, false, "This mount's driver cannot set a park position");
                 return;
             }
             Coordinates position = telescopeMediator.GetCurrentPosition();
-            if (TryGetDeviceViewModel<TelescopeVM>(out TelescopeVM? mountViewModel)) {
+            if (TryGetDeviceViewModel<TelescopeVM>(out TelescopeVM? mountViewModel))
+            {
                 await BroadcastMessageReceivedAsync(id, true, "Setting park position");
                 InvokeOnUiThread(() => mountViewModel.SetParkPositionCommand.Execute(position));
                 Log($"Park position set to {position}.");
-            } else {
+            }
+            else
+            {
                 await BroadcastMessageReceivedAsync(id, false, "N.I.N.A.'s mount controls are not available");
             }
         }
 
-        private async Task HomeCommandAsync(string? id) {
-            if (!IsConnected) {
+        private async Task HomeCommandAsync(string? id)
+        {
+            if (!IsConnected)
+            {
                 await BroadcastMessageReceivedAsync(id, false, "No device connected");
                 return;
             }
             await BroadcastMessageReceivedAsync(id, true);
-            try {
+            try
+            {
                 CancellationToken cancellationToken = BeginOperation(ref _slewCancellationSource);
                 await StopGuidingForMoveAsync(cancellationToken);
                 await FindHomeAsync(cancellationToken);
-            } catch (OperationCanceledException) {
+            }
+            catch (OperationCanceledException)
+            {
                 Log("Find home aborted.");
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 LogWarning($"Mount find home failed: {ex.Message}");
             }
         }
 
-        private async Task SetTrackingCommandAsync(string? id, string? trackingType) {
+        private async Task SetTrackingCommandAsync(string? id, string? trackingType)
+        {
             // Refused rather than read as Sidereal, which would start the mount tracking on a typo.
-            if (!TryParseTrackingMode(trackingType, out TrackingMode mode)) {
+            if (!TryParseTrackingMode(trackingType, out TrackingMode mode))
+            {
                 await BroadcastMessageReceivedAsync(id, false, $"Unknown tracking mode \"{trackingType}\"");
                 return;
             }
             bool isTrackingSet = SetTracking(mode);
-            if (!isTrackingSet) {
+            if (!isTrackingSet)
+            {
                 await BroadcastMessageReceivedAsync(id, false,
                     "The mount is not connected or cannot change its tracking");
                 return;
@@ -1289,18 +1458,22 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             await BroadcastMessageReceivedAsync(id, true);
         }
 
-        private async Task SlewCommandAsync(string? id, double raHours, double dec) {
+        private async Task SlewCommandAsync(string? id, double raHours, double dec)
+        {
             Coordinates coordinates = new Coordinates(raHours, dec, Epoch.J2000, Coordinates.RAType.Hours);
             // Checked before the ack, so a refused slew is rejected with its reason and not just logged.
-            if (!IsConnected) {
+            if (!IsConnected)
+            {
                 await BroadcastMessageReceivedAsync(id, false, "No device connected");
                 return;
             }
-            if (IsParked) {
+            if (IsParked)
+            {
                 await BroadcastMessageReceivedAsync(id, false, "Mount is parked");
                 return;
             }
-            if (DescribeLimitBreach(coordinates, Observatory.LocalNow) is string breach) {
+            if (DescribeLimitBreach(coordinates, Observatory.LocalNow) is string breach)
+            {
                 string refusal = $"Can't slew to {coordinates.RAString}, {coordinates.DecString}: {breach}";
                 LogWarning(refusal);
                 await BroadcastMessageReceivedAsync(id, false, refusal);
@@ -1309,20 +1482,26 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
             await BroadcastMessageReceivedAsync(id, true);
             _lastManualSlewTarget = coordinates;
-            try {
+            try
+            {
                 CancellationToken cancellationToken = BeginOperation(ref _slewCancellationSource);
                 GuidingStopOutcome guiding = await StopGuidingForMoveAsync(cancellationToken);
-                if (await SlewToAsync(coordinates, cancellationToken) && guiding == GuidingStopOutcome.Stopped) {
+                if (await SlewToAsync(coordinates, cancellationToken) && guiding == GuidingStopOutcome.Stopped)
+                {
                     await ResumeGuidingAfterSlewAsync(cancellationToken);
                 }
-            } catch (OperationCanceledException) {
+            }
+            catch (OperationCanceledException)
+            {
                 Log("Slew aborted.");
             }
         }
 
-        private async Task StopSlewCommandAsync(string? id) {
+        private async Task StopSlewCommandAsync(string? id)
+        {
             AbortSlew();
-            if (!IsConnected) {
+            if (!IsConnected)
+            {
                 await BroadcastMessageReceivedAsync(id, false, "No device connected");
                 return;
             }
@@ -1335,7 +1514,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Uses N.I.N.A.'s centering solver with the profile's plate-solve settings. A null filter keeps
         /// the current one, and any filter change is reverted afterwards.
         /// </summary>
-        public async Task<bool> CenterAsync(Coordinates target, CancellationToken cancellationToken = default) {
+        public async Task<bool> CenterAsync(Coordinates target, CancellationToken cancellationToken = default)
+        {
             IPlateSolverFactory factory = Observatory.PlateSolverFactory;
             IProfile profile = Observatory.Settings.ProfileService.ActiveProfile;
             IPlateSolveSettings plateSolveSettings = profile.PlateSolveSettings;
@@ -1346,7 +1526,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             ICenteringSolver solver = factory.GetCenteringSolver(plateSolver, blindSolver, imagingMediator,
                 telescopeMediator, filterWheelMediator, domeMediator, domeFollower);
 
-            CenterSolveParameter parameter = new CenterSolveParameter {
+            CenterSolveParameter parameter = new CenterSolveParameter
+            {
                 Coordinates = target,
                 Threshold = plateSolveSettings.Threshold,
                 NoSync = profile.TelescopeSettings.NoSync
@@ -1359,7 +1540,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             using (Observatory.FrameLabel.Begin(PreviewSource.PlateSolve))
                 result = await solver.Center(solveExposure, parameter, null, NoProgress, cancellationToken);
 
-            if (result?.Success != true) {
+            if (result?.Success != true)
+            {
                 LogWarning("Centering failed.", device: "autopilot", category: LogCategory.Autopilot);
                 return false;
             }
@@ -1378,12 +1560,13 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// </summary>
         internal static bool IsDomeGeometryFailure(Exception exception) =>
             exception.Message == Loc.Instance["LblDomeRadiusMisconfigured"];
-        
+
         /// <summary>
         /// Solves where the mount points, or null when there's no solver or the solve fails. The rotator
         /// syncs against the result's PositionAngle.
         /// </summary>
-        public async Task<PlateSolveResult?> CaptureAndSolveAsync(CancellationToken cancellationToken = default) {
+        public async Task<PlateSolveResult?> CaptureAndSolveAsync(CancellationToken cancellationToken = default)
+        {
             IPlateSolverFactory factory = Observatory.PlateSolverFactory;
             IProfile profile = Observatory.Settings.ProfileService.ActiveProfile;
             IPlateSolveSettings plateSolveSettings = profile.PlateSolveSettings;
@@ -1394,7 +1577,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             ICaptureSolver solver = factory.GetCaptureSolver(plateSolver, blindSolver, imagingMediator,
                 filterWheelMediator);
 
-            CaptureSolverParameter parameter = new CaptureSolverParameter {
+            CaptureSolverParameter parameter = new CaptureSolverParameter
+            {
                 Coordinates = telescopeMediator.GetCurrentPosition()
             };
             ApplyProfileSolveSettings(parameter, profile);
@@ -1404,7 +1588,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             using (Observatory.FrameLabel.Begin(PreviewSource.PlateSolve))
                 result = await solver.Solve(solveExposure, parameter, null, NoProgress, cancellationToken);
 
-            if (result?.Success != true) {
+            if (result?.Success != true)
+            {
                 LogWarning("Plate solve failed.", device: "autopilot", category: LogCategory.Autopilot);
                 return null;
             }
@@ -1416,16 +1601,19 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         private IPlateSolver? GetConfiguredPlateSolver(IPlateSolverFactory factory,
-            IPlateSolveSettings plateSolveSettings) {
+            IPlateSolveSettings plateSolveSettings)
+        {
             IPlateSolver? plateSolver = factory.GetPlateSolver(plateSolveSettings);
-            if (plateSolver == null) {
+            if (plateSolver == null)
+            {
                 LogWarning("No plate solver configured in the N.I.N.A. profile.", device: "autopilot",
                     category: LogCategory.Autopilot);
             }
             return plateSolver;
         }
 
-        private static void ApplyProfileSolveSettings(CaptureSolverParameter parameter, IProfile profile) {
+        private static void ApplyProfileSolveSettings(CaptureSolverParameter parameter, IProfile profile)
+        {
             IPlateSolveSettings plateSolveSettings = profile.PlateSolveSettings;
             parameter.Attempts = plateSolveSettings.NumberOfAttempts;
             parameter.Binning = plateSolveSettings.Binning;
@@ -1439,7 +1627,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             parameter.BlindFailoverEnabled = plateSolveSettings.BlindFailoverEnabled;
         }
 
-        private static CaptureSequence CreatePlateSolveExposure(IPlateSolveSettings plateSolveSettings) {
+        private static CaptureSequence CreatePlateSolveExposure(IPlateSolveSettings plateSolveSettings)
+        {
             BinningMode binning = new BinningMode(plateSolveSettings.Binning, plateSolveSettings.Binning);
             CaptureSequence solveExposure = new CaptureSequence(plateSolveSettings.ExposureTime,
                 CaptureSequence.ImageTypes.SNAPSHOT, plateSolveSettings.Filter, binning, 1);

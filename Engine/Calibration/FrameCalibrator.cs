@@ -11,18 +11,22 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.Calibration {
+namespace CosmicVaults.NINA.Astraeus.Engine.Calibration
+{
     /// <summary>
     /// The result of calibrating one frame. OutputPath is the calibrated file when it worked. If not,
     /// SkipReason says there was nothing to calibrate with (e.g. a master that isn't on this PC), or
     /// Error says the arithmetic or the write failed.
     /// </summary>
     internal sealed record CalibrationOutcome(
-        string? OutputPath, string? Error, string? SkipReason, double DurationSeconds, IReadOnlyList<string> Warnings) {
+        string? OutputPath, string? Error, string? SkipReason, double DurationSeconds, IReadOnlyList<string> Warnings)
+    {
         public bool IsSuccess => OutputPath != null;
 
-        public string Status {
-            get {
+        public string Status
+        {
+            get
+            {
                 if (IsSuccess) return "completed";
                 if (SkipReason != null) return "skipped";
                 return "failed";
@@ -50,7 +54,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Calibration {
     /// Files are read and written through N.I.N.A., so the calibrated copy gets the profile's file
     /// type and compression, same as the raw.
     /// </summary>
-    internal sealed class FrameCalibrator(Observatory observatory) {
+    internal sealed class FrameCalibrator(Observatory observatory)
+    {
         /// <summary>ADU added to every calibrated pixel. The PEDESTAL header records it for removal.</summary>
         public const int Pedestal = 1000;
         private const double FlatMin = 0.001;
@@ -59,18 +64,22 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Calibration {
         private const int ReadBitDepth = 16;
 
         public async Task<CalibrationOutcome> CalibrateAsync(string lightPath, CalibrationPlan plan,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken)
+        {
             Stopwatch stopwatch = Stopwatch.StartNew();
             List<string> warnings = new List<string>(plan.Warnings);
-            try {
+            try
+            {
                 string? mastersFolder = MasterIndex.ResolveMastersFolder(observatory.Settings);
                 if (mastersFolder == null)
                     return Skipped("No calibration masters folder is set on this PC.", stopwatch, warnings);
                 MasterIndex masterIndex = new MasterIndex(mastersFolder);
                 Dictionary<string, string> masterPaths = new Dictionary<string, string>();
-                foreach ((string role, MasterRef master) in plan.Roles) {
+                foreach ((string role, MasterRef master) in plan.Roles)
+                {
                     string? path = masterIndex.FindLocalPath(master, out string? missingReason);
-                    if (path is null) {
+                    if (path is null)
+                    {
                         string reason = $"Master {role} #{master.Id} r{master.Revision} is not usable here: " +
                                         $"{missingReason}.";
                         return Skipped(reason, stopwatch, warnings);
@@ -86,7 +95,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Calibration {
                     ?? throw new InvalidOperationException("The light frame has no pixel data.");
                 int width = light.Properties.Width, height = light.Properties.Height;
 
-                async Task<ushort[]?> LoadAsync(string role) {
+                async Task<ushort[]?> LoadAsync(string role)
+                {
                     if (!masterPaths.TryGetValue(role, out string? path)) return null;
                     IImageData image = await factory.CreateFromFile(path, bitDepth: ReadBitDepth, isBayered: false,
                         RawConverterEnum.FREEIMAGE, cancellationToken);
@@ -116,7 +126,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Calibration {
                 string stem = Stem(lightPath) + CalibratedSuffix;
                 RemoveStaleOutput(directory, stem);
                 IProfileService profile = observatory.Settings.ProfileService;
-                FileSaveInfo saveInfo = new FileSaveInfo(profile) {
+                FileSaveInfo saveInfo = new FileSaveInfo(profile)
+                {
                     FilePath = directory,
                     FilePattern = stem,
                     FileType = profile.ActiveProfile?.ImageFileSettings.FileType ?? FileTypeEnum.FITS,
@@ -124,15 +135,20 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Calibration {
                 string savedPath = await image.SaveToDisk(saveInfo, cancellationToken, forceFileType: true);
 
                 return new CalibrationOutcome(savedPath, null, null, stopwatch.Elapsed.TotalSeconds, warnings);
-            } catch (OperationCanceledException) {
+            }
+            catch (OperationCanceledException)
+            {
                 throw;
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 return new CalibrationOutcome(null, ex.Message, null, stopwatch.Elapsed.TotalSeconds, warnings);
             }
         }
 
         internal static void AddCalibrationHeaders(ImageMetaData metadata, CalibrationPlan plan, bool hasFlat,
-            double flatNorm) {
+            double flatNorm)
+        {
             List<IGenericMetaDataHeader> headers = metadata.GenericHeaders;
             headers.Add(new StringMetaDataHeader("CREATOR", "Astraeus", "Calibrated by Astraeus"));
             headers.Add(new StringMetaDataHeader("CALSTRAT", plan.Strategy, "Astraeus calibration strategy"));
@@ -152,17 +168,20 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Calibration {
             => new CalibrationOutcome(null, null, reason, stopwatch.Elapsed.TotalSeconds, warnings);
 
         internal static ushort[] Apply(ushort[] light, ushort[]? bias, ushort[]? dark, ushort[]? flat,
-            double? darkScalingRatio, List<string> warnings, out double flatNorm) {
+            double? darkScalingRatio, List<string> warnings, out double flatNorm)
+        {
             int count = light.Length;
             flatNorm = 1.0;
 
-            if (flat != null) {
+            if (flat != null)
+            {
                 List<double> samples = new List<double>(count / FlatSampleStride + 1);
                 for (int i = 0; i < count; i += FlatSampleStride)
                     samples.Add(flat[i] - (bias?[i] ?? 0));
                 samples.Sort();
                 flatNorm = samples[samples.Count / 2];
-                if (flatNorm <= 0) {
+                if (flatNorm <= 0)
+                {
                     warnings.Add("Master flat has no signal after bias subtraction; flat correction skipped.");
                     flat = null;
                     flatNorm = 1.0;
@@ -173,7 +192,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Calibration {
             double ratio = darkScalingRatio ?? 1.0;
             ushort[] result = new ushort[count];
             int clippedFlat = 0;
-            for (int i = 0; i < count; i++) {
+            for (int i = 0; i < count; i++)
+            {
                 double additive = 0;
                 if (dark != null)
                     additive = shouldScaleDark ? bias![i] + (dark[i] - bias[i]) * ratio : dark[i];
@@ -181,9 +201,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Calibration {
                     additive = bias[i];
 
                 double value = light[i] - additive;
-                if (flat != null) {
+                if (flat != null)
+                {
                     double gain = (flat[i] - (bias?[i] ?? 0)) / flatNorm;
-                    if (gain < FlatMin) {
+                    if (gain < FlatMin)
+                    {
                         gain = 1.0;
                         clippedFlat++;
                     }
@@ -198,14 +220,16 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Calibration {
             return result;
         }
 
-        internal static ushort ClampToUShort(double value) {
+        internal static ushort ClampToUShort(double value)
+        {
             if (value <= 0) return 0;
             if (value >= ushort.MaxValue) return ushort.MaxValue;
             return (ushort)value;
         }
 
         /// <summary>"LIGHT_0001" from LIGHT_0001.fits, LIGHT_0001.xisf or LIGHT_0001.fits.fz.</summary>
-        internal static string Stem(string path) {
+        internal static string Stem(string path)
+        {
             string name = Path.GetFileName(path);
             if (name.EndsWith(".fz", StringComparison.OrdinalIgnoreCase)) name = name[..^3];
             return Path.GetFileNameWithoutExtension(name);
@@ -213,11 +237,14 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Calibration {
 
         // A retried report can leave an earlier output behind. N.I.N.A. would then save beside it under
         // a numbered name, and the upload would pick that up.
-        internal static void RemoveStaleOutput(string directory, string stem) {
-            try {
+        internal static void RemoveStaleOutput(string directory, string stem)
+        {
+            try
+            {
                 foreach (string stale in Directory.EnumerateFiles(directory, stem + ".*"))
                     File.Delete(stale);
-            } catch { /* the save reports its own problems */ }
+            }
+            catch { /* the save reports its own problems */ }
         }
     }
 }

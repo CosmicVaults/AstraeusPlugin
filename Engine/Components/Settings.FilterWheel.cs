@@ -11,8 +11,10 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine {
-    public partial class Settings {
+namespace CosmicVaults.NINA.Astraeus.Engine
+{
+    public partial class Settings
+    {
         /// <summary>A null offset leaves the filter's own offset alone.</summary>
         private sealed record IncomingFilter(short Position, string Name, int? FocusOffset);
 
@@ -22,7 +24,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
         private DebouncedPush? _filterWheelSettingsPush;
 
-        private async Task HandleFilterWheelUpdateAsync(WsCommand command) {
+        private async Task HandleFilterWheelUpdateAsync(WsCommand command)
+        {
             if (!command.Payload.TryGetProperty("data", out JsonElement data)) return;
 
             IFilterWheelSettings filterWheelSettings = Profile!.FilterWheelSettings;
@@ -45,11 +48,13 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Null when the list has the wrong shape, which rejects the whole update. Entries without a
         /// position or a name are skipped.
         /// </summary>
-        private static Dictionary<short, IncomingFilter>? ReadIncomingFilters(JsonElement filters) {
+        private static Dictionary<short, IncomingFilter>? ReadIncomingFilters(JsonElement filters)
+        {
             if (filters.ValueKind != JsonValueKind.Array) return null;
 
             Dictionary<short, IncomingFilter> incomingFilters = new Dictionary<short, IncomingFilter>();
-            foreach (JsonElement filterElement in filters.EnumerateArray()) {
+            foreach (JsonElement filterElement in filters.EnumerateArray())
+            {
                 JsonFieldState positionState = JsonFields.ReadShort(filterElement, "position", out short position, min: 0);
                 JsonFieldState nameState = JsonFields.ReadString(filterElement, "name", out string name);
                 JsonFieldState offsetState =
@@ -71,20 +76,24 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         private static void ApplyIncomingFilters(IFilterWheelSettings filterWheelSettings,
-            Dictionary<short, IncomingFilter> incomingFilters) {
+            Dictionary<short, IncomingFilter> incomingFilters)
+        {
             ObserveAllCollection<FilterInfo> filters = filterWheelSettings.FilterWheelFilters;
 
             List<FilterInfo> removedFilters = filters
                 .Where(filter => !incomingFilters.ContainsKey(filter.Position))
                 .ToList();
-            foreach (FilterInfo removedFilter in removedFilters) {
+            foreach (FilterInfo removedFilter in removedFilters)
+            {
                 filters.Remove(removedFilter);
             }
 
-            foreach (IncomingFilter incomingFilter in incomingFilters.Values) {
+            foreach (IncomingFilter incomingFilter in incomingFilters.Values)
+            {
                 FilterInfo? existingFilter =
                     filters.FirstOrDefault(filter => filter.Position == incomingFilter.Position);
-                if (existingFilter == null) {
+                if (existingFilter == null)
+                {
                     int initialOffset = incomingFilter.FocusOffset ?? 0;
                     filters.Add(new FilterInfo(incomingFilter.Name, initialOffset, incomingFilter.Position));
                     continue;
@@ -94,18 +103,21 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             }
         }
 
-        internal Task PushFilterWheelSettingsAsync() {
+        internal Task PushFilterWheelSettingsAsync()
+        {
             if (_isFilterWheelPushSuppressed) return Task.CompletedTask;
             IFilterWheelSettings filterWheelSettings = Profile!.FilterWheelSettings;
             List<FilterPayload> filters = filterWheelSettings.FilterWheelFilters
-                .Select(filter => new FilterPayload {
+                .Select(filter => new FilterPayload
+                {
                     Position = filter.Position,
                     Name = filter.Name,
                     FocusOffset = filter.FocusOffset,
                     IsAutofocusFilter = filter.AutoFocusFilter
                 })
                 .ToList();
-            FilterWheelSettingsPayload payload = new FilterWheelSettingsPayload {
+            FilterWheelSettingsPayload payload = new FilterWheelSettingsPayload
+            {
                 DisableGuidingOnFilterChange = filterWheelSettings.DisableGuidingOnFilterChange,
                 Filters = filters
             };
@@ -116,10 +128,12 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// For Smart Autofocus. Writes the server's offset table into NINA's filter settings so they stay
         /// right outside the autopilot. False if the server couldn't be reached, leaving the profile untouched.
         /// </summary>
-        internal async Task<bool> PullAutofocusOffsetsAsync() {
+        internal async Task<bool> PullAutofocusOffsetsAsync()
+        {
             IReadOnlyDictionary<string, double>? offsets =
                 await Observatory.AstraeusWebClient.GetAutofocusOffsetsAsync();
-            if (offsets == null) {
+            if (offsets == null)
+            {
                 LogWarning("Smart Autofocus: offset table unavailable, so N.I.N.A.'s filter offsets are left as they are.",
                     device: "filterwheel");
                 return false;
@@ -131,12 +145,15 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         /// <summary>Returns how many filters changed.</summary>
-        internal int ApplyFocusOffsets(IReadOnlyDictionary<string, double> offsets) {
+        internal int ApplyFocusOffsets(IReadOnlyDictionary<string, double> offsets)
+        {
             ObserveAllCollection<FilterInfo> filters = Profile!.FilterWheelSettings.FilterWheelFilters;
             int changedCount = 0;
             _isFilterWheelPushSuppressed = true;
-            try {
-                foreach ((string name, double offset) in offsets) {
+            try
+            {
+                foreach ((string name, double offset) in offsets)
+                {
                     FilterInfo? filter = filters.FirstOrDefault(
                         candidate => string.Equals(candidate.Name, name, StringComparison.OrdinalIgnoreCase));
                     if (filter == null) continue;
@@ -145,53 +162,67 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                     filter.FocusOffset = targetOffset;
                     changedCount++;
                 }
-            } finally {
+            }
+            finally
+            {
                 _isFilterWheelPushSuppressed = false;
             }
             if (changedCount > 0) ScheduleFilterWheelPush();
             return changedCount;
         }
 
-        private void ScheduleFilterWheelPush() {
+        private void ScheduleFilterWheelPush()
+        {
             _filterWheelSettingsPush ??= CreatePush(PushFilterWheelSettingsAsync, "filter wheel");
             _filterWheelSettingsPush.Schedule();
         }
 
-        private void OnFilterWheelSettingsChanged(object? sender, PropertyChangedEventArgs eventArgs) {
+        private void OnFilterWheelSettingsChanged(object? sender, PropertyChangedEventArgs eventArgs)
+        {
             ScheduleFilterWheelPush();
         }
 
-        private void OnFilterInfoChanged(object? sender, PropertyChangedEventArgs eventArgs) {
+        private void OnFilterInfoChanged(object? sender, PropertyChangedEventArgs eventArgs)
+        {
             if (_isFilterWheelPushSuppressed) return;
             ScheduleFilterWheelPush();
         }
 
-        private void OnFilterCollectionChanged(object? sender, NotifyCollectionChangedEventArgs eventArgs) {
-            if (eventArgs.OldItems != null) {
-                foreach (INotifyPropertyChanged filter in eventArgs.OldItems) {
+        private void OnFilterCollectionChanged(object? sender, NotifyCollectionChangedEventArgs eventArgs)
+        {
+            if (eventArgs.OldItems != null)
+            {
+                foreach (INotifyPropertyChanged filter in eventArgs.OldItems)
+                {
                     filter.PropertyChanged -= OnFilterInfoChanged;
                 }
             }
-            if (eventArgs.NewItems != null) {
-                foreach (INotifyPropertyChanged filter in eventArgs.NewItems) {
+            if (eventArgs.NewItems != null)
+            {
+                foreach (INotifyPropertyChanged filter in eventArgs.NewItems)
+                {
                     filter.PropertyChanged += OnFilterInfoChanged;
                 }
             }
             ScheduleFilterWheelPush();
         }
 
-        internal void SubscribeFilterItems() {
+        internal void SubscribeFilterItems()
+        {
             ObserveAllCollection<FilterInfo> filters = Profile!.FilterWheelSettings.FilterWheelFilters;
-            foreach (INotifyPropertyChanged filter in filters) {
+            foreach (INotifyPropertyChanged filter in filters)
+            {
                 filter.PropertyChanged += OnFilterInfoChanged;
             }
             filters.CollectionChanged += OnFilterCollectionChanged;
         }
 
-        internal void UnsubscribeFilterItems() {
+        internal void UnsubscribeFilterItems()
+        {
             ObserveAllCollection<FilterInfo> filters = Profile!.FilterWheelSettings.FilterWheelFilters;
             filters.CollectionChanged -= OnFilterCollectionChanged;
-            foreach (INotifyPropertyChanged filter in filters) {
+            foreach (INotifyPropertyChanged filter in filters)
+            {
                 filter.PropertyChanged -= OnFilterInfoChanged;
             }
         }

@@ -8,10 +8,12 @@ using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows;
 
-namespace CosmicVaults.NINA.Astraeus.Engine {
+namespace CosmicVaults.NINA.Astraeus.Engine
+{
     /// <summary>Shared base for device and service components. DeviceComponent adds the NINA device side.</summary>
-    public abstract class BaseComponent(Observatory observatory, IWebSocketBus webSocketBus) : IComponent {
-        
+    public abstract class BaseComponent(Observatory observatory, IWebSocketBus webSocketBus) : IComponent
+    {
+
         public const string NoDevice = "None";
         public abstract string DeviceType { get; }
         public virtual bool IsBusy => false;
@@ -20,7 +22,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// <summary>One-time setup, before the first Start.</summary>
         public virtual Task Awake() => Task.CompletedTask;
         /// <summary>Overrides call the base.</summary>
-        public virtual Task Start() {
+        public virtual Task Start()
+        {
             WebSocketBus.CommandReceived += OnCommandReceived;
             return Task.CompletedTask;
         }
@@ -29,7 +32,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// <summary>Called each tick after Update.</summary>
         public virtual Task LateUpdate() => Task.CompletedTask;
         /// <summary>Overrides call the base last, which sets IsDestroyed.</summary>
-        public virtual Task Destroy() {
+        public virtual Task Destroy()
+        {
             WebSocketBus.CommandReceived -= OnCommandReceived;
             IsDestroyed = true;
             return Task.CompletedTask;
@@ -51,7 +55,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// <summary>Handles the component's own commands, the ones RouteCommandAsync doesn't know.</summary>
         protected abstract Task HandleCommandAsync(WsCommand command);
 
-        protected async Task BroadcastMessageReceivedAsync(string? id, bool isAccepted, string? message = null) {
+        protected async Task BroadcastMessageReceivedAsync(string? id, bool isAccepted, string? message = null)
+        {
             var payload = new { status = isAccepted ? "accepted" : "rejected", message = message };
             await WebSocketBus.SendAsync(new WsResponse(DeviceType, id, "received", payload));
         }
@@ -71,9 +76,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Runs action on N.I.N.A.'s UI thread, where its view models and device choosers are bound.
         /// Server commands arrive on the socket thread.
         /// </summary>
-        protected static void InvokeOnUiThread(Action action) {
+        protected static void InvokeOnUiThread(Action action)
+        {
             System.Windows.Threading.Dispatcher? dispatcher = Application.Current?.Dispatcher;
-            if (dispatcher == null || dispatcher.CheckAccess()) {
+            if (dispatcher == null || dispatcher.CheckAccess())
+            {
                 action();
                 return;
             }
@@ -120,11 +127,15 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             [CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
             => Observatory.LogDebug(message, device ?? DeviceType, category ?? DefaultLogCategory, member, file, line);
 
-        private async void OnCommandReceived(WsCommand command) {
+        private async void OnCommandReceived(WsCommand command)
+        {
             if (!command.Device.Equals(DeviceType, StringComparison.OrdinalIgnoreCase)) return;
-            try {
+            try
+            {
                 await RouteCommandAsync(command);
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 LogError($"Unhandled exception handling {DeviceType}/{command.Action}: {ex.Message}");
             }
         }

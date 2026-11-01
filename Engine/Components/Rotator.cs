@@ -18,16 +18,18 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine {
+namespace CosmicVaults.NINA.Astraeus.Engine
+{
     public class Rotator(
         Observatory observatory,
         IWebSocketBus webSocketBus,
         IRotatorMediator rotatorMediator)
-        : DeviceComponent<IRotatorVM, IRotatorConsumer, RotatorInfo>(rotatorMediator, observatory, webSocketBus) {
+        : DeviceComponent<IRotatorVM, IRotatorConsumer, RotatorInfo>(rotatorMediator, observatory, webSocketBus)
+    {
         public override string DeviceType { get; } = "rotator";
         public override string DisplayName { get; } = "Rotator";
         public override bool IsBusy => LastInfo?.IsMoving == true;
-        
+
         private CancellationTokenSource? _moveCancellationSource;
 
         // Read from the mediator, not LastInfo. LastInfo only holds a value during the plugin's own tick,
@@ -37,12 +39,15 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         public bool IsSynced => IsConnected && rotatorMediator.GetInfo().Synced;
         /// <summary>The mechanical angle the rotator would move to for a given sky angle.</summary>
         public float GetTargetPosition(float skyAngle) => rotatorMediator.GetTargetPosition(skyAngle);
-        
-        public override WsMessage? GetUpdateMessage() {
-            if (LastInfo == null) {
+
+        public override WsMessage? GetUpdateMessage()
+        {
+            if (LastInfo == null)
+            {
                 return null;
             }
-            RotatorPayload payload = new RotatorPayload {
+            RotatorPayload payload = new RotatorPayload
+            {
                 DeviceId = DeviceId,
                 IsReversed = LastInfo.Reverse,
                 Position = DevicePayload.CleanValue(LastInfo.Position),
@@ -54,9 +59,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return new RotatorUpdate(payload);
         }
 
-        public override WsMessage? GetDeviceStaticInfo() {
-            RotatorInfo info =  rotatorMediator.GetInfo();
-            RotatorPayload payload = new RotatorPayload {
+        public override WsMessage? GetDeviceStaticInfo()
+        {
+            RotatorInfo info = rotatorMediator.GetInfo();
+            RotatorPayload payload = new RotatorPayload
+            {
                 DeviceId = info.DeviceId,
                 Name = info.Name,
                 IsConnected = info.Connected,
@@ -65,22 +72,26 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 DriverInfo = info.DriverInfo,
                 CanReverse = info.CanReverse,
                 StepSize = DevicePayload.CleanValue(info.StepSize),
-                
+
             };
             return new RotatorUpdate(payload);
         }
 
-        protected override Task HandleCommandAsync(WsCommand command) {
-            switch (command.Action) {
+        protected override Task HandleCommandAsync(WsCommand command)
+        {
+            switch (command.Action)
+            {
                 case "reverse":
-                    if (JsonFields.ReadBool(command.Payload, "reverse", out bool isReversed) != JsonFieldState.Valid) {
+                    if (JsonFields.ReadBool(command.Payload, "reverse", out bool isReversed) != JsonFieldState.Valid)
+                    {
                         RejectMalformedCommandAsync(command, "reverse").ObserveFaults(LogCommandFault);
                         break;
                     }
                     SetReverseCommandAsync(command.Id, isReversed).ObserveFaults(LogCommandFault);
                     break;
                 case "setMechanicalRange":
-                    if (JsonFields.ReadString(command.Payload, "range", out string range) != JsonFieldState.Valid) {
+                    if (JsonFields.ReadString(command.Payload, "range", out string range) != JsonFieldState.Valid)
+                    {
                         RejectMalformedCommandAsync(command, "range").ObserveFaults(LogCommandFault);
                         break;
                     }
@@ -89,14 +100,15 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 case "move":
                     // Bounded, so the float cast below cannot reach infinity.
                     if (JsonFields.ReadDouble(command.Payload, "position", out double positionDegrees, min: 0, max: 360)
-                        != JsonFieldState.Valid) {
+                        != JsonFieldState.Valid)
+                    {
                         RejectMalformedCommandAsync(command, "position").ObserveFaults(LogCommandFault);
                         break;
                     }
                     MoveCommandAsync(command.Id, (float)positionDegrees).ObserveFaults(LogCommandFault);
                     break;
             }
-            
+
             return Task.CompletedTask;
         }
 
@@ -104,12 +116,15 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Sets the reverse flag on the driver and in the profile, the way N.I.N.A.'s own rotator
         /// panel does. GetInfo returns a snapshot, so writing the flag there would change nothing.
         /// </summary>
-        private async Task SetReverseCommandAsync(string id, bool isReversed) {
-            if (rotatorMediator.GetInfo() is not { CanReverse: true }) {
+        private async Task SetReverseCommandAsync(string id, bool isReversed)
+        {
+            if (rotatorMediator.GetInfo() is not { CanReverse: true })
+            {
                 await BroadcastMessageReceivedAsync(id, false, "This rotator cannot reverse.");
                 return;
             }
-            if (rotatorMediator.GetDevice() is not IRotator rotator) {
+            if (rotatorMediator.GetDevice() is not IRotator rotator)
+            {
                 await BroadcastMessageReceivedAsync(id, false, "No rotator connected.");
                 return;
             }
@@ -126,14 +141,16 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Tells the rotator its current mechanical position is skyAngle, which sets the offset SkyPosition
         /// relies on. The angle comes from a plate solve's PositionAngle.
         /// </summary>
-        public void SyncToSkyAngle(float skyAngle) {
+        public void SyncToSkyAngle(float skyAngle)
+        {
             if (!IsConnected) return;
             rotatorMediator.Sync(skyAngle);
             Observatory.Log($"Rotator synced to sky angle {skyAngle:F2}°", DeviceType, LogCategory.Equipment);
         }
 
         /// <summary>Returns the adjusted target, or NaN if disconnected or cancelled.</summary>
-        public async Task<float> MoveRelativeAsync(float degrees, CancellationToken cancellationToken) {
+        public async Task<float> MoveRelativeAsync(float degrees, CancellationToken cancellationToken)
+        {
             if (!IsConnected) return float.NaN;
             using CancellationTokenSource moveCancellationSource = CancellationTokenSource.CreateLinkedTokenSource(
                 cancellationToken, BeginOperation(ref _moveCancellationSource));
@@ -142,7 +159,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         /// <summary>Returns the adjusted target, or NaN if disconnected or cancelled.</summary>
-        public async Task<float> MoveMechanicalAsync(float position, CancellationToken cancellationToken) {
+        public async Task<float> MoveMechanicalAsync(float position, CancellationToken cancellationToken)
+        {
             if (!IsConnected) return float.NaN;
             using CancellationTokenSource moveCancellationSource = CancellationTokenSource.CreateLinkedTokenSource(
                 cancellationToken, BeginOperation(ref _moveCancellationSource));
@@ -155,18 +173,24 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
         ///////////// WS command /////////////
 
-        private async Task MoveCommandAsync(string id, float position) {
+        private async Task MoveCommandAsync(string id, float position)
+        {
             await BroadcastMessageReceivedAsync(id, true);
-            try {
+            try
+            {
                 await MoveMechanicalAsync(position, CancellationToken.None);
-            } catch (OperationCanceledException) {
+            }
+            catch (OperationCanceledException)
+            {
                 Observatory.Log("Rotator move aborted", DeviceType, LogCategory.Equipment);
             }
         }
 
-        private async Task SetMechanicalRangeCommandAsync(string id, string? range) {
+        private async Task SetMechanicalRangeCommandAsync(string id, string? range)
+        {
             RotatorRangeTypeEnum rangeType;
-            switch (range) {
+            switch (range)
+            {
                 case "full":
                     rangeType = RotatorRangeTypeEnum.FULL;
                     break;

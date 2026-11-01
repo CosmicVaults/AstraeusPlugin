@@ -1,7 +1,9 @@
 using CosmicVaults.NINA.Astraeus.Engine.Autopilot.States;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
-    internal sealed class AutopilotStates(Context context) {
+namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot
+{
+    internal sealed class AutopilotStates(Context context)
+    {
 
         private WaitForDusk WaitForDusk { get; } = new WaitForDusk("Entry State: Wait for Dusk", context);
         private RefreshSession RefreshSession { get; } = new RefreshSession("Renew Astraeus Session", context);
@@ -54,7 +56,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
         private WaitForEquipmentConnected WaitForFlatPanelConnect { get; } =
             new WaitForEquipmentConnected("Wait for Flat Panel Connected", context, context.FlatPanel,
                 "Autopilot: waiting for the flat panel to be connected.",
-                () => new {
+                () => new
+                {
                     mode = context.FlatPanelMode.ToString(),
                     default_device = context.FlatPanel?.DefaultDevice ?? BaseComponent.NoDevice,
                     auto_connect = context.ShouldAutoConnectEquipment
@@ -64,26 +67,29 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
         private WaitForSafe WaitForSafe { get; } = new WaitForSafe("Wait for Safe Conditions", context);
         private DomeControlSettingCheck OpenRoofCheck { get; } =
             new DomeControlSettingCheck("Open Roof Check", context);
+        // The park N.I.N.A. needs before it will move the shutter, with "Refuse unsafe shutter move" on.
+        private ParkMountForRoofOpen ParkMountForRoofOpen { get; } =
+            new ParkMountForRoofOpen("Park Mount for Roof Open", context);
         private OpenDome OpenDomeShutter { get; } = new OpenDome("Open Dome Shutter", context);
         private WaitForDomeOpen WaitForDomeShutter { get; } =
             new WaitForDomeOpen("Wait for dome shutter to open", context);
         // In Operate mode nobody else will open the roof, so a failed open goes back through the
         // safety check after a pause and tries again.
         private WaitForNextPoll RetryRoofOpen { get; } =
-            new WaitForNextPoll("Wait before retrying roof open", context, Context.DefaultRetryDelaySeconds);
+            new WaitForNextPoll("Wait before retrying roof open", context, AutopilotConstants.DefaultRetryDelaySeconds);
         private PrepareFlatPanel PrepareFlatPanel { get; } = new PrepareFlatPanel("Prepare Flat Panel", context);
 
         // Image Run Phase 2: Get Target
         private PollForTarget PollForTarget { get; } = new PollForTarget("Poll for Target", context);
         private CheckTargetLimits CheckTargetLimits { get; } =
-            new CheckTargetLimits("Check Target Within Limits", context, Context.FrameWindow);
+            new CheckTargetLimits("Check Target Within Limits", context, AutopilotConstants.FrameWindow);
         private CheckTargetLimits CheckLimitsBeforeFrame { get; } =
-            new CheckTargetLimits("Check Limits (before exposure)", context, Context.ExposureWindow);
+            new CheckTargetLimits("Check Limits (before exposure)", context, AutopilotConstants.ExposureWindow);
         private IsMeridianFlipRequired CheckMeridianFlip { get; } =
-            new IsMeridianFlipRequired("Check Meridian Flip (before slew)", context, Context.FrameWindow);
+            new IsMeridianFlipRequired("Check Meridian Flip (before slew)", context, AutopilotConstants.FrameWindow);
         private RunMeridianFlip RunMeridianFlip { get; } = new RunMeridianFlip("Meridian Flip (before slew)", context);
         private IsMeridianFlipRequired CheckFlipBeforeFrame { get; } =
-            new IsMeridianFlipRequired("Check Meridian Flip (before exposure)", context, Context.ExposureWindow);
+            new IsMeridianFlipRequired("Check Meridian Flip (before exposure)", context, AutopilotConstants.ExposureWindow);
         private RunMeridianFlip RunFlipBeforeFrame { get; } =
             new RunMeridianFlip("Meridian Flip (before exposure)", context);
         private CheckTargetChanged CheckTargetChanged { get; } =
@@ -94,8 +100,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
             new WaitForNextPoll("Wait set time before polling again", context);
         private DisableTracking StopTrackingForLimit { get; } =
             new DisableTracking("Stop Tracking (Limit Reached)", context);
-        // A refused target may have the mount sitting at its limit, and nothing watches the mount
-        // until the next slew. So we stop tracking instead of tracking through the limit.
+        // A refused target, or a failed flip, may have the mount sitting at its limit, and nothing watches
+        // the mount until the next slew. So we stop tracking instead of tracking through the limit.
         private DisableTracking StopTrackingForRefusal { get; } =
             new DisableTracking("Stop Tracking (Target Refused)", context);
 
@@ -121,6 +127,9 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
             new ApplyRecommendedFocus("Apply Recommended Focus", context);
         private MarkImageStarted MarkImageStarted { get; } = new MarkImageStarted("Mark Image Started", context);
         private CaptureImage CaptureImage { get; } = new CaptureImage("Capture Image", context);
+        // What the frame's own solve says about the pointing, and whether anything is blocking the light.
+        private CheckFramePointing CheckFramePointing { get; } = new CheckFramePointing("Check Frame Pointing", context);
+        private CheckLightPath CheckLightPath { get; } = new CheckLightPath("Check Light Path", context);
         private ReportResult ReportResult { get; } = new ReportResult("Report results back to server", context);
         private CalibrateFrame CalibrateFrame { get; } = new CalibrateFrame("Calibrate Frame", context);
         private QueueUpload QueueUpload { get; } = new QueueUpload("Queue Cloud Upload", context);
@@ -130,45 +139,50 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
         // ends the night and closes the panel if the mode says to.
         private DisableAutopilot DisableAutopilot { get; } = new DisableAutopilot("Disable Autopilot", context);
         private SecureObservatory SecureForSafety { get; } =
-            new SecureObservatory("Secure (Unsafe)", context, isEmergency: true);
+            new SecureObservatory("Secure (Unsafe)", context, SecureKind.Emergency);
         private SecureObservatory SecureForShutdown { get; } =
-            new SecureObservatory("Secure (Window Closed)", context, "the observing window has closed");
+            new SecureObservatory("Secure (Window Closed)", context, SecureKind.EndOfNight, "the observing window has closed");
         // On an unrecoverable fault, park and close before switching off so the observatory is never
         // left open and tracking unattended.
         private SecureObservatory SecureForFault { get; } =
-            new SecureObservatory("Secure (Fault)", context, "unrecoverable fault", isFault: true);
+            new SecureObservatory("Secure (Fault)", context, SecureKind.Fault, "unrecoverable fault");
         // A mount limit crossed mid-run means the limit checks got it wrong, so it's treated like a
         // fault, quoting the breach the watcher logged.
         private SecureObservatory SecureForLimit { get; } =
-            new SecureObservatory("Secure (Limit Reached)", context,
-                () => context.LastLimitBreach ?? "mount limit reached", isFault: true);
+            new SecureObservatory("Secure (Limit Reached)", context, SecureKind.Fault,
+                () => context.LastLimitBreach ?? "mount limit reached");
         // Cloud storage is full and the account asks to pause instead of imaging on. Not this
         // observatory's fault, but it ends the night the same way, so it parks and closes first and
         // names itself in the session-end email.
         private SecureObservatory SecureForStorageFull { get; } =
-            new SecureObservatory("Secure (Storage Full)", context, "cloud storage is full", isFault: true);
+            new SecureObservatory("Secure (Storage Full)", context, SecureKind.Fault, "cloud storage is full");
         // The server refused this plugin version. Nothing more can be dispatched until it is updated,
         // so the night ends the same way as storage full.
         private SecureObservatory SecureForUpdateRequired { get; } =
-            new SecureObservatory("Secure (Update Required)", context,
-                "this Astraeus version is no longer supported", isFault: true);
+            new SecureObservatory("Secure (Update Required)", context, SecureKind.Fault,
+                "this Astraeus version is no longer supported");
         // The start-up sequence is the observer's own and may have opened the roof or unparked the
         // mount before failing, so both get put back before switching off. The dome usually isn't
         // connected yet, so the roof can't be confirmed open. Unless the mount can move under a closed
         // roof, a mount the sequence unparked is stopped where it is rather than parked, with an alert.
         private SecureObservatory SecureForStartupFailure { get; } =
-            new SecureObservatory("Secure (Start-up Failed)", context, "the start-up sequence failed", isFault: true);
+            new SecureObservatory("Secure (Start-up Failed)", context, SecureKind.Fault, "the start-up sequence failed");
         // A cover that won't open would be in every frame, so the night ends here.
         private SecureObservatory SecureForFlatPanel { get; } =
-            new SecureObservatory("Secure (Flat Panel)", context,
-                "the flat panel cover could not be confirmed open", isFault: true);
-        // The roof stopped reading open mid-night. Under Operate everything stops where it is and the
-        // autopilot disables, since nothing else should have moved the roof. A roof that isn't ours is
-        // handled like unsafe conditions, then waits for safe conditions and the roof again.
+            new SecureObservatory("Secure (Flat Panel)", context, SecureKind.Fault,
+                "the flat panel cover could not be confirmed open");
+        // The roof stopped reading open mid-night. First, did the dome merely drop off and come back with
+        // the roof still open? Then imaging carries on from the next poll. Otherwise, under Operate
+        // everything stops where it is and the autopilot disables, since nothing else should have moved
+        // the roof. A roof that isn't ours is handled like unsafe conditions, then waits for safe
+        // conditions and the roof again.
+        private IsRoofStillOpen IsRoofStillOpen { get; } = new IsRoofStillOpen("Check Roof Still Open", context);
         private StopForRoofClosed StopForRoofClosed { get; } = new StopForRoofClosed("Stop (Roof Closed)", context);
         private SecureObservatory SecureForRoofClosed { get; } =
-            new SecureObservatory("Secure (Roof Closed)", context, () => "the roof stopped reading open",
-                isEmergency: true);
+            new SecureObservatory("Secure (Roof Closed)", context, SecureKind.Emergency,
+                () => "the roof stopped reading open");
+        // Switching the autopilot off. The machine runs it as an exit, so no transition ever reaches it.
+        private StopOnSwitchOff StopOnSwitchOff { get; } = new StopOnSwitchOff("Stop (Switched Off)", context);
         // Before the shutdown sequence, so a sequence that cuts switch power never does it to a cold camera.
         private WarmCamera WarmCamera { get; } = new WarmCamera("Warm Camera", context);
         private RunSequence RunShutdownSequence { get; } =
@@ -177,25 +191,22 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
             new DisconnectEquipment("Disconnect Equipment", context);
         private EndSession EndSession { get; } = new EndSession("End Autopilot Session", context);
 
-        public StateBase EntryState => WaitForDusk;
+        // Where a watcher's result goes when the state it aborted has no edge of its own for it.
+        private TransitionsTable Defaults { get; } = new();
 
-        public StateMachine.AbortRoutes CreateAbortRoutes() {
-            return new StateMachine.AbortRoutes(
-                Unsafe: SecureForSafety,
-                LimitReached: StopTrackingForLimit,
-                WindowClosed: SecureForShutdown,
-                RoofClosed: StopForRoofClosed,
-                Fault: SecureForFault);
-        }
+        public MachineRoutes CreateRoutes() =>
+            new MachineRoutes(WaitForDusk, Defaults, SecureForFault, StopOnSwitchOff);
 
-        public void WireTransitions() {
+        public void WireTransitions()
+        {
             WireStartup();
             WireRoofAndTarget();
             WireImaging();
             WireAborts();
         }
 
-        private void WireStartup() {
+        private void WireStartup()
+        {
             WaitForDusk.OnCompleted(RefreshSession);
             RefreshSession.OnCompleted(PrepareSmartAutofocus).OnFailed(DisableAutopilot);
             // The session only opens here, right after RefreshSession renews the token, so the
@@ -232,10 +243,12 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
         }
 
         // An open roof, a target, and the slew to it.
-        private void WireRoofAndTarget() {
+        private void WireRoofAndTarget()
+        {
             // Wait for Safe -> Open Roof -> Flat panel out of the way.
             WaitForSafe.OnCompleted(OpenRoofCheck);
-            OpenRoofCheck.OnYes(OpenDomeShutter).OnNo(WaitForDomeShutter).OnPass(PrepareFlatPanel);
+            OpenRoofCheck.OnYes(ParkMountForRoofOpen).OnNo(WaitForDomeShutter).OnPass(PrepareFlatPanel);
+            ParkMountForRoofOpen.OnCompleted(OpenDomeShutter).OnFailed(RetryRoofOpen);
             OpenDomeShutter.OnCompleted(PrepareFlatPanel).OnFailed(RetryRoofOpen);
             RetryRoofOpen.OnCompleted(WaitForSafe);
             WaitForDomeShutter.OnCompleted(PrepareFlatPanel);
@@ -246,12 +259,12 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
             // the same coordinates on the other side of the pier. Deciding afterwards would mean
             // slewing and centring on the wrong side first. This covers a target drifting past the
             // limit and a new target that needs the other side.
-            
+
             PollForTarget.OnCompleted(CheckTargetLimits).OnFailed(DisableOnPollFail)
                 .On(AutopilotStateResult.UpdateRequired, SecureForUpdateRequired);
             CheckTargetLimits.OnYes(CheckMeridianFlip).OnNo(StopTrackingForRefusal);
             CheckMeridianFlip.OnYes(RunMeridianFlip).OnNo(CheckTargetChanged);
-            RunMeridianFlip.OnCompleted(CheckTargetChanged).OnFailed(DelayNextPoll);
+            RunMeridianFlip.OnCompleted(CheckTargetChanged).OnFailed(StopTrackingForRefusal);
             CheckTargetChanged.OnYes(StopGuiding).OnNo(ChangeFilter);
             DisableOnPollFail.OnCompleted(DelayNextPoll).OnFailed(DelayNextPoll);
             DelayNextPoll.OnCompleted(PollForTarget);
@@ -270,7 +283,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
         }
 
         // Filter, focus, guiding, the exposure and what happens to the frame.
-        private void WireImaging() {
+        private void WireImaging()
+        {
             //Set Filter -> decide whether an autofocus is due before committing to the frame
             ChangeFilter.OnCompleted(CheckAutofocus).OnFailed(DelayNextPoll);
             CheckAutofocus.OnYes(RunAutofocus).OnNo(ApplyRecommendedFocus);
@@ -281,11 +295,13 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
             CheckDiskSpace.OnCompleted(CheckLimitsBeforeFrame).OnFailed(SecureForFault);
             CheckLimitsBeforeFrame.OnYes(CheckFlipBeforeFrame).OnNo(StopTrackingForRefusal);
             CheckFlipBeforeFrame.OnYes(RunFlipBeforeFrame).OnNo(MarkImageStarted);
-            RunFlipBeforeFrame.OnCompleted(CheckTargetChanged).OnFailed(DelayNextPoll);
+            RunFlipBeforeFrame.OnCompleted(CheckTargetChanged).OnFailed(StopTrackingForRefusal);
             MarkImageStarted.OnCompleted(CaptureImage).OnFailed(DelayNextPoll);
 
-            // Image Capture
-            CaptureImage.OnCompleted(ReportResult).OnFailed(ReportResult);
+            // Image Capture. A failed capture goes straight to the report, since there is no frame to check.
+            CaptureImage.OnCompleted(CheckFramePointing).OnFailed(ReportResult);
+            CheckFramePointing.OnCompleted(CheckLightPath);
+            CheckLightPath.OnCompleted(ReportResult);
             ReportResult.OnCompleted(CalibrateFrame);
             CalibrateFrame.OnCompleted(CheckCloudUpload);
             CheckCloudUpload.OnYes(CheckR2Space).OnNo(PollForTarget);
@@ -296,8 +312,14 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
             QueueUpload.OnCompleted(PollForTarget);
         }
 
-        // Abort paths for the machine-injected results (see CreateAbortRoutes), and the end of the night.
-        private void WireAborts() {
+        // The default edges for the results the watchers inject, where each abort leads, and the end of the night.
+        private void WireAborts()
+        {
+            Defaults.On(AutopilotStateResult.Unsafe, SecureForSafety)
+                .On(AutopilotStateResult.RoofClosed, IsRoofStillOpen)
+                .On(AutopilotStateResult.LimitReached, StopTrackingForLimit)
+                .On(AutopilotStateResult.WindowClosed, SecureForShutdown);
+
             SecureForSafety.OnCompleted(WaitForSafe);            // Unsafe:       secure -> wait for safe -> resume
             SecureForFault.OnCompleted(DisableAutopilot);        // Fault: secure -> disable
             SecureForLimit.OnCompleted(DisableAutopilot);        // LimitReached: stop -> secure -> disable
@@ -305,9 +327,10 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
             SecureForUpdateRequired.OnCompleted(DisableAutopilot); // Version refused: secure -> disable
             SecureForStartupFailure.OnCompleted(DisableAutopilot); // Start-up failed: secure -> disable
             SecureForFlatPanel.OnCompleted(DisableAutopilot);    // Flat panel would not open: secure -> disable
-            // RoofClosed: secure like unsafe -> wait for safe and the roof again (Wait-for-open), or stop and disable (Operate)
-            StopForRoofClosed.OnCompleted(SecureForRoofClosed).OnFailed(DisableAutopilot)
-                .On(AutopilotStateResult.Resumed, PollForTarget);
+            // RoofClosed: a dome that merely dropped and came back open resumes polling. Otherwise secure like
+            // unsafe -> wait for safe and the roof again (Wait-for-open), or stop and disable (Operate).
+            IsRoofStillOpen.OnYes(PollForTarget).OnNo(StopForRoofClosed);
+            StopForRoofClosed.OnCompleted(SecureForRoofClosed).OnFailed(DisableAutopilot);
             SecureForRoofClosed.OnCompleted(WaitForSafe);
             SecureForShutdown.OnCompleted(WarmCamera);
             WarmCamera.OnCompleted(RunShutdownSequence);

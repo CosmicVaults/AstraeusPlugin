@@ -5,19 +5,24 @@ using System.ComponentModel;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine {
-    public partial class Settings {
+namespace CosmicVaults.NINA.Astraeus.Engine
+{
+    public partial class Settings
+    {
         private DebouncedPush? _meridianFlipPush;
 
-        private void SubscribeMeridianFlipSettings() {
+        private void SubscribeMeridianFlipSettings()
+        {
             Profile!.MeridianFlipSettings.PropertyChanged += OnMeridianFlipSettingsChanged;
         }
 
-        private void UnsubscribeMeridianFlipSettings() {
+        private void UnsubscribeMeridianFlipSettings()
+        {
             if (Profile != null) Profile.MeridianFlipSettings.PropertyChanged -= OnMeridianFlipSettingsChanged;
         }
 
-        private async Task HandleMeridianFlipUpdateAsync(WsCommand command) {
+        private async Task HandleMeridianFlipUpdateAsync(WsCommand command)
+        {
             if (!command.Payload.TryGetProperty("data", out JsonElement data)) return;
 
             IMeridianFlipSettings meridianFlipSettings = Profile!.MeridianFlipSettings;
@@ -46,16 +51,19 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         // N.I.N.A.'s setters keep minimum <= maximum, so a minimum above the current maximum goes in
         // after the new maximum.
         private static void ApplyMinutesAfterMeridian(IMeridianFlipSettings meridianFlipSettings,
-            double? minimum, double? maximum) {
+            double? minimum, double? maximum)
+        {
             bool isMaximumRaisedFirst = minimum > meridianFlipSettings.MaxMinutesAfterMeridian && maximum is double;
             if (isMaximumRaisedFirst) meridianFlipSettings.MaxMinutesAfterMeridian = maximum!.Value;
             if (minimum is double newMinimum) meridianFlipSettings.MinutesAfterMeridian = newMinimum;
             if (maximum is double newMaximum) meridianFlipSettings.MaxMinutesAfterMeridian = newMaximum;
         }
 
-        internal Task PushMeridianFlipSettingsAsync() {
+        internal Task PushMeridianFlipSettingsAsync()
+        {
             IMeridianFlipSettings meridianFlipSettings = Profile!.MeridianFlipSettings;
-            MeridianFlipSettingsPayload payload = new MeridianFlipSettingsPayload {
+            MeridianFlipSettingsPayload payload = new MeridianFlipSettingsPayload
+            {
                 MinutesAfterMeridian = meridianFlipSettings.MinutesAfterMeridian,
                 MaxMinutesAfterMeridian = meridianFlipSettings.MaxMinutesAfterMeridian,
                 PauseTimeBeforeMeridian = meridianFlipSettings.PauseTimeBeforeMeridian,
@@ -68,7 +76,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return WebSocketBus.SendAsync(SettingsUpdate.Create(payload, "meridianflip"));
         }
 
-        private void OnMeridianFlipSettingsChanged(object? sender, PropertyChangedEventArgs eventArgs) {
+        private void OnMeridianFlipSettingsChanged(object? sender, PropertyChangedEventArgs eventArgs)
+        {
             _meridianFlipPush ??= CreatePush(PushMeridianFlipSettingsAsync, "meridian flip");
             _meridianFlipPush.Schedule();
         }

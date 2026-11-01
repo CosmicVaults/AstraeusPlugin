@@ -3,8 +3,10 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
 
-namespace CosmicVaults.NINA.Astraeus {
-    public class RelayCommand(Action execute, Func<bool>? canExecute = null) : ICommand {
+namespace CosmicVaults.NINA.Astraeus
+{
+    public class RelayCommand(Action execute, Func<bool>? canExecute = null) : ICommand
+    {
 
         private readonly Action _execute = execute ?? throw new ArgumentNullException(nameof(execute));
         private readonly Func<bool>? _canExecute = canExecute;
@@ -16,7 +18,8 @@ namespace CosmicVaults.NINA.Astraeus {
         public event EventHandler? CanExecuteChanged;
 
         // WPF controls listen to CanExecuteChanged and can only be touched on the UI thread.
-        public void RaiseCanExecuteChanged() {
+        public void RaiseCanExecuteChanged()
+        {
             Dispatcher? dispatcher = Application.Current?.Dispatcher;
             if (dispatcher != null && !dispatcher.CheckAccess())
                 dispatcher.BeginInvoke(new Action(() => CanExecuteChanged?.Invoke(this, EventArgs.Empty)));

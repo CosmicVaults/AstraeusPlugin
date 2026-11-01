@@ -11,9 +11,11 @@ using Newtonsoft.Json.Linq;
 using NINA.Astrometry;
 using NUnit.Framework;
 
-namespace CosmicVaults.NINA.Astraeus.Tests {
+namespace CosmicVaults.NINA.Astraeus.Tests
+{
     [TestFixture]
-    public class AstraeusWebClientTests {
+    public class AstraeusWebClientTests
+    {
         private const string NextPath = "/api/autopilot/next/";
         private const string StorageCheckPath = "/api/observatory/storage/check/";
         private const string CompletePath = "/api/autopilot/images/8812/complete/";
@@ -23,7 +25,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
 
         // The whole /next/ reply reads into the response the states act on. A field the server renamed would show here as a null.
         [Test]
-        public async Task TheNextFrameReplyReadsEveryField() {
+        public async Task TheNextFrameReplyReadsEveryField()
+        {
             FakeNina nina = new FakeNina();
             nina.Server.Reply("GET", NextPath, """
                 {
@@ -37,7 +40,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
             AutopilotNextResponse? next = await nina.Observatory.AstraeusWebClient.GetAutopilotNextAsync();
 
             Assert.That(next, Is.Not.Null);
-            Assert.Multiple(() => {
+            Assert.Multiple(() =>
+            {
                 Assert.That(next!.ImageId, Is.EqualTo(8812));
                 Assert.That(next.ProjectId, Is.EqualTo(41));
                 Assert.That(next.ProjectName, Is.EqualTo("Orion"));
@@ -62,7 +66,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
         // What the mount is doing goes up as the query so the server can score candidates by the slew. The position is
         // written with the invariant culture, so a comma-decimal machine sends the same text.
         [Test]
-        public async Task TheNextFrameRequestCarriesTheMountsStateInItsQuery() {
+        public async Task TheNextFrameRequestCarriesTheMountsStateInItsQuery()
+        {
             FakeNina nina = new FakeNina();
             nina.Server.Reply("GET", NextPath, """{"retry_after": 60}""");
             Coordinates position = new Coordinates(83.5, -5.25, Epoch.J2000, Coordinates.RAType.Degrees);
@@ -70,7 +75,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
             await nina.Observatory.AstraeusWebClient.GetAutopilotNextAsync("Ha", "pierWest", 41, position);
 
             FakeServerHandler.Request request = nina.Server.Requests.Single();
-            Assert.Multiple(() => {
+            Assert.Multiple(() =>
+            {
                 Assert.That(request.Method, Is.EqualTo("GET"));
                 Assert.That(request.Path, Is.EqualTo(NextPath));
                 Assert.That(request.Query, Is.EqualTo(
@@ -80,7 +86,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
 
         // A reply with no frame, only a retry, still parses, so the poll sleeps the server's delay rather than failing.
         [Test]
-        public async Task AReplyWithOnlyARetryReadsAsNoFrame() {
+        public async Task AReplyWithOnlyARetryReadsAsNoFrame()
+        {
             FakeNina nina = new FakeNina();
             nina.Server.Reply("GET", NextPath, """{"retry_after": 120, "reason": "no_targets_visible"}""");
 
@@ -98,7 +105,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
         [TestCase("-1", true)]
         [TestCase("0", false)]
         [TestCase("null", null)]
-        public async Task TheDitherFlagReadsBoolsAndAcpNumbers(string literal, bool? expected) {
+        public async Task TheDitherFlagReadsBoolsAndAcpNumbers(string literal, bool? expected)
+        {
             FakeNina nina = new FakeNina();
             nina.Server.Reply("GET", NextPath, $$"""{"image_id": 1, "dither": {{literal}}}""");
 
@@ -110,7 +118,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
         // A server error is no frame, never an exception, since the poll runs unattended all night.
         [TestCase(HttpStatusCode.InternalServerError)]
         [TestCase(HttpStatusCode.ServiceUnavailable)]
-        public async Task AFailedReplyIsNull(HttpStatusCode status) {
+        public async Task AFailedReplyIsNull(HttpStatusCode status)
+        {
             FakeNina nina = new FakeNina();
             nina.Server.Reply("GET", NextPath, status, """{"detail": "down"}""");
 
@@ -119,7 +128,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
 
         // One field of the wrong type refuses the whole reply, so a half-read target can never reach the mount.
         [Test]
-        public async Task AWrongTypedFieldRefusesTheWholeReply() {
+        public async Task AWrongTypedFieldRefusesTheWholeReply()
+        {
             FakeNina nina = new FakeNina();
             nina.Server.Reply("GET", NextPath, """{"image_id": 1, "ra": 83.8, "gain": "high"}""");
 
@@ -128,7 +138,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
 
         // Signed out, the plugin still asks and sends no bearer. The server's 401 is what tells it, not a guess made locally.
         [Test]
-        public async Task ASignedOutClientSendsNoBearer() {
+        public async Task ASignedOutClientSendsNoBearer()
+        {
             FakeNina nina = new FakeNina();
             nina.Server.Reply("GET", NextPath, "{}");
 
@@ -140,7 +151,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
         // A 401 is retried once with a fresh token and then given up, so an expired token costs one round trip and a revoked
         // one doesn't loop.
         [Test]
-        public async Task A401IsRetriedOnceThenGivenUp() {
+        public async Task A401IsRetriedOnceThenGivenUp()
+        {
             FakeNina nina = new FakeNina();
             nina.Server.Reply("GET", NextPath, HttpStatusCode.Unauthorized, """{"detail": "expired"}""");
 
@@ -153,7 +165,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
         // A 426 means the server no longer supports this plugin version. The call fails and the observatory is marked, so
         // nothing more is dispatched.
         [Test]
-        public async Task A426MarksTheObservatoryAsNeedingAnUpdate() {
+        public async Task A426MarksTheObservatoryAsNeedingAnUpdate()
+        {
             FakeNina nina = new FakeNina();
             nina.Server.Reply("GET", NextPath, HttpStatusCode.UpgradeRequired, """{"detail": "update"}""");
 
@@ -167,7 +180,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
 
         // The storage check is a POST with an empty body, since under Overwrite Oldest the server may delete frames to answer it.
         [Test]
-        public async Task TheStorageCheckIsAnEmptyPost() {
+        public async Task TheStorageCheckIsAnEmptyPost()
+        {
             FakeNina nina = new FakeNina();
             nina.Server.Reply("POST", StorageCheckPath, """{"has_space": true}""");
 
@@ -181,7 +195,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
 
         // The storage reply reads every field, with the byte counts as longs since a quota passes an int.
         [Test]
-        public async Task TheStorageReplyReadsEveryField() {
+        public async Task TheStorageReplyReadsEveryField()
+        {
             FakeNina nina = new FakeNina();
             nina.Server.Reply("POST", StorageCheckPath, """
                 {
@@ -198,7 +213,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
 
         // Missing counts read as zero and a missing pause flag as keep imaging, which is what an older server means.
         [Test]
-        public async Task AMinimalStorageReplyTakesTheGentleDefaults() {
+        public async Task AMinimalStorageReplyTakesTheGentleDefaults()
+        {
             FakeNina nina = new FakeNina();
             nina.Server.Reply("POST", StorageCheckPath, """{"has_space": true}""");
 
@@ -210,7 +226,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
         // A reply without has_space is no answer, not a yes. Callers let the frame through on null and the upload's 507 is
         // the backstop.
         [Test]
-        public async Task AStorageReplyWithoutHasSpaceIsNull() {
+        public async Task AStorageReplyWithoutHasSpaceIsNull()
+        {
             FakeNina nina = new FakeNina();
             nina.Server.Reply("POST", StorageCheckPath, """{"used_bytes": 1}""");
 
@@ -230,20 +247,23 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
         [TestCase("0.0", false)]
         [TestCase("null", null)]
         [TestCase("\"yes\"", null)]
-        public void AFlagReadsBooleansAndNumbersAndNothingElse(string json, bool? expected) {
+        public void AFlagReadsBooleansAndNumbersAndNothingElse(string json, bool? expected)
+        {
             Assert.That(AstraeusWebClient.ParseFlag(JToken.Parse(json)), Is.EqualTo(expected));
         }
 
         // A field the server left out is unknown, not off.
         [Test]
-        public void AMissingFlagIsUnknown() {
+        public void AMissingFlagIsUnknown()
+        {
             Assert.That(AstraeusWebClient.ParseFlag(null), Is.Null);
         }
 
         ///////////// PostAutopilotCompleteAsync and PostManualCaptureAsync /////////////
 
         // A frame as the capture reports it, with a few fields deliberately unknown.
-        private static CaptureResult SolvedFrame() => new CaptureResult {
+        private static CaptureResult SolvedFrame() => new CaptureResult
+        {
             IsSuccess = true,
             IsPlateSolved = true,
             FilePath = Path.Combine("frames", "LIGHT_0001.fits"),
@@ -259,7 +279,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
         // The complete body is the server's record of the frame, so its field names are a contract. Nulls are left out
         // rather than sent, and the file path is the bare name, since the server has no use for this PC's folders.
         [Test]
-        public async Task TheCompleteBodyCarriesTheFrameAndLeavesUnknownsOut() {
+        public async Task TheCompleteBodyCarriesTheFrameAndLeavesUnknownsOut()
+        {
             FakeNina nina = new FakeNina();
             nina.Server.Reply("POST", CompletePath, "{}");
 
@@ -268,7 +289,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
 
             FakeServerHandler.Request request = nina.Server.Requests.Single();
             JsonElement body = Json.Parse(request.Body!);
-            Assert.Multiple(() => {
+            Assert.Multiple(() =>
+            {
                 Assert.That(request.Path, Is.EqualTo(CompletePath));
                 Assert.That(body.GetProperty("success").GetBoolean(), Is.True);
                 Assert.That(body.GetProperty("client_ref").GetString(), Is.EqualTo("ref-1"));
@@ -292,7 +314,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
         // A manual capture goes to its own endpoint with the same body plus whether to calibrate, and the capture id
         // comes back.
         [Test]
-        public async Task AManualCaptureSaysWhetherToCalibrateAndGetsItsCaptureId() {
+        public async Task AManualCaptureSaysWhetherToCalibrateAndGetsItsCaptureId()
+        {
             FakeNina nina = new FakeNina();
             nina.Server.Reply("POST", ManualCapturePath, """{"capture_id": 5}""");
 
@@ -300,7 +323,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
                 SolvedFrame(), "ref-2", isCloudUploadEnabled: false, shouldCalibrate: true);
 
             JsonElement body = Json.Parse(nina.Server.Requests.Single().Body!);
-            Assert.Multiple(() => {
+            Assert.Multiple(() =>
+            {
                 Assert.That(captureId, Is.EqualTo(5));
                 Assert.That(plan, Is.Null);
                 Assert.That(body.GetProperty("calibrate").GetBoolean(), Is.True);

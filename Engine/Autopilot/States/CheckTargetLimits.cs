@@ -3,25 +3,29 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
+namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States
+{
     /// <summary>
     /// Checks the target is inside the mount limits now and over its whole window, before the slew and
     /// again before the frame. The server applies the same rules, so a refusal here only happens when the
     /// two sides disagree.
     /// </summary>
     internal sealed class CheckTargetLimits(string name, Context context, Func<AutopilotNextResponse?, TimeSpan> window)
-        : StateBase(name) {
+        : StateBase(name)
+    {
         // A refusal is reported to the server, and the roof is open for that round trip.
-        protected internal override bool ShouldWatchSafety => true;
-        protected internal override bool ShouldWatchMountLimits => true;
+        protected internal override Aborts AbortsOn => Aborts.All;
 
-        public override async Task<AutopilotStateResult> ExecuteAsync(CancellationToken cancellationToken) {
-            if (!context.IsMountLimitEnabled || context.Mount == null) {
+        public override async Task<AutopilotStateResult> ExecuteAsync(CancellationToken cancellationToken)
+        {
+            if (!context.IsMountLimitEnabled || context.Mount == null)
+            {
                 return AutopilotStateResult.Yes;
             }
 
-            AutopilotNextResponse? target = context.CurrentTarget;
-            if (target?.Ra is not double ra || target.Dec is not double dec) {
+            AutopilotNextResponse? target = context.Frame.Target;
+            if (target?.Ra is not double ra || target.Dec is not double dec)
+            {
                 context.Log("No coordinates provided, so skipping limit check.");
                 return AutopilotStateResult.Yes;
             }
@@ -33,8 +37,9 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
             TimeSpan lookAhead = window(target);
             bool shouldIncludeMeridian = !context.CanFlipForCurrentTarget;
             string? breach = context.Mount.DescribeTrackingBreach(coordinates, lookAhead, shouldIncludeMeridian,
-                marginDegrees: Context.LimitAltitudeMarginDegrees);
-            if (breach == null) {
+                marginDegrees: AutopilotConstants.LimitAltitudeMarginDegrees);
+            if (breach == null)
+            {
                 return AutopilotStateResult.Yes;
             }
 
@@ -46,31 +51,37 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
 
             // Past the server's margin the target ran into the limit while setup went on, so nothing is
             // misconfigured and the server schedules it again.
-            if (context.HasServerWindowExpired) {
-                double setupMinutes = (context.UtcNow - context.TargetAssignedAtUtc).TotalMinutes;
+            if (context.Frame.HasServerWindowExpired)
+            {
+                double setupMinutes = (context.UtcNow - context.Frame.AssignedAtUtc).TotalMinutes;
                 context.LogWarning($"Skipping {target.TargetName}: {breach}. Setup took {setupMinutes:F1} min " +
                                    "since the server assigned it, more than the " +
-                                   $"{Context.LimitLookAheadMarginSeconds / 60} min it allows, so the server will " +
+                                   $"{AutopilotConstants.LimitLookAheadMarginSeconds / 60} min it allows, so the server will " +
                                    "schedule it again.");
-            } else if (isInsideTheMargin) {
+            }
+            else if (isInsideTheMargin)
+            {
                 context.LogWarning($"Skipping {target.TargetName}: {breach}. Too close to the limit to trust the " +
                                    "prediction against the mount's own reading, so the server will offer it again " +
                                    "once it is clear.");
-            } else {
+            }
+            else
+            {
                 string label = target.ImageId is int imageId
                     ? $"{target.TargetName} (image {imageId})"
                     : $"{target.TargetName}";
                 context.LogError($"Can't slew to {label}: {breach}, so skipping. Note: " +
                                  ExplainRefusal(coordinates, lookAhead));
             }
-            context.NextPollDelaySeconds = Context.DefaultRetryDelaySeconds;
+            context.NextPollDelaySeconds = AutopilotConstants.DefaultRetryDelaySeconds;
 
             // Reported as a failed frame so the requests table shows why. Past the server's setup
             // margin it's deferred instead, as a timing miss for the server to re-judge.
-            if (target.ImageId is int failedImageId) {
+            if (target.ImageId is int failedImageId)
+            {
                 await context.Observatory.AstraeusWebClient.PostAutopilotFailAsync(
                     failedImageId, $"Can't slew to {target.TargetName}: {breach}", null,
-                    isDeferred: context.HasServerWindowExpired || isInsideTheMargin);
+                    isDeferred: context.Frame.HasServerWindowExpired || isInsideTheMargin);
             }
             return AutopilotStateResult.No;
         }
@@ -79,20 +90,24 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
         /// Tells whoever reads the log at 2am where to look. Only the meridian has a local fix. A mount that
         /// never reports a side of pier looks just like wrong site coordinates, which sends them the wrong way.
         /// </summary>
-        private string ExplainRefusal(Coordinates coordinates, TimeSpan window) {
+        private string ExplainRefusal(Coordinates coordinates, TimeSpan window)
+        {
             const string elsewhere = "the server applies the same rules, so check the site coordinates " +
                                      "and horizon sync.";
             // If altitude or horizon broke, no flip would help and the meridian isn't worth mentioning.
             // Re-running the look-ahead without the meridian tells us which it was.
             Mount mount = context.Mount!;
-            if (mount.DescribeTrackingBreach(coordinates, window, shouldIncludeMeridian: false) != null) {
+            if (mount.DescribeTrackingBreach(coordinates, window, shouldIncludeMeridian: false) != null)
+            {
                 return elsewhere;
             }
-            if (!context.IsMeridianFlipEnabled) {
+            if (!context.IsMeridianFlipEnabled)
+            {
                 return "a meridian flip would clear this, but meridian flips are off (Astraeus Settings → " +
                        "Meridian, or the plugin's Autopilot options).";
             }
-            if (!mount.IsPierSideKnown) {
+            if (!mount.IsPierSideKnown)
+            {
                 return "a meridian flip would clear this, but the mount reports its side of pier as " +
                        $"{mount.SideOfPier}. Check the driver's side-of-pier support.";
             }

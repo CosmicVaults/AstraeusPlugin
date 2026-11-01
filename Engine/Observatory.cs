@@ -30,8 +30,10 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine {
-    public class Observatory {
+namespace CosmicVaults.NINA.Astraeus.Engine
+{
+    public class Observatory
+    {
         public Authenticator Authenticator { get; private set; }
         public WebSocketClient WebSocketClient { get; private set; }
         public AstraeusWebClient AstraeusWebClient { get; private set; }
@@ -52,7 +54,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         private static readonly TimeSpan SocketStaleAfter = TimeSpan.FromSeconds(180);
 
         ///////////// Reconnect policy /////////////
-      private static readonly TimeSpan InitialReconnectBackoff = TimeSpan.FromSeconds(5);
+        private static readonly TimeSpan InitialReconnectBackoff = TimeSpan.FromSeconds(5);
         private static readonly TimeSpan MaxReconnectBackoff = TimeSpan.FromSeconds(60);
         private static readonly TimeSpan StableConnectionAge = TimeSpan.FromSeconds(30);
         private static readonly TimeSpan DisplacedBackoff = TimeSpan.FromMinutes(5);
@@ -135,7 +137,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             Autopilot.SequenceRunner? sequenceRunner = null,
             IMeridianFlipVMFactory? meridianFlipFactory = null,
             TimeProvider? clock = null,
-            HttpMessageHandler? serverHandler = null) {
+            HttpMessageHandler? serverHandler = null)
+        {
             Clock = clock ?? TimeProvider.System;
             PlateSolverFactory = plateSolverFactory;
             NighttimeCalculator = nighttimeCalculator;
@@ -171,6 +174,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             _components.Add(new Feed.WebcamFeed(this, WebSocketBus));
             _components.Add(new Settings(this, WebSocketBus));
             _components.Add(new Autopilot.Autopilot(this, WebSocketBus));
+            _components.Add(new ProfileManager(this, WebSocketBus));
             // After the Camera and the Autopilot. ShutDown destroys in this order, so both producers
             // stop before the queue stops consuming.
             CaptureUploads = new Imaging.CaptureUploadQueue(this, WebSocketBus);
@@ -180,34 +184,47 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             Log($"Observatory loaded. Astraeus {AstraeusVersion.Current}, server {ServerEndpoints.Host}.", "system");
         }
 
-        public async Task Awake() {
+        public async Task Awake()
+        {
             await Authenticator.Awake();
-            foreach (IComponent component in _components) {
-                try {
+            foreach (IComponent component in _components)
+            {
+                try
+                {
                     await component.Awake();
-                } catch (Exception ex) {
+                }
+                catch (Exception ex)
+                {
                     LogError($"Exception raised in awake of {component.GetType()}: {ex.Message}.", "system");
                 }
             }
             await CheckWebSocketConnectionAsync();
         }
 
-        public async Task Start() {
-            foreach (IComponent component in _components) {
-                try {
+        public async Task Start()
+        {
+            foreach (IComponent component in _components)
+            {
+                try
+                {
                     await component.Start();
-                } catch (Exception ex) {
+                }
+                catch (Exception ex)
+                {
                     LogError($"Exception raised during start of {component.GetType()}: {ex.Message}.", "system");
                 }
             }
         }
 
-        public async Task Update() {
+        public async Task Update()
+        {
             // Nothing more goes to the server, not even a session restore. LateUpdate still runs, so
             // the mount limit and roof backstops keep working.
             if (IsUpdateRequired) return;
-            if (!Authenticator.IsAuthenticated) {
-                if (IsSocketOpen) {
+            if (!Authenticator.IsAuthenticated)
+            {
+                if (IsSocketOpen)
+                {
                     await WebSocketClient.StopAsync();
                 }
                 await Authenticator.TryRestoreSessionAsync();
@@ -216,50 +233,66 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             bool isConnectionOpen = await CheckWebSocketConnectionAsync();
             if (!isConnectionOpen) return;
 
-            foreach (IComponent component in _components) {
-                try {
+            foreach (IComponent component in _components)
+            {
+                try
+                {
                     await component.Update();
-                } catch (Exception ex) {
+                }
+                catch (Exception ex)
+                {
                     LogError($"Exception occurred when updating {component}: {ex.Message}", "system");
                 }
             }
         }
 
-        public async Task LateUpdate() {
-            Dictionary<string, object> deviceData = new ();
-            foreach (IComponent component in _components) {
+        public async Task LateUpdate()
+        {
+            Dictionary<string, object> deviceData = new();
+            foreach (IComponent component in _components)
+            {
                 if (TryGetUpdatePayload(component) is not { } payload) continue;
                 deviceData[component.DeviceType] = payload;
             }
             Cadence.IsBusy = _components.Any(component => component.IsBusy);
-            
+
             // Periodic telemetry goes only to somebody who can see it. Components still push their
             // own events (connections, notifications, previews) regardless of who is watching.
-            if (deviceData.Count > 0 && Cadence.ShouldPublish) {
+            if (deviceData.Count > 0 && Cadence.ShouldPublish)
+            {
                 await WebSocketBus.SendAsync(new DashboardUpdate(deviceData));
             }
 
             // Each in its own try, so one that throws can't stop the others' late update, including
             // the mount's limit backstop.
-            foreach (IComponent component in _components) {
-                try {
+            foreach (IComponent component in _components)
+            {
+                try
+                {
                     await component.LateUpdate();
-                } catch (Exception ex) {
+                }
+                catch (Exception ex)
+                {
                     LogError($"Exception occurred in the late update of {component}: {ex.Message}", "system");
                 }
             }
         }
 
-        private JsonElement? TryGetUpdatePayload(IComponent component) {
-            try {
+        private JsonElement? TryGetUpdatePayload(IComponent component)
+        {
+            try
+            {
                 return component.GetUpdateMessage()?.Payload;
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 LogError($"Exception occurred building the update of {component}: {ex.Message}", "system");
                 return null;
             }
         }
 
-        public async Task ShutDownAsync() {
+        public async Task ShutDownAsync()
+        {
             if (_isShutDown) return;
             _isShutDown = true;
 
@@ -268,13 +301,18 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             // The machine first, while everything it drives is still alive. Destroying the camera under a
             // running capture cancels the frame from outside, which the machine reads as a fault and
             // answers with a park and a roof close. A plain stop leaves the observatory as found.
-            if (TryGetComponent(out Autopilot.Autopilot? autopilot)) {
+            if (TryGetComponent(out Autopilot.Autopilot? autopilot))
+            {
                 await autopilot.StopMachineAsync();
             }
-            foreach (IComponent component in _components) {
-                try {
+            foreach (IComponent component in _components)
+            {
+                try
+                {
                     await component.Destroy();
-                } catch (Exception ex) {
+                }
+                catch (Exception ex)
+                {
                     LogError($"Exception raised during destroy of {component.GetType()}: {ex.Message}.", "system");
                 }
             }
@@ -284,10 +322,13 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
         public bool IsSocketOpen => WebSocketClient.State == WebSocketState.Open;
 
-        public TimeSpan NextTickDelay {
-            get {
+        public TimeSpan NextTickDelay
+        {
+            get
+            {
                 if (IsUpdateRequired || !Authenticator.IsAuthenticated) return UnauthenticatedPoll;
-                if (!IsSocketOpen) {
+                if (!IsSocketOpen)
+                {
                     TimeSpan wait = NextConnectAttemptUtc - DateTime.UtcNow;
                     return wait < MinReconnectWait ? MinReconnectWait : wait;
                 }
@@ -299,9 +340,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             new(Volatile.Read(ref _nextConnectAttemptTicks), DateTimeKind.Utc);
 
         /// <summary>Whether the socket is open. Reconnects first if it isn't and an attempt is due.</summary>
-        private async Task<bool> CheckWebSocketConnectionAsync() {
+        private async Task<bool> CheckWebSocketConnectionAsync()
+        {
             if (!Authenticator.IsAuthenticated) return false;
-            if (IsSocketOpen && DateTime.UtcNow - WebSocketClient.LastInboundUtc > SocketStaleAfter) {
+            if (IsSocketOpen && DateTime.UtcNow - WebSocketClient.LastInboundUtc > SocketStaleAfter)
+            {
                 // Torn down before logging, so the line goes to NINA's log file and isn't sent down
                 // the socket that's about to close.
                 await WebSocketClient.StopAsync();
@@ -309,10 +352,12 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                            "treated the websocket as dead and reconnecting", "system");
             }
 
-            if (!IsSocketOpen) {
+            if (!IsSocketOpen)
+            {
                 if (DateTime.UtcNow < NextConnectAttemptUtc) return false;
                 bool didOpen = await WebSocketClient.OpenConnectionAsync();
-                if (!didOpen) {
+                if (!didOpen)
+                {
                     TimeSpan delay = ScheduleReconnect();
                     LogWarning($"Failed opening WS; next attempt in {delay.TotalSeconds:F0}s", "system");
                     return false;
@@ -325,7 +370,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return true;
         }
 
-        private TimeSpan ScheduleReconnect() {
+        private TimeSpan ScheduleReconnect()
+        {
             TimeSpan current = TimeSpan.FromTicks(Volatile.Read(ref _reconnectBackoffTicks));
             TimeSpan next = current == TimeSpan.Zero
                 ? InitialReconnectBackoff
@@ -335,17 +381,20 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return next;
         }
 
-        private void OnSocketDisconnected(DisconnectInfo info) {
+        private void OnSocketDisconnected(DisconnectInfo info)
+        {
             // Our own stop (stale socket, plugin disabled, signed out, shutting down). The loop that
             // stopped it decides what's next, so nothing is booked or delayed here.
             if (info.IsDeliberate) return;
 
-            if (info.CloseStatus is { } refusal && (int)refusal == WebSocketClient.CloseCodeUpdateRequired) {
+            if (info.CloseStatus is { } refusal && (int)refusal == WebSocketClient.CloseCodeUpdateRequired)
+            {
                 MarkUpdateRequired();
                 return;
             }
 
-            if (info.CloseStatus is { } status && (int)status == WebSocketClient.CloseCodeDisplaced) {
+            if (info.CloseStatus is { } status && (int)status == WebSocketClient.CloseCodeDisplaced)
+            {
                 Volatile.Write(ref _reconnectBackoffTicks, 0);
                 Volatile.Write(ref _nextConnectAttemptTicks, (DateTime.UtcNow + DisplacedBackoff).Ticks);
                 LogWarning("Another N.I.N.A. client connected to this account and took over the connection; " +
@@ -353,14 +402,17 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 return;
             }
 
-            if (info.ConnectionAge >= StableConnectionAge) {
+            if (info.ConnectionAge >= StableConnectionAge)
+            {
                 Volatile.Write(ref _reconnectBackoffTicks, 0);
                 Volatile.Write(ref _nextConnectAttemptTicks, 0);
                 // The age and the close frame (or its absence) are what match a drop against the
                 // server's own log for that connection.
                 LogWarning($"Websocket connection lost after {info.ConnectionAge.TotalMinutes:F1} min " +
                            $"({info.CloseDescription ?? "no close frame"}); reconnecting.", "system");
-            } else {
+            }
+            else
+            {
                 TimeSpan delay = ScheduleReconnect();
                 LogWarning($"Websocket closed {info.ConnectionAge.TotalSeconds:F0}s after connecting " +
                            $"({info.CloseDescription ?? "no close frame"}); " +
@@ -372,19 +424,26 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Called on a 426 or a socket close of 4026. Runs once, and never throws. The socket stop isn't
         /// awaited, because this can be raised from inside the socket's own open or receive path.
         /// </summary>
-        public void MarkUpdateRequired() {
+        public void MarkUpdateRequired()
+        {
             if (Interlocked.Exchange(ref _isUpdateRequired, 1) == 1) return;
             LogCritical(UpdateRequiredMessage, "system");
-            try {
+            try
+            {
                 Notification.ShowError(UpdateRequiredMessage);
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 LocalLog.Warning($"Could not show the update notice in N.I.N.A.: {ex.Message}");
             }
             WebSocketClient.StopAsync().ObserveFaults(exception =>
                 LocalLog.Warning($"Stopping the websocket after the update notice failed: {exception.Message}"));
-            try {
+            try
+            {
                 UpdateRequired?.Invoke();
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 LocalLog.Warning($"An update notice handler failed: {ex.Message}");
             }
         }
@@ -399,9 +458,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Whether it's before the chosen dusk or after the chosen dawn. Shared by the state machine and
         /// the Dome's roof watchdog so both agree on when the night is over.
         /// </summary>
-        public bool IsOutsideObservingWindow() {
+        public bool IsOutsideObservingWindow()
+        {
             RiseAndSetEvent twilight = OperatingWindowTwilight();
-            if (twilight.Set is DateTime dusk && twilight.Rise is DateTime dawn) {
+            if (twilight.Set is DateTime dusk && twilight.Rise is DateTime dawn)
+            {
                 return LocalNow < dusk || LocalNow > dawn;
             }
             // No dusk or dawn today means polar summer or polar night. The sun's current altitude
@@ -410,28 +471,34 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         /// <summary>Whether today's chosen dawn has passed. False on a day without one.</summary>
-        public bool IsAfterDawn() {
+        public bool IsAfterDawn()
+        {
             RiseAndSetEvent twilight = OperatingWindowTwilight();
             return twilight.Rise is DateTime dawn && LocalNow > dawn;
         }
 
-        private RiseAndSetEvent OperatingWindowTwilight() {
+        private RiseAndSetEvent OperatingWindowTwilight()
+        {
             NighttimeData data = NighttimeCalculator.Calculate();
-            return Settings.GetAutopilotOperatingWindow() switch {
+            return Settings.GetAutopilotOperatingWindow() switch
+            {
                 Autopilot.OperatingWindow.Nautical => data.NauticalTwilightRiseAndSet,
                 Autopilot.OperatingWindow.Astronomical => data.TwilightRiseAndSet,
                 _ => data.SunRiseAndSet
             };
         }
 
-        private bool IsSunBelowOperatingWindowAltitude() {
-            double windowAltitudeDegrees = Settings.GetAutopilotOperatingWindow() switch {
+        private bool IsSunBelowOperatingWindowAltitude()
+        {
+            double windowAltitudeDegrees = Settings.GetAutopilotOperatingWindow() switch
+            {
                 Autopilot.OperatingWindow.Nautical => NauticalTwilightAltitudeDegrees,
                 Autopilot.OperatingWindow.Astronomical => AstronomicalTwilightAltitudeDegrees,
                 _ => SunsetAltitudeDegrees
             };
             IAstrometrySettings astrometry = Settings.ProfileService.ActiveProfile.AstrometrySettings;
-            ObserverInfo observer = new ObserverInfo {
+            ObserverInfo observer = new ObserverInfo
+            {
                 Latitude = astrometry.Latitude,
                 Longitude = astrometry.Longitude,
                 Elevation = astrometry.Elevation
@@ -446,25 +513,29 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         // doesn't send the line twice. Caller attributes are forwarded so the file shows the real call site.
 
         public void Log(string message, string device, LogCategory category = LogCategory.System,
-            [CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0) {
+            [CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
+        {
             LocalLog.Info($"[{device}] {message}", member, file, line);
             Publish(device, category, message, "INFO", isToast: false);
         }
 
         public void LogWarning(string message, string device, LogCategory category = LogCategory.System,
-            [CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0) {
+            [CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
+        {
             LocalLog.Warning($"[{device}] {message}", member, file, line);
             Publish(device, category, message, "WARNING", isToast: false);
         }
 
         public void LogError(string message, string device, LogCategory category = LogCategory.System,
-            [CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0) {
+            [CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
+        {
             LocalLog.Error($"[{device}] {message}", member, file, line);
             Publish(device, category, message, "ERROR", isToast: true);
         }
 
         public void LogDebug(string message, string device, LogCategory category = LogCategory.System,
-            [CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0) {
+            [CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
+        {
             LocalLog.Debug($"[{device}] {message}", member, file, line);
         }
 
@@ -473,12 +544,14 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// to send the email too, or Context.ReportCritical from inside the autopilot, which does both.
         /// </summary>
         public void LogCritical(string message, string device, LogCategory category = LogCategory.System,
-            [CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0) {
+            [CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
+        {
             LocalLog.Error($"[{device}] {message}", member, file, line);
             Publish(device, category, message, "CRITICAL", isToast: true);
         }
 
-        private void Publish(string device, LogCategory category, string message, string severity, bool isToast) {
+        private void Publish(string device, LogCategory category, string message, string severity, bool isToast)
+        {
             LogRecorded?.Invoke(new LogLine(severity, device, message));
             if (!IsSocketOpen) return;
             string categoryName = category.ToString().ToLowerInvariant();
@@ -496,12 +569,17 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// finally block. Takes no CancellationToken because the machine's is already cancelled on the stop
         /// path. The web client's 10-second timeout bounds it.
         /// </summary>
-        public void ReportEvent(string kind, string message, object? details = null, string? clientRef = null) {
+        public void ReportEvent(string kind, string message, object? details = null, string? clientRef = null)
+        {
             EventReported?.Invoke(new ReportedEvent(kind, message, details));
-            _ = Task.Run(async () => {
-                try {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
                     await SendEventAsync(kind, message, details, clientRef);
-                } catch (Exception ex) {
+                }
+                catch (Exception ex)
+                {
                     LocalLog.Warning($"[alerts] Could not report {kind}: {ex.Message}");
                 }
             });
@@ -512,13 +590,16 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// alerts, since a "roof opened" four hours late is worse than nothing.
         /// </summary>
         public async Task<bool> ReportEventAsync(string kind, string message, object? details = null,
-            string? clientRef = null) {
+            string? clientRef = null)
+        {
             EventReported?.Invoke(new ReportedEvent(kind, message, details));
             return await SendEventAsync(kind, message, details, clientRef);
         }
 
-        private async Task<bool> SendEventAsync(string kind, string message, object? details, string? clientRef) {
-            if (Authenticator?.IsAuthenticated != true) {
+        private async Task<bool> SendEventAsync(string kind, string message, object? details, string? clientRef)
+        {
+            if (Authenticator?.IsAuthenticated != true)
+            {
                 LocalLog.Warning($"[alerts] Not signed in, so dropping {kind}: {message}");
                 return false;
             }
@@ -532,12 +613,14 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// because the server stores no mount or safety state, and its roof and autopilot rows come over the
         /// socket, which is down on the nights these alerts matter.
         /// </summary>
-        private Dictionary<string, object> WithRigSnapshot(object? details) {
+        private Dictionary<string, object> WithRigSnapshot(object? details)
+        {
             Dictionary<string, object> merged = RigSnapshot();
             if (details is null) return merged;
             // Call sites pass anonymous objects. Nulls are skipped here because NullValueHandling drops
             // null properties but not null dictionary entries.
-            foreach (PropertyInfo property in details.GetType().GetProperties()) {
+            foreach (PropertyInfo property in details.GetType().GetProperties())
+            {
                 if (property.GetValue(details) is { } value)
                     merged[property.Name] = value;
             }
@@ -548,17 +631,21 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Read from each device's mediator, since a tick's LastInfo is empty outside a tick and while the
         /// socket is down. A device not in use is left out, not reported as missing.
         /// </summary>
-        private Dictionary<string, object> RigSnapshot() {
+        private Dictionary<string, object> RigSnapshot()
+        {
             var snapshot = new Dictionary<string, object>();
-            try {
-                if (TryGetComponent(out Dome? dome) && (dome.IsConnected || dome.HasDefaultDevice)) {
+            try
+            {
+                if (TryGetComponent(out Dome? dome) && (dome.IsConnected || dome.HasDefaultDevice))
+                {
                     snapshot["roof"] = DescribeShutter(dome);
                     if ((dome.ConnectedDeviceId ?? dome.DefaultDevice) is { } roofDeviceId)
                         snapshot["roof_device_id"] = roofDeviceId;
                 }
                 if (TryGetComponent(out Mount? mount) && (mount.IsConnected || mount.HasDefaultDevice))
                     snapshot["mount"] = !mount.IsConnected ? "disconnected" : mount.IsParked ? "parked" : "not parked";
-                if (TryGetComponent(out Autopilot.Autopilot? autopilot)) {
+                if (TryGetComponent(out Autopilot.Autopilot? autopilot))
+                {
                     snapshot["autopilot_state"] = autopilot.StateName;
                     if (autopilot.SessionStartedUtc is { } startedUtc)
                         snapshot["session_started_at"] =
@@ -570,7 +657,9 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                         : safetyMonitor.IsSafe() ? "safe" : "unsafe";
                 if (TryGetComponent(out Weather? weather) && weather.Snapshot() is { Count: > 0 } readings)
                     snapshot["weather"] = readings;
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 // The snapshot is only context. The alert itself must still go.
                 LocalLog.Warning($"[alerts] Could not read the rig for an alert: {ex.Message}");
             }
@@ -578,14 +667,17 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         /// <summary>The shutter in the email's words: open, closed, opening, closing, error or disconnected.</summary>
-        private static string DescribeShutter(Dome dome) {
+        private static string DescribeShutter(Dome dome)
+        {
             string name = dome.ShutterStatusName;
             return (name.StartsWith("Shutter", StringComparison.Ordinal) ? name["Shutter".Length..] : name)
                 .ToLowerInvariant();
         }
 
-        public T GetComponent<T>() where T : class {
-            foreach (IComponent component in _components) {
+        public T GetComponent<T>() where T : class
+        {
+            foreach (IComponent component in _components)
+            {
                 if (component is T match)
                     return match;
             }
@@ -593,16 +685,21 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 $"Component implementing {typeof(T).Name} not found");
         }
 
-        public IEnumerable<T> GetComponents<T>() where T : class {
-            foreach (IComponent component in _components) {
+        public IEnumerable<T> GetComponents<T>() where T : class
+        {
+            foreach (IComponent component in _components)
+            {
                 if (component is T match)
                     yield return match;
             }
         }
 
-        public bool TryGetComponent<T>([NotNullWhen(true)] out T? component) where T : class {
-            foreach (IComponent candidate in _components) {
-                if (candidate is T match) {
+        public bool TryGetComponent<T>([NotNullWhen(true)] out T? component) where T : class
+        {
+            foreach (IComponent candidate in _components)
+            {
+                if (candidate is T match)
+                {
                     component = match;
                     return true;
                 }

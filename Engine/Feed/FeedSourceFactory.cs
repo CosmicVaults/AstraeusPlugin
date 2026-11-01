@@ -1,11 +1,13 @@
 using System;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
+namespace CosmicVaults.NINA.Astraeus.Engine.Feed
+{
     /// <summary>
     /// Builds the IFeedSource for the current settings. The feed and the options page's Test
     /// connection button both use it, so the test runs the same source the real feed will.
     /// </summary>
-    internal static class FeedSourceFactory {
+    internal static class FeedSourceFactory
+    {
         /// <summary>
         /// Long enough for a slow camera on a busy LAN to answer, but a dead one won't hold a capture
         /// slot for most of an interval.
@@ -13,7 +15,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
         public static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(15);
 
         /// <summary>The source for these settings, or the reason there isn't one for the caller to show.</summary>
-        public static (IFeedSource? Source, string? Reason) Create(AstraeusSettings settings) {
+        public static (IFeedSource? Source, string? Reason) Create(AstraeusSettings settings)
+        {
             string? url = settings.GetFeedUrl();
             if (string.IsNullOrWhiteSpace(url))
                 return (null, "No feed URL is set.");
@@ -22,7 +25,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
             string? username = settings.GetFeedUsername();
             string? password = settings.GetFeedPassword();
 
-            switch (kind) {
+            switch (kind)
+            {
                 case FeedSourceKind.HttpSnapshot:
                     return (new HttpSnapshotSource(url, username, password, isMjpeg: false, RequestTimeout), null);
 

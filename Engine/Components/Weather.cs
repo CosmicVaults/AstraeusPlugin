@@ -9,33 +9,39 @@ using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine {
+namespace CosmicVaults.NINA.Astraeus.Engine
+{
     public class Weather(
         Observatory observatory,
         IWebSocketBus webSocketBus,
         IWeatherDataMediator weatherMediator)
         : DeviceComponent<IWeatherDataVM, IWeatherDataConsumer, WeatherDataInfo>(
-            weatherMediator, observatory, webSocketBus) {
+            weatherMediator, observatory, webSocketBus)
+    {
         public override string DeviceType { get; } = "weather";
         public override LogCategory DefaultLogCategory => LogCategory.Weather;
         public override string DisplayName { get; } = "Weather";
-     
+
         private static readonly TimeSpan SampleInterval = TimeSpan.FromSeconds(55);
         private const int ReadingDecimalPlaces = 2;
         private DateTime _lastSampleAt = DateTime.MinValue;
 
         /// <summary>Null when the station has no such sensor (NaN).</summary>
-        private static double? Reading(double? value) {
+        private static double? Reading(double? value)
+        {
             double? finiteValue = DevicePayload.CleanValue(value);
             if (finiteValue == null) return null;
             return Math.Round(finiteValue.Value, ReadingDecimalPlaces);
         }
 
-        private WeatherPayload? BuildReadingPayload() {
-            if (LastInfo is null) {
+        private WeatherPayload? BuildReadingPayload()
+        {
+            if (LastInfo is null)
+            {
                 return null;
             }
-            return new WeatherPayload {
+            return new WeatherPayload
+            {
                 DeviceId = DeviceId,
                 CloudCover = Reading(LastInfo.CloudCover),
                 DewPoint = Reading(LastInfo.DewPoint),
@@ -54,7 +60,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             };
         }
 
-        public override WsMessage? GetUpdateMessage() {
+        public override WsMessage? GetUpdateMessage()
+        {
             WeatherPayload? payload = BuildReadingPayload();
             return payload is null ? null : new WeatherUpdate(payload, "dashboard");
         }
@@ -63,11 +70,14 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Files one reading a minute on the durable path, since GetUpdateMessage only runs while a browser
         /// tab is open. The socket check is here because Observatory.LateUpdate doesn't check it.
         /// </summary>
-        public override async Task LateUpdate() {
+        public override async Task LateUpdate()
+        {
             // Before base.LateUpdate(), which nulls LastInfo.
             if (Observatory.IsSocketOpen && LastInfo is not null && IsConnected
-                && DateTime.UtcNow - _lastSampleAt >= SampleInterval) {
-                if (BuildReadingPayload() is { } payload) {
+                && DateTime.UtcNow - _lastSampleAt >= SampleInterval)
+            {
+                if (BuildReadingPayload() is { } payload)
+                {
                     _lastSampleAt = DateTime.UtcNow;
                     await WebSocketBus.SendAsync(new WeatherUpdate(payload, "event"));
                 }
@@ -75,9 +85,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             await base.LateUpdate();
         }
 
-        public override WsMessage? GetDeviceStaticInfo() {
+        public override WsMessage? GetDeviceStaticInfo()
+        {
             WeatherDataInfo info = weatherMediator.GetInfo();
-            WeatherPayload payload = new WeatherPayload {
+            WeatherPayload payload = new WeatherPayload
+            {
                 DeviceId = info.DeviceId,
                 Name = info.Name,
                 IsConnected = info.Connected,
@@ -89,7 +101,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return new WeatherUpdate(payload);
         }
 
-        protected override Task HandleCommandAsync(WsCommand command) {
+        protected override Task HandleCommandAsync(WsCommand command)
+        {
             return Task.CompletedTask;
         }
 
@@ -97,7 +110,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Current ambient temperature in °C, or null when no connected sensor reports one. Used as the
         /// autofocus temperature-change fallback when the focuser has no temperature probe.
         /// </summary>
-        public double? GetTemperature() {
+        public double? GetTemperature()
+        {
             WeatherDataInfo? info = weatherMediator.GetInfo();
             if (info is not { Connected: true }) return null;
             return double.IsNaN(info.Temperature) ? null : info.Temperature;
@@ -107,11 +121,13 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// The station's readings for an alert. Reads the mediator because LastInfo is empty outside a
         /// tick and while the socket is down.
         /// </summary>
-        public Dictionary<string, double>? Snapshot() {
+        public Dictionary<string, double>? Snapshot()
+        {
             WeatherDataInfo? info = weatherMediator.GetInfo();
             if (info is not { Connected: true }) return null;
             var readings = new Dictionary<string, double>();
-            void Add(string key, double value) {
+            void Add(string key, double value)
+            {
                 if (Reading(value) is { } reading) readings[key] = reading;
             }
             Add("temperature", info.Temperature);

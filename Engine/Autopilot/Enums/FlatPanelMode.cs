@@ -1,6 +1,8 @@
-namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot {
+namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot
+{
     /// <summary>Serialised by name, and the web app stores those names.</summary>
-    public enum FlatPanelMode {
+    public enum FlatPanelMode
+    {
         /// <summary>Leave the flat panel alone. It isn't even connected at dusk.</summary>
         Ignore,
         /// <summary>Whenever the roof opens, make sure the light is off and the cover open. Nothing at dawn.</summary>

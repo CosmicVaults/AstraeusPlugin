@@ -4,11 +4,15 @@ using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Controls {
-    public class LoginViewModel : BaseViewModel {
-        public string StatusMessage {
+namespace CosmicVaults.NINA.Astraeus.Controls
+{
+    public class LoginViewModel : BaseViewModel
+    {
+        public string StatusMessage
+        {
             get => _statusMessage;
-            set {
+            set
+            {
                 if (_statusMessage == value) return;
                 _statusMessage = value;
                 OnPropertyChanged(nameof(StatusMessage));
@@ -42,18 +46,20 @@ namespace CosmicVaults.NINA.Astraeus.Controls {
 
         private void Log(string message) => _observatory.Log(message, "system", LogCategory.System);
 
-        public LoginViewModel(Authenticator authenticator, Observatory observatory) {
+        public LoginViewModel(Authenticator authenticator, Observatory observatory)
+        {
             _authenticator = authenticator;
             _observatory = observatory;
             _authenticator.PropertyChanged += AuthenticatorOnPropertyChanged;
             _observatory.UpdateRequired += () => StatusMessage = Observatory.UpdateRequiredMessage;
             if (_observatory.IsUpdateRequired) _statusMessage = Observatory.UpdateRequiredMessage;
-            SignInCommand  = new RelayCommand(async () => await SignInAsync(), () => IsSignedOut);
+            SignInCommand = new RelayCommand(async () => await SignInAsync(), () => IsSignedOut);
             SignOutCommand = new RelayCommand(async () => await SignOutAsync(), () => _authenticator.IsAuthenticated);
-            CancelCommand  = new RelayCommand(CancelSignIn, () => _authenticator.IsSigningIn);
+            CancelCommand = new RelayCommand(CancelSignIn, () => _authenticator.IsSigningIn);
         }
 
-        private void AuthenticatorOnPropertyChanged(object? sender, PropertyChangedEventArgs eventArgs) {
+        private void AuthenticatorOnPropertyChanged(object? sender, PropertyChangedEventArgs eventArgs)
+        {
             // The PKCE flow completes on an HttpListener thread, so these can arrive off the UI thread.
             // RelayCommand marshals itself, and OnPropertyChanged is safe because WPF bindings dispatch.
             SignInCommand.RaiseCanExecuteChanged();
@@ -65,9 +71,11 @@ namespace CosmicVaults.NINA.Astraeus.Controls {
             OnPropertyChanged(nameof(AccountLabel));
         }
 
-        private async Task SignInAsync() {
+        private async Task SignInAsync()
+        {
             // A refused version can't sign in either, so say why instead of opening the browser.
-            if (_observatory.IsUpdateRequired) {
+            if (_observatory.IsUpdateRequired)
+            {
                 StatusMessage = Observatory.UpdateRequiredMessage;
                 return;
             }
@@ -76,28 +84,36 @@ namespace CosmicVaults.NINA.Astraeus.Controls {
             _signInCancellation = new CancellationTokenSource();
 
             StatusMessage = "Waiting for sign-in in your browser...";
-            try {
+            try
+            {
                 bool isSignedIn = await _authenticator.SignInAsync(_signInCancellation.Token);
                 StatusMessage = isSignedIn ? "Signed in."
                     : _observatory.IsUpdateRequired ? Observatory.UpdateRequiredMessage
                     : "Sign-in did not complete.";
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 StatusMessage = $"Sign-in failed: {ex.Message}";
             }
         }
 
-        private void CancelSignIn() {
+        private void CancelSignIn()
+        {
             _signInCancellation?.Cancel();
             StatusMessage = "Sign-in cancelled.";
         }
 
         // Runs as the command's async void, so nothing may escape it.
-        private async Task SignOutAsync() {
-            try {
+        private async Task SignOutAsync()
+        {
+            try
+            {
                 await _authenticator.SignOutAsync();
                 StatusMessage = "Signed out.";
                 Log(StatusMessage);
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 StatusMessage = $"Sign-out failed: {ex.Message}";
             }
         }

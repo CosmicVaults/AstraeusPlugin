@@ -1,18 +1,22 @@
 ﻿using CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages;
 using System.Text.Json.Serialization;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Payloads {
-    public sealed record WeatherUpdate : WsMessage {
+namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Payloads
+{
+    public sealed record WeatherUpdate : WsMessage
+    {
         public WeatherUpdate(WeatherPayload payload, string? context = null)
             : base(
                 type: "update",
                 device: "weather",
                 context: context,
                 payload: ToJsonElement(new DataPayload<WeatherPayload>(payload))
-            ) { }
+            )
+        { }
     }
 
-    public record WeatherPayload : DevicePayload {
+    public record WeatherPayload : DevicePayload
+    {
         [JsonPropertyName("average_period")]
         public double? AveragePeriod { get; init; }
 

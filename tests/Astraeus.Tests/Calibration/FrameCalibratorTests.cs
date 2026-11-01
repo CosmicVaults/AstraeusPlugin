@@ -6,9 +6,11 @@ using CosmicVaults.NINA.Astraeus.Engine.Calibration;
 using NINA.Image.ImageData;
 using NUnit.Framework;
 
-namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
+namespace CosmicVaults.NINA.Astraeus.Tests.Calibration
+{
     [TestFixture]
-    public class FrameCalibratorTests {
+    public class FrameCalibratorTests
+    {
         private static ushort[] Pixels(params int[] values) => values.Select(value => (ushort)value).ToArray();
 
         private static ushort[] Filled(int count, int value) => Enumerable.Repeat((ushort)value, count).ToArray();
@@ -22,7 +24,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
 
         // A matched dark is subtracted whole and the pedestal added, so the background sits above zero instead of clipping.
         [Test]
-        public void AMatchedDarkIsSubtractedAndThePedestalAdded() {
+        public void AMatchedDarkIsSubtractedAndThePedestalAdded()
+        {
             ushort[] result = Calibrate(Pixels(1000, 2000), dark: Pixels(100, 100));
 
             Assert.That(result, Is.EqualTo(Pixels(1900, 2900)));
@@ -30,13 +33,15 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
 
         // With no dark the bias alone comes off, which is the whole of a bias-only plan.
         [Test]
-        public void ABiasAloneIsSubtracted() {
+        public void ABiasAloneIsSubtracted()
+        {
             Assert.That(Calibrate(Pixels(1000), bias: Pixels(100)), Is.EqualTo(Pixels(1900)));
         }
 
         // A scaled dark is the bias plus the dark current scaled by the exposure ratio, so a 600 s dark serves a 300 s light.
         [Test]
-        public void AScaledDarkIsTheBiasPlusTheDarkCurrentTimesTheRatio() {
+        public void AScaledDarkIsTheBiasPlusTheDarkCurrentTimesTheRatio()
+        {
             ushort[] result = Calibrate(Pixels(1000), bias: Pixels(100), dark: Pixels(300), darkScalingRatio: 0.5);
 
             Assert.That(result, Is.EqualTo(Pixels(1800)));
@@ -45,7 +50,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
         // Scaling needs the bias to separate the dark current from the offset, so without one the dark is used whole and
         // the ratio ignored, rather than scaling the offset too.
         [Test]
-        public void TheRatioIsIgnoredWithoutABias() {
+        public void TheRatioIsIgnoredWithoutABias()
+        {
             ushort[] result = Calibrate(Pixels(1000), dark: Pixels(300), darkScalingRatio: 0.5);
 
             Assert.That(result, Is.EqualTo(Pixels(1700)));
@@ -54,7 +60,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
         // The flat is normalised to the median of its sampled pixels (every sixteenth), so a pixel at half the median is
         // brightened by two and a median one is left alone.
         [Test]
-        public void AFlatDividesByItsGainAboutTheMedian() {
+        public void AFlatDividesByItsGainAboutTheMedian()
+        {
             ushort[] flat = Filled(32, 2000);
             flat[16] = 1000;
 
@@ -68,7 +75,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
         // A flat that is all zero after the bias has nothing to divide by, so it is dropped with a warning rather than
         // blowing every pixel up.
         [Test]
-        public void AFlatWithNoSignalIsDroppedWithAWarning() {
+        public void AFlatWithNoSignalIsDroppedWithAWarning()
+        {
             List<string> warnings = new List<string>();
 
             ushort[] result = FrameCalibrator.Apply(Pixels(1000), null, null, Pixels(0), null, warnings, out double flatNorm);
@@ -80,7 +88,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
 
         // A dead flat pixel would divide by nothing, so it is treated as unity and counted in a warning instead of going white.
         [Test]
-        public void ADeadFlatPixelIsTreatedAsUnityAndCounted() {
+        public void ADeadFlatPixelIsTreatedAsUnityAndCounted()
+        {
             ushort[] flat = Filled(32, 2000);
             flat[1] = 0;
             List<string> warnings = new List<string>();
@@ -95,7 +104,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
         // The output is 16-bit, so a bright pixel saturates and an over-subtracted one floors at zero rather than wrapping.
         [TestCase(65000, 0, 65535)]
         [TestCase(100, 2000, 0)]
-        public void TheResultIsClampedToSixteenBits(int light, int dark, int expected) {
+        public void TheResultIsClampedToSixteenBits(int light, int dark, int expected)
+        {
             Assert.That(Calibrate(Pixels(light), dark: Pixels(dark)), Is.EqualTo(Pixels(expected)));
         }
 
@@ -103,7 +113,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
         [TestCase(-1, 0)]
         [TestCase(1234.7, 1234)]
         [TestCase(70000, 65535)]
-        public void TheClampTruncatesAndPinsToTheEnds(double value, int expected) {
+        public void TheClampTruncatesAndPinsToTheEnds(double value, int expected)
+        {
             Assert.That(FrameCalibrator.ClampToUShort(value), Is.EqualTo(expected));
         }
 
@@ -114,7 +125,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
         [TestCase("LIGHT_0001.fits.fz", "LIGHT_0001")]
         [TestCase("LIGHT_0001.xisf", "LIGHT_0001")]
         [TestCase(@"frames\LIGHT_0001.FITS", "LIGHT_0001")]
-        public void TheStemDropsTheFolderTheExtensionAndACompressionSuffix(string path, string expected) {
+        public void TheStemDropsTheFolderTheExtensionAndACompressionSuffix(string path, string expected)
+        {
             Assert.That(FrameCalibrator.Stem(path), Is.EqualTo(expected));
         }
 
@@ -122,7 +134,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
 
         // The calibrated file records which masters made it, so a frame can be traced back to its plan.
         [Test]
-        public void TheHeadersNameThePlanAndTheMastersItUsed() {
+        public void TheHeadersNameThePlanAndTheMastersItUsed()
+        {
             ImageMetaData metadata = new ImageMetaData();
             CalibrationPlan plan = new CalibrationPlan("bias_flat", DarkScalingRatio: null, ShouldKeepRaw: true,
                 Warnings: Array.Empty<string>(), Bias: new MasterRef(12, 1, null), Dark: null, Flat: new MasterRef(7, 2, null));
@@ -139,7 +152,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
 
         // A dark plan records the dark and its scaling ratio, and nothing about a flat it didn't have.
         [Test]
-        public void ADarkPlanRecordsTheDarkAndItsRatio() {
+        public void ADarkPlanRecordsTheDarkAndItsRatio()
+        {
             ImageMetaData metadata = new ImageMetaData();
             CalibrationPlan plan = new CalibrationPlan("scaled_dark", DarkScalingRatio: 0.5, ShouldKeepRaw: true,
                 Warnings: Array.Empty<string>(), Bias: new MasterRef(12, 1, null), Dark: new MasterRef(3, 1, null), Flat: null);
@@ -157,17 +171,21 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
         // A retried report leaves last time's calibrated file behind, and N.I.N.A. would save beside it under a numbered
         // name. The stale outputs go, whatever their format, and the light itself is never touched.
         [Test]
-        public void StaleOutputsAreRemovedAndTheLightLeftAlone() {
+        public void StaleOutputsAreRemovedAndTheLightLeftAlone()
+        {
             string folder = Path.Combine(Path.GetTempPath(), "Astraeus.Tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(folder);
-            try {
+            try
+            {
                 foreach (string name in new[] { "LIGHT_0001_cal.fits", "LIGHT_0001_cal.xisf", "LIGHT_0001.fits" })
                     File.WriteAllText(Path.Combine(folder, name), "");
 
                 FrameCalibrator.RemoveStaleOutput(folder, "LIGHT_0001_cal");
 
                 Assert.That(Directory.GetFiles(folder).Select(Path.GetFileName), Is.EqualTo(new[] { "LIGHT_0001.fits" }));
-            } finally {
+            }
+            finally
+            {
                 Directory.Delete(folder, recursive: true);
             }
         }

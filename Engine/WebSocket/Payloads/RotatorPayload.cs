@@ -1,18 +1,22 @@
 ﻿using CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages;
 using System.Text.Json.Serialization;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Payloads {
-    public sealed record RotatorUpdate : WsMessage {
+namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Payloads
+{
+    public sealed record RotatorUpdate : WsMessage
+    {
         public RotatorUpdate(RotatorPayload payload, string? context = null)
             : base(
                 type: "update",
                 device: "rotator",
                 context: context,
                 payload: ToJsonElement(new DataPayload<RotatorPayload>(payload))
-            ) { }
+            )
+        { }
     }
 
-    public record RotatorPayload : DevicePayload {
+    public record RotatorPayload : DevicePayload
+    {
         [JsonPropertyName("can_reverse")]
         public bool? CanReverse { get; init; }
         [JsonPropertyName("reverse")]

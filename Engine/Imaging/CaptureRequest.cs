@@ -2,8 +2,10 @@
 using NINA.Core.Model.Equipment;
 using NINA.Equipment.Model;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
-    public sealed record CaptureRequest {
+namespace CosmicVaults.NINA.Astraeus.Engine.Imaging
+{
+    public sealed record CaptureRequest
+    {
         private const int UseProfileGainOrOffset = -1;
 
         public double ExposureTime { get; init; }
@@ -37,7 +39,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
         public static CaptureRequest Manual(double exposureTime, string imageType, BinningMode binning,
             bool shouldSaveToDisk, int gain = UseProfileGainOrOffset, int offset = UseProfileGainOrOffset,
             bool isPlateSolveRequested = false) =>
-            new CaptureRequest {
+            new CaptureRequest
+            {
                 ExposureTime = exposureTime,
                 ImageType = imageType,
                 Binning = binning,
@@ -49,7 +52,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
 
         public static CaptureRequest Autopilot(double exposureTime, short binning, Coordinates? solveHint,
             int gain = UseProfileGainOrOffset, int offset = UseProfileGainOrOffset, int frameNumber = 0) =>
-            new CaptureRequest {
+            new CaptureRequest
+            {
                 ExposureTime = exposureTime,
                 ImageType = CaptureSequence.ImageTypes.LIGHT,
                 Binning = new BinningMode(binning, binning),

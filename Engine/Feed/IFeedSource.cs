@@ -3,14 +3,16 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
+namespace CosmicVaults.NINA.Astraeus.Engine.Feed
+{
     /// <summary>
     /// One frame as a source produced it, before any sizing or encoding. An HTTP camera gives JPEG
     /// bytes that are often ready to send, and the RTSP decoder gives pixels. Carrying both lets
     /// FeedFrameEncoder.Prepare be the only place that scales or encodes, so max width and quality
     /// are read fresh on every tick.
     /// </summary>
-    internal readonly record struct SourceFrame(byte[]? Jpeg, BitmapSource? Image, DateTime CapturedUtc) {
+    internal readonly record struct SourceFrame(byte[]? Jpeg, BitmapSource? Image, DateTime CapturedUtc)
+    {
         public static SourceFrame FromJpeg(byte[] jpeg) => new(jpeg, null, DateTime.UtcNow);
         public static SourceFrame FromImage(BitmapSource image) => new(null, image, DateTime.UtcNow);
     }
@@ -26,7 +28,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
     /// repeated failures, so a source holding an expensive connection should reconnect internally.
     /// Kept narrow so an out-of-process RTSP decoder would just be one more implementation.
     /// </summary>
-    internal interface IFeedSource : IAsyncDisposable {
+    internal interface IFeedSource : IAsyncDisposable
+    {
         Task<SourceFrame?> CaptureAsync(CancellationToken cancellationToken);
     }
 }

@@ -1,7 +1,9 @@
 using System.Text.Json;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages {
-    public sealed record InboundMessage {
+namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages
+{
+    public sealed record InboundMessage
+    {
         public string Id { get; init; } = default!;
         public string Type { get; init; } = default!;
         public string Device { get; init; } = default!;

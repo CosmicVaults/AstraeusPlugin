@@ -1,12 +1,14 @@
 using CosmicVaults.NINA.Astraeus.Engine.Imaging;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.Calibration {
+namespace CosmicVaults.NINA.Astraeus.Engine.Calibration
+{
     /// <summary>
     /// One calibration frame on disk, described from its header. The acquisition settings group like
     /// frames for stacking and describe a generated master to the server. Pixels aren't kept here.
     /// The generator loads them when it stacks a group.
     /// </summary>
-    public sealed class MasterFrameDescriptor {
+    public sealed class MasterFrameDescriptor
+    {
         private const int NotReported = -1;
 
         public required string FilePath { get; init; }
@@ -26,7 +28,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Calibration {
         public string? FilterName { get; init; }
         public string? ReadoutMode { get; init; }
 
-        public override string ToString() {
+        public override string ToString()
+        {
             string exposure = double.IsNaN(ExposureTimeSeconds) ? "-" : $"{ExposureTimeSeconds:0.###}s";
             string temperature = AcquisitionMetadata.MatchingTemperature(TemperatureCelsius, SetPointCelsius)
                 is int degrees ? $"{degrees}°C" : "-";

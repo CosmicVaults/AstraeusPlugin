@@ -1,5 +1,7 @@
-namespace CosmicVaults.NINA.Astraeus.Engine {
-    internal static class ServerEndpoints {
+namespace CosmicVaults.NINA.Astraeus.Engine
+{
+    internal static class ServerEndpoints
+    {
         public const string AutopilotApiSegment = "autopilot";
         public const string AutofocusApiSegment = "autofocus";
 

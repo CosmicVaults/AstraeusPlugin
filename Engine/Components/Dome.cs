@@ -16,15 +16,17 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine {
+namespace CosmicVaults.NINA.Astraeus.Engine
+{
     public class Dome(
         Observatory observatory,
         IWebSocketBus webSocketBus,
         IDomeMediator domeMediator) :
-        DeviceComponent<IDomeVM, IDomeConsumer, DomeInfo>(domeMediator, observatory, webSocketBus) {
+        DeviceComponent<IDomeVM, IDomeConsumer, DomeInfo>(domeMediator, observatory, webSocketBus)
+    {
         public override string DeviceType { get; } = "dome";
         public override string DisplayName { get; } = "Dome";
-        
+
         public override bool IsBusy => LastInfo?.Slewing == true;
 
         private SafetyMonitor? _safetyMonitor;
@@ -37,26 +39,31 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
         public void AbortShutter() => AbortOperation(ref _shutterCancellationSource);
 
-        public override async Task Start() {
+        public override async Task Start()
+        {
             await base.Start();
-            if (!Observatory.TryGetComponent(out _safetyMonitor)) {
+            if (!Observatory.TryGetComponent(out _safetyMonitor))
+            {
                 LogError("Unable to get access to Safety Monitor.");
             }
-            
+
             domeMediator.Closed += OnDomeClosed;
             domeMediator.Opened += OnDomeOpened;
             domeMediator.Parked += OnDomeParked;
         }
 
-        public override Task Destroy() {
+        public override Task Destroy()
+        {
             domeMediator.Closed -= OnDomeClosed;
             domeMediator.Opened -= OnDomeOpened;
             domeMediator.Parked -= OnDomeParked;
             return base.Destroy();
         }
 
-        protected override Task HandleCommandAsync(WsCommand command) {
-            switch (command.Action) {
+        protected override Task HandleCommandAsync(WsCommand command)
+        {
+            switch (command.Action)
+            {
                 case "open":
                     OpenShutterCommandAsync(command.Id).ObserveFaults(LogCommandFault);
                     break;
@@ -77,7 +84,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                     break;
                 case "slew":
                     if (JsonFields.ReadDouble(command.Payload, "data", out double azimuthDegrees, min: 0, max: 360)
-                        != JsonFieldState.Valid) {
+                        != JsonFieldState.Valid)
+                    {
                         RejectMalformedCommandAsync(command, "data").ObserveFaults(LogCommandFault);
                         break;
                     }
@@ -85,7 +93,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                     break;
                 case "clockwise_nudge":
                     if (JsonFields.ReadDouble(command.Payload, "data", out double clockwiseDegrees, min: 0, max: 360)
-                        != JsonFieldState.Valid) {
+                        != JsonFieldState.Valid)
+                    {
                         RejectMalformedCommandAsync(command, "data").ObserveFaults(LogCommandFault);
                         break;
                     }
@@ -93,7 +102,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                     break;
                 case "anticlockwise_nudge":
                     if (JsonFields.ReadDouble(command.Payload, "data", out double anticlockwiseDegrees, min: 0, max: 360)
-                        != JsonFieldState.Valid) {
+                        != JsonFieldState.Valid)
+                    {
                         RejectMalformedCommandAsync(command, "data").ObserveFaults(LogCommandFault);
                         break;
                     }
@@ -103,7 +113,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                     SetParkCommandAsync(command.Id).ObserveFaults(LogCommandFault);
                     break;
                 case "set_follow":
-                    if (JsonFields.ReadBool(command.Payload, "data", out bool isFollowing) != JsonFieldState.Valid) {
+                    if (JsonFields.ReadBool(command.Payload, "data", out bool isFollowing) != JsonFieldState.Valid)
+                    {
                         RejectMalformedCommandAsync(command, "data").ObserveFaults(LogCommandFault);
                         break;
                     }
@@ -115,12 +126,14 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             }
             return Task.CompletedTask;
         }
-        
-        public override WsMessage? GetUpdateMessage() {
+
+        public override WsMessage? GetUpdateMessage()
+        {
             if (!IsConnected || LastInfo == null)
                 return null;
-            
-            DomePayload payload = new DomePayload {
+
+            DomePayload payload = new DomePayload
+            {
                 DeviceId = DeviceId,
                 ShutterStatus = LastInfo.ShutterStatus.ToString(),
                 IsAtHome = LastInfo.AtHome,
@@ -133,9 +146,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return new DomeUpdate(payload, "dashboard");
         }
 
-        public override WsMessage? GetDeviceStaticInfo() {
+        public override WsMessage? GetDeviceStaticInfo()
+        {
             DomeInfo info = domeMediator.GetInfo();
-            DomePayload payload = new DomePayload {
+            DomePayload payload = new DomePayload
+            {
                 DeviceId = DeviceId,
                 Name = info.Name,
                 IsConnected = info.Connected,
@@ -159,14 +174,16 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         ///////////// Events /////////////
-        
-        private Task OnDomeOpened(object sender, EventArgs eventArgs) {
+
+        private Task OnDomeOpened(object sender, EventArgs eventArgs)
+        {
             _ = PostShutterStatusAsync("ShutterOpen");
             ReportRoofEvent(NotificationKind.RoofOpened, "Roof opened.");
             return Task.CompletedTask;
         }
 
-        private Task OnDomeClosed(object sender, EventArgs eventArgs) {
+        private Task OnDomeClosed(object sender, EventArgs eventArgs)
+        {
             _ = PostShutterStatusAsync("ShutterClosed");
             ReportRoofEvent(NotificationKind.RoofClosed, "Roof closed.");
             return Task.CompletedTask;
@@ -176,12 +193,14 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Emails the observers that the roof moved, whoever moved it. The message is fixed because the
         /// server keys its cooldown on the first line, so a flapping roof sends one open and one close.
         /// </summary>
-        private void ReportRoofEvent(string kind, string message) {
+        private void ReportRoofEvent(string kind, string message)
+        {
             // Who moved it is the first thing anyone asks at 2am.
             string initiator = Observatory.TryGetComponent<Autopilot.Autopilot>(out Autopilot.Autopilot? autopilot)
                                && autopilot.IsRunning ? "autopilot" : "manual";
             DomeInfo domeInfo = domeMediator.GetInfo();
-            var details = new {
+            var details = new
+            {
                 device = domeInfo.Name ?? DisplayName,
                 azimuth = domeInfo.Azimuth.ToString("F1", CultureInfo.InvariantCulture),
                 initiator,
@@ -189,12 +208,13 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             };
             Observatory.ReportEvent(kind, message, details, Guid.NewGuid().ToString("N"));
         }
-        
-        private Task OnDomeParked(object sender, EventArgs eventArgs) {
+
+        private Task OnDomeParked(object sender, EventArgs eventArgs)
+        {
             _ = PostParkedStatusAsync(true);
             return Task.CompletedTask;
         }
-        
+
         ///////////// Roof watchdog /////////////
         // Like Mount's limit backstop, this watches the roof when the autopilot isn't. It logs a
         // CRITICAL line and emails once per breach, and never moves anything. With the autopilot off,
@@ -210,22 +230,28 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
         // In LateUpdate like Mount's backstop, because Observatory.Update returns early when signed
         // out or the socket is down. A safety check has to keep working when the server is unreachable.
-        public override Task LateUpdate() {
-            try {
+        public override Task LateUpdate()
+        {
+            try
+            {
                 WatchRoof();
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 // One bad pass must not stop the watchdog or the loop.
                 LogDebug($"Roof watchdog skipped a pass: {ex.Message}");
             }
             return base.LateUpdate();
         }
 
-        private void WatchRoof() {
+        private void WatchRoof()
+        {
             if (!IsConnected) return;
             DomeInfo info = domeMediator.GetInfo();
             // A dome with no shutter, or one reporting an error, is not an open roof to alert about.
             bool isRoofOpen = info.ShutterStatus is ShutterState.ShutterOpen or ShutterState.ShutterOpening;
-            if (!isRoofOpen) {
+            if (!isRoofOpen)
+            {
                 _isReportedOpenWhileUnsafe = false;
                 _isReportedOpenAfterDawn = false;
                 return;
@@ -235,21 +261,28 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             // watcher and can act on it. Merely running isn't enough. Nothing watches the roof while
             // it waits for dusk, connects devices or runs the shutdown sequence.
             if (Observatory.TryGetComponent<Autopilot.Autopilot>(out Autopilot.Autopilot? autopilot)
-                && autopilot.IsRoofUnderControl) {
+                && autopilot.IsRoofUnderControl)
+            {
                 return;
             }
 
             bool isUnsafe = _safetyMonitor is { IsConnected: true } monitor && !monitor.IsSafe();
-            if (!isUnsafe) {
+            if (!isUnsafe)
+            {
                 _isReportedOpenWhileUnsafe = false;
-            } else if (!_isReportedOpenWhileUnsafe) {
+            }
+            else if (!_isReportedOpenWhileUnsafe)
+            {
                 _isReportedOpenWhileUnsafe = true;
                 ReportRoofOpen("Roof is open and conditions are unsafe, and the autopilot is not watching it.", info);
             }
 
-            if (!Observatory.IsAfterDawn()) {
+            if (!Observatory.IsAfterDawn())
+            {
                 _isReportedOpenAfterDawn = false;
-            } else if (!_isReportedOpenAfterDawn) {
+            }
+            else if (!_isReportedOpenAfterDawn)
+            {
                 _isReportedOpenAfterDawn = true;
                 ReportRoofOpen("Roof is still open after dawn, and the autopilot is not watching it.", info);
             }
@@ -259,9 +292,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Logs CRITICAL and emails the observers. The headline stays fixed because the server keys its
         /// alert cooldown on the first line, so the facts go in the details and the log line.
         /// </summary>
-        private void ReportRoofOpen(string headline, DomeInfo info) {
+        private void ReportRoofOpen(string headline, DomeInfo info)
+        {
             string mount = "disconnected";
-            if (Observatory.TryGetComponent<Mount>(out Mount? mountComponent) && mountComponent.IsConnected) {
+            if (Observatory.TryGetComponent<Mount>(out Mount? mountComponent) && mountComponent.IsConnected)
+            {
                 mount = mountComponent.IsParked ? "parked" : "unparked";
             }
             bool isCloseOnUnsafeEnabled = Observatory.Settings.ProfileService.ActiveProfile.DomeSettings.CloseOnUnsafe;
@@ -270,7 +305,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 $"{headline} Shutter {shutter}, mount {mount}, N.I.N.A. 'Close on unsafe' is " +
                 $"{(isCloseOnUnsafeEnabled ? "on" : "off")}. Astraeus will not close it.",
                 DeviceType, DefaultLogCategory);
-            Observatory.ReportEvent(NotificationKind.CriticalError, headline, new {
+            Observatory.ReportEvent(NotificationKind.CriticalError, headline, new
+            {
                 shutter,
                 mount,
                 roof_mode = Observatory.Settings.GetAutopilotRoofMode().ToString(),
@@ -282,210 +318,282 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
         ///////////// Actions /////////////
 
-        private async Task HomeCommandAsync(string id) {
+        private async Task HomeCommandAsync(string id)
+        {
             await BroadcastMessageReceivedAsync(id, true);
-            try {
+            try
+            {
                 bool isHome = await domeMediator.FindHome(BeginOperation(ref _azimuthCancellationSource));
                 LogOutcome(isHome, "Dome found its home position.", "Dome did not find its home position.");
-            } catch (OperationCanceledException) {
+            }
+            catch (OperationCanceledException)
+            {
                 Log("Find home aborted.");
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 LogWarning($"Dome find home failed: {ex.Message}");
             }
         }
 
-        private async Task SlewCommandAsync(string id, double position) {
+        private async Task SlewCommandAsync(string id, double position)
+        {
             await BroadcastMessageReceivedAsync(id, true);
             Log($"Slewing to {position}...");
-            try {
+            try
+            {
                 bool isSlewed = await domeMediator.SlewToAzimuth(position,
                     BeginOperation(ref _azimuthCancellationSource));
                 LogOutcome(isSlewed, $"Dome slewed to {position}.", $"Dome did not slew to {position}.");
-            } catch (OperationCanceledException) {
+            }
+            catch (OperationCanceledException)
+            {
                 Log("Slew aborted.");
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 LogWarning($"Dome slew failed: {ex.Message}");
             }
         }
 
-        private async Task SyncCommandAsync(string id) {
+        private async Task SyncCommandAsync(string id)
+        {
             await BroadcastMessageReceivedAsync(id, true, "Syncing to Mount");
-            try {
+            try
+            {
                 await domeMediator.WaitForDomeSynchronization(BeginOperation(ref _azimuthCancellationSource));
                 Log("Dome synchronised with the mount.");
-            } catch (OperationCanceledException) {
+            }
+            catch (OperationCanceledException)
+            {
                 Log("Sync aborted.");
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 LogWarning($"Dome sync failed: {ex.Message}");
             }
         }
 
-        private void MoveClockwiseCommand(string id, double degrees) {
-            if (!TryGetDeviceViewModel<DomeVM>(out DomeVM? domeViewModel)) {
+        private void MoveClockwiseCommand(string id, double degrees)
+        {
+            if (!TryGetDeviceViewModel<DomeVM>(out DomeVM? domeViewModel))
+            {
                 _ = BroadcastMessageReceivedAsync(id, false, "N.I.N.A.'s dome controls are not available");
                 return;
             }
-            InvokeOnUiThread(() => {
+            InvokeOnUiThread(() =>
+            {
                 domeViewModel.RotateDegrees = degrees;
                 domeViewModel.RotateCWCommand.Execute(null);
             });
             _ = BroadcastMessageReceivedAsync(id, true, $"Moving clockwise {degrees} degrees");
         }
-        
-        private void MoveAntiClockwiseCommand(string id, double degrees) {
-            if (!TryGetDeviceViewModel<DomeVM>(out DomeVM? domeViewModel)) {
+
+        private void MoveAntiClockwiseCommand(string id, double degrees)
+        {
+            if (!TryGetDeviceViewModel<DomeVM>(out DomeVM? domeViewModel))
+            {
                 _ = BroadcastMessageReceivedAsync(id, false, "N.I.N.A.'s dome controls are not available");
                 return;
             }
-            InvokeOnUiThread(() => {
+            InvokeOnUiThread(() =>
+            {
                 domeViewModel.RotateDegrees = degrees;
                 domeViewModel.RotateCCWCommand.Execute(null);
             });
             _ = BroadcastMessageReceivedAsync(id, true, $"Moving anticlockwise {degrees} degrees");
         }
 
-        private void StopCommand(string? id) {
+        private void StopCommand(string? id)
+        {
             AbortSlew();
             AbortShutter();
-            if (TryGetDeviceViewModel<DomeVM>(out DomeVM? domeViewModel)) {
+            if (TryGetDeviceViewModel<DomeVM>(out DomeVM? domeViewModel))
+            {
                 InvokeOnUiThread(() => domeViewModel.StopCommand.Execute(null));
             }
             _ = BroadcastMessageReceivedAsync(id, true, $"Stopping all motion.");
         }
-        
-        private async Task ParkCommandAsync(string? id) {
+
+        private async Task ParkCommandAsync(string? id)
+        {
             await BroadcastMessageReceivedAsync(id, true);
             Log("Parking Dome...");
-            try {
+            try
+            {
                 bool isParked = await domeMediator.Park(BeginOperation(ref _azimuthCancellationSource));
                 LogOutcome(isParked, "Dome has parked.", "Dome did not park.");
-            } catch (OperationCanceledException) {
+            }
+            catch (OperationCanceledException)
+            {
                 Log("Park aborted.");
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 LogWarning($"Dome park failed: {ex.Message}");
             }
         }
 
-        private void LogOutcome(bool isSuccess, string successMessage, string failureMessage) {
-            if (isSuccess) {
+        private void LogOutcome(bool isSuccess, string successMessage, string failureMessage)
+        {
+            if (isSuccess)
+            {
                 Log(successMessage);
-            } else {
+            }
+            else
+            {
                 LogWarning(failureMessage);
             }
         }
 
         // N.I.N.A.'s dome driver wrapper checks CanSetPark itself. DomeInfo doesn't expose it.
-        private async Task SetParkCommandAsync(string? id) {
-            if (!IsConnected) {
+        private async Task SetParkCommandAsync(string? id)
+        {
+            if (!IsConnected)
+            {
                 await BroadcastMessageReceivedAsync(id, false, "No device connected");
                 return;
             }
-            if (IsAutopilotRunning) {
+            if (IsAutopilotRunning)
+            {
                 await BroadcastMessageReceivedAsync(id, false,
                     "The autopilot is running; the park position cannot be changed now");
                 return;
             }
             double azimuth = domeMediator.GetInfo().Azimuth;
-            if (TryGetDeviceViewModel<DomeVM>(out DomeVM? domeViewModel)) {
+            if (TryGetDeviceViewModel<DomeVM>(out DomeVM? domeViewModel))
+            {
                 await BroadcastMessageReceivedAsync(id, true, "Setting park position");
                 InvokeOnUiThread(() => domeViewModel.SetParkPositionCommand.Execute(azimuth));
                 Log($"Park position set to {azimuth}.");
-            } else {
+            }
+            else
+            {
                 await BroadcastMessageReceivedAsync(id, false, "N.I.N.A.'s dome controls are not available");
             }
         }
-        
-        private async Task<bool> OpenShutterCommandAsync(string? id) {
+
+        private async Task<bool> OpenShutterCommandAsync(string? id)
+        {
             ShutterState currentState = domeMediator.GetInfo().ShutterStatus;
-            if (currentState == ShutterState.ShutterOpen || currentState == ShutterState.ShutterOpening) {
+            if (currentState == ShutterState.ShutterOpen || currentState == ShutterState.ShutterOpening)
+            {
                 await BroadcastMessageReceivedAsync(id, true, "The shutter is already open or opening");
                 return false;
             }
             // Refuse before replying, so the dashboard shows why instead of an accepted open that never happens.
-            if (WhyShutterCannotOpen() is string reason) {
+            if (WhyShutterCannotOpen() is string reason)
+            {
                 LogWarning($"Shutter cannot open: {reason}.");
                 await BroadcastMessageReceivedAsync(id, false, $"The shutter cannot open: {reason}");
                 return false;
             }
             await BroadcastMessageReceivedAsync(id, true);
             Log("Shutter is Opening...");
-            try {
+            try
+            {
                 bool hasOpened = await domeMediator.OpenShutter(BeginOperation(ref _shutterCancellationSource));
-                if (hasOpened) {
+                if (hasOpened)
+                {
                     Log("Shutter opened.");
-                } else {
+                }
+                else
+                {
                     LogError("Failed to open the shutter.");
                 }
                 return hasOpened;
-            } catch (OperationCanceledException) {
+            }
+            catch (OperationCanceledException)
+            {
                 Log("Shutter open aborted.");
                 return false;
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 LogError($"Opening the shutter failed: {ex.Message}");
                 return false;
             }
         }
-  
-        private async Task<bool> CloseShutterCommandAsync(string? id) {
+
+        private async Task<bool> CloseShutterCommandAsync(string? id)
+        {
             await BroadcastMessageReceivedAsync(id, true);
             bool hasClosed = false;
 
             ShutterState currentState = domeMediator.GetInfo().ShutterStatus;
-            if (currentState == ShutterState.ShutterClosed || currentState == ShutterState.ShutterClosing) {
+            if (currentState == ShutterState.ShutterClosed || currentState == ShutterState.ShutterClosing)
+            {
                 Log("Shutter is already closed or closing...");
                 return false;
             }
             Log("Shutter is Closing...");
-            try {
+            try
+            {
                 hasClosed = await domeMediator.CloseShutter(BeginOperation(ref _shutterCancellationSource));
-                if (hasClosed) {
+                if (hasClosed)
+                {
                     Log("Shutter closed.");
-                } else {
+                }
+                else
+                {
                     LogError("Failed to close the shutter.");
                 }
-            } catch (OperationCanceledException) {
+            }
+            catch (OperationCanceledException)
+            {
                 Log("Shutter close aborted.");
             }
             return hasClosed;
         }
 
-        private async Task SetFollowCommandAsync(string? id, bool shouldFollow) {
+        private async Task SetFollowCommandAsync(string? id, bool shouldFollow)
+        {
             await BroadcastMessageReceivedAsync(id, true);
-            if (shouldFollow) {
+            if (shouldFollow)
+            {
                 bool hasEnabledFollowing = await domeMediator.EnableFollowing(ComponentToken);
-                if (hasEnabledFollowing) {
+                if (hasEnabledFollowing)
+                {
                     Log("Dome set to follow mount.");
-                } else {
+                }
+                else
+                {
                     LogError("Failed to set dome to follow mount.");
                 }
                 return;
             }
             bool hasDisabledFollowing = await domeMediator.DisableFollowing(ComponentToken);
-            if (hasDisabledFollowing) {
+            if (hasDisabledFollowing)
+            {
                 Log("Dome no longer following mount.");
-            } else {
+            }
+            else
+            {
                 LogError("Failed to stop dome following mount.");
             }
         }
-        
+
         ///////////// Post Helpers /////////////
 
-        private async Task PostShutterStatusAsync(string status) {
+        private async Task PostShutterStatusAsync(string status)
+        {
             DomePayload payload =
-                new DomePayload{DeviceId = DeviceId, ShutterStatus = status, IsConnected = IsConnected};
+                new DomePayload { DeviceId = DeviceId, ShutterStatus = status, IsConnected = IsConnected };
             DomeUpdate message = new DomeUpdate(payload, "event");
             await WebSocketBus.SendAsync(message);
         }
-        
-        private async Task PostParkedStatusAsync(bool isParked) {
-            DomePayload payload = new DomePayload{DeviceId = DeviceId, IsParked = isParked, IsConnected = IsConnected};
+
+        private async Task PostParkedStatusAsync(bool isParked)
+        {
+            DomePayload payload = new DomePayload { DeviceId = DeviceId, IsParked = isParked, IsConnected = IsConnected };
             DomeUpdate message = new DomeUpdate(payload, "event");
             await WebSocketBus.SendAsync(message);
         }
-        
+
         ///////////// Autopilot Helpers /////////////
 
-        public bool IsShutterOpen() {
+        public bool IsShutterOpen()
+        {
             return IsConnected && domeMediator.GetInfo().ShutterStatus == ShutterState.ShutterOpen;
         }
 
@@ -493,11 +601,13 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Not the same as !IsShutterOpen. Opening, closing, error and unknown are neither, and for safety
         /// it's the closed reading that counts.
         /// </summary>
-        public bool IsShutterClosed() {
+        public bool IsShutterClosed()
+        {
             return IsConnected && domeMediator.GetInfo().ShutterStatus == ShutterState.ShutterClosed;
         }
 
-        public bool IsShutterOpening() {
+        public bool IsShutterOpening()
+        {
             return IsConnected && domeMediator.GetInfo().ShutterStatus == ShutterState.ShutterOpening;
         }
 
@@ -511,7 +621,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         private static readonly TimeSpan RoofMoveTimeout = TimeSpan.FromMinutes(5);
 
         /// <summary>True only if it reads open afterwards.</summary>
-        public async Task<bool> OpenShutterAsync(CancellationToken cancellationToken) {
+        public async Task<bool> OpenShutterAsync(CancellationToken cancellationToken)
+        {
             if (!IsConnected) return false;
             if (IsShutterOpen()) return true;
             bool isFinished = await RunShutterMoveAsync(domeMediator.OpenShutter, "opening", cancellationToken);
@@ -522,7 +633,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// True only if the shutter reads closed afterwards. N.I.N.A. reports the close as done after its
         /// settle delay whatever the shutter did.
         /// </summary>
-        public async Task<bool> CloseShutterAsync(CancellationToken cancellationToken) {
+        public async Task<bool> CloseShutterAsync(CancellationToken cancellationToken)
+        {
             if (!IsConnected) return false;
             if (IsShutterClosed()) return true;
             bool isFinished = await RunShutterMoveAsync(domeMediator.CloseShutter, "closing", cancellationToken);
@@ -533,10 +645,12 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// For the autopilot's waits. Closes the shutter only if the mount is connected and reports
         /// parked. False if it isn't, or the close didn't finish.
         /// </summary>
-        public async Task<bool> TryCloseWhenParkedAsync(string reason, CancellationToken cancellationToken) {
+        public async Task<bool> TryCloseWhenParkedAsync(string reason, CancellationToken cancellationToken)
+        {
             if (!IsConnected) return false;
             if (IsShutterClosed()) return true;
-            if (!Observatory.TryGetComponent<Mount>(out Mount? mount) || !mount.IsConnected || !mount.IsParked) {
+            if (!Observatory.TryGetComponent<Mount>(out Mount? mount) || !mount.IsConnected || !mount.IsParked)
+            {
                 LogWarning($"Not closing the roof ({reason}): the mount is not confirmed parked.");
                 return false;
             }
@@ -546,30 +660,40 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
         // A caller's cancel still throws. Our own timeout or a driver exception returns false.
         private async Task<bool> RunShutterMoveAsync(Func<CancellationToken, Task<bool>> move, string action,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken)
+        {
             // On the observatory's clock, so a test can run a stalled roof out of time.
             using CancellationTokenSource timeoutSource = new CancellationTokenSource(RoofMoveTimeout, Observatory.Clock);
             using CancellationTokenSource moveCancellationSource =
                 CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutSource.Token);
-            try {
+            try
+            {
                 return await move(moveCancellationSource.Token);
-            } catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
                 throw;
-            } catch (OperationCanceledException) {
+            }
+            catch (OperationCanceledException)
+            {
                 LogError($"Roof did not finish {action} within {RoofMoveTimeout.TotalMinutes:F0} minutes.");
                 return false;
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 LogError($"Roof {action} failed: {ex.Message}");
                 return false;
             }
         }
-     
+
         ///////////// Helpers /////////////
-        
+
         // Only a connected monitor that reads unsafe stops a manual open. Without one the observer
         // decides, unless N.I.N.A. would refuse the open anyway, so the dashboard is told why.
-        private string? WhyShutterCannotOpen() {
-            if (_safetyMonitor is { IsConnected: true } monitor) {
+        private string? WhyShutterCannotOpen()
+        {
+            if (_safetyMonitor is { IsConnected: true } monitor)
+            {
                 return monitor.IsSafe() ? null : "the safety monitor reports conditions are unsafe";
             }
             bool isRefusedWithoutMonitor = Observatory.Settings.ProfileService.ActiveProfile.DomeSettings

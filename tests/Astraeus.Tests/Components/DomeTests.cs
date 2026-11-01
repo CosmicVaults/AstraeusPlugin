@@ -8,14 +8,17 @@ using Moq;
 using NINA.Equipment.Interfaces;
 using NUnit.Framework;
 
-namespace CosmicVaults.NINA.Astraeus.Tests.Components {
+namespace CosmicVaults.NINA.Astraeus.Tests.Components
+{
     [TestFixture]
-    public class DomeTests {
+    public class DomeTests
+    {
         // A cap on waits that should end at once, so a regression fails instead of hanging the run.
         private static readonly TimeSpan Soon = TimeSpan.FromSeconds(5);
 
         // A dome started as the plugin starts it, so it has found the safety monitor, at 22:00 on a typical night.
-        private static async Task<FakeNina> WatchingDomeAsync(ShutterState? shutter, bool? isSafe) {
+        private static async Task<FakeNina> WatchingDomeAsync(ShutterState? shutter, bool? isSafe)
+        {
             FakeNina nina = new FakeNina();
             nina.SetTypicalNight(new DateTime(2026, 3, 1, 22, 0, 0));
             nina.SetRoof(shutter);
@@ -24,7 +27,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
             return nina;
         }
 
-        private static async Task PassAsync(FakeNina nina, int passes) {
+        private static async Task PassAsync(FakeNina nina, int passes)
+        {
             for (int pass = 0; pass < passes; pass++) await nina.Dome.LateUpdate();
         }
 
@@ -33,11 +37,13 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         // N.I.N.A. waits as long as the driver says "closing", so a stalled roof is given five clock minutes and then
         // reported, rather than holding the secure for the rest of the night.
         [Test]
-        public async Task AStalledCloseIsGivenUpAfterFiveMinutesOnTheClock() {
+        public async Task AStalledCloseIsGivenUpAfterFiveMinutesOnTheClock()
+        {
             FakeNina nina = new FakeNina();
             nina.SetRoof(ShutterState.ShutterOpen);
             nina.DomeMediator.Setup(mediator => mediator.CloseShutter(It.IsAny<CancellationToken>()))
-                .Returns<CancellationToken>(async token => {
+                .Returns<CancellationToken>(async token =>
+                {
                     await Task.Delay(Timeout.Infinite, token);
                     return true;
                 });
@@ -56,13 +62,15 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         // Outside the autopilot nothing closes the roof, so a roof open in unsafe conditions is an alert, once per breach,
         // and never a close: the plugin only moves the roof while the autopilot is working it.
         [Test]
-        public async Task AnOpenRoofWhileUnsafeIsReportedOncePerBreachAndNeverClosed() {
+        public async Task AnOpenRoofWhileUnsafeIsReportedOncePerBreachAndNeverClosed()
+        {
             FakeNina nina = await WatchingDomeAsync(ShutterState.ShutterOpen, isSafe: false);
 
             await PassAsync(nina, 3);
             Assert.That(nina.Alerts, Has.Count.EqualTo(1), "once while the breach lasts");
             Observatory.ReportedEvent alert = nina.Alerts[0];
-            Assert.Multiple(() => {
+            Assert.Multiple(() =>
+            {
                 Assert.That(alert.Message, Is.EqualTo("Roof is open and conditions are unsafe, and the autopilot is not watching it."));
                 Assert.That(alert.Detail("shutter"), Is.EqualTo("ShutterOpen"));
                 Assert.That(alert.Detail("mount"), Is.EqualTo("disconnected"));
@@ -83,7 +91,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
 
         // A roof still opening is already letting the weather in, so it counts as open.
         [Test]
-        public async Task AnOpeningRoofCountsAsOpen() {
+        public async Task AnOpeningRoofCountsAsOpen()
+        {
             FakeNina nina = await WatchingDomeAsync(ShutterState.ShutterOpening, isSafe: false);
 
             await PassAsync(nina, 1);
@@ -93,7 +102,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
 
         // An open roof in safe conditions before dawn is a night in progress, not a breach.
         [Test]
-        public async Task AnOpenRoofWhileSafeBeforeDawnIsNotReported() {
+        public async Task AnOpenRoofWhileSafeBeforeDawnIsNotReported()
+        {
             FakeNina nina = await WatchingDomeAsync(ShutterState.ShutterOpen, isSafe: true);
 
             await PassAsync(nina, 3);
@@ -103,7 +113,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
 
         // A roof still open after dawn is reported once per morning, whatever the weather.
         [Test]
-        public async Task AnOpenRoofAfterDawnIsReportedOnce() {
+        public async Task AnOpenRoofAfterDawnIsReportedOnce()
+        {
             FakeNina nina = await WatchingDomeAsync(ShutterState.ShutterOpen, isSafe: true);
             nina.Clock.SetUtcNow(new DateTimeOffset(new DateTime(2026, 3, 2, 7, 0, 0), TimeSpan.Zero));
 
@@ -115,7 +126,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
 
         // A dome that isn't connected can't be watched, and that is not a breach either.
         [Test]
-        public async Task ADisconnectedDomeIsNotWatched() {
+        public async Task ADisconnectedDomeIsNotWatched()
+        {
             FakeNina nina = await WatchingDomeAsync(null, isSafe: false);
 
             await PassAsync(nina, 3);

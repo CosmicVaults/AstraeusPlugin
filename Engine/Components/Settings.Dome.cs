@@ -6,11 +6,14 @@ using System.ComponentModel;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine {
-    public partial class Settings {
+namespace CosmicVaults.NINA.Astraeus.Engine
+{
+    public partial class Settings
+    {
         private DebouncedPush? _domeSettingsPush;
 
-        private async Task HandleDomeUpdateAsync(WsCommand command) {
+        private async Task HandleDomeUpdateAsync(WsCommand command)
+        {
             if (!command.Payload.TryGetProperty("data", out JsonElement data)) return;
 
             IDomeSettings domeSettings = Profile!.DomeSettings;
@@ -53,9 +56,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 $"azimuthTolerance={domeSettings.AzimuthTolerance_degrees}", device: "dome");
         }
 
-        internal Task PushDomeSettingsAsync() {
+        internal Task PushDomeSettingsAsync()
+        {
             IDomeSettings domeSettings = Profile!.DomeSettings;
-            DomeSettingsPayload payload = new DomeSettingsPayload {
+            DomeSettingsPayload payload = new DomeSettingsPayload
+            {
                 ScopePositionEastWest_mm = domeSettings.ScopePositionEastWest_mm,
                 ScopePositionNorthSouth_mm = domeSettings.ScopePositionNorthSouth_mm,
                 ScopePositionUpDown_mm = domeSettings.ScopePositionUpDown_mm,
@@ -81,7 +86,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return WebSocketBus.SendAsync(SettingsUpdate.Create(payload, "dome"));
         }
 
-        private void OnDomeSettingsChanged(object? sender, PropertyChangedEventArgs eventArgs) {
+        private void OnDomeSettingsChanged(object? sender, PropertyChangedEventArgs eventArgs)
+        {
             _domeSettingsPush ??= CreatePush(PushDomeSettingsAsync, "dome");
             _domeSettingsPush.Schedule();
         }

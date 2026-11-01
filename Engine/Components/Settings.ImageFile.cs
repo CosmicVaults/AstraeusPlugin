@@ -7,12 +7,15 @@ using System.ComponentModel;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine {
-    public partial class Settings {
+namespace CosmicVaults.NINA.Astraeus.Engine
+{
+    public partial class Settings
+    {
         private DebouncedPush? _imageFileSettingsPush;
 
         // The save folder isn't here because file paths are never synced with the server.
-        private async Task HandleImageFileUpdateAsync(WsCommand command) {
+        private async Task HandleImageFileUpdateAsync(WsCommand command)
+        {
             if (!command.Payload.TryGetProperty("data", out JsonElement data)) return;
 
             IImageFileSettings imageFileSettings = Profile!.ImageFileSettings;
@@ -40,15 +43,18 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         // N.I.N.A. checks and saves the file patterns through its options view model, not the profile.
-        private void SetFilePatternOnOptionsPage(string propertyName, string pattern) {
+        private void SetFilePatternOnOptionsPage(string propertyName, string pattern)
+        {
             IOptionsVM optionsViewModel = Observatory.Settings.OptionsViewModel;
             InvokeOnUiThread(
                 () => optionsViewModel.GetType().GetProperty(propertyName)?.SetValue(optionsViewModel, pattern));
         }
 
-        internal Task PushImageFileSettingsAsync() {
+        internal Task PushImageFileSettingsAsync()
+        {
             IImageFileSettings imageFileSettings = Profile!.ImageFileSettings;
-            ImageFileSettingsPayload payload = new ImageFileSettingsPayload {
+            ImageFileSettingsPayload payload = new ImageFileSettingsPayload
+            {
                 FilePattern = imageFileSettings.FilePattern,
                 FilePatternDARK = imageFileSettings.FilePatternDARK,
                 FilePatternBIAS = imageFileSettings.FilePatternBIAS,
@@ -65,7 +71,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return WebSocketBus.SendAsync(SettingsUpdate.Create(payload, "imagefile"));
         }
 
-        private void OnImageFileSettingsChanged(object? sender, PropertyChangedEventArgs eventArgs) {
+        private void OnImageFileSettingsChanged(object? sender, PropertyChangedEventArgs eventArgs)
+        {
             _imageFileSettingsPush ??= CreatePush(PushImageFileSettingsAsync, "image file");
             _imageFileSettingsPush.Schedule();
         }

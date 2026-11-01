@@ -5,9 +5,11 @@ using NINA.Core.Utility;
 using System;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.Components {
+namespace CosmicVaults.NINA.Astraeus.Engine.Components
+{
     public sealed class AstraeusLoggerComponent(Observatory observatory, IWebSocketBus webSocketBus)
-        : ServiceComponent(observatory, webSocketBus) {
+        : ServiceComponent(observatory, webSocketBus)
+    {
 
         public override string DeviceType => "system";
         public override LogCategory DefaultLogCategory => LogCategory.System;
@@ -20,7 +22,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Components {
 
         private Serilog.ILogger? _wrappingLogger;
 
-        public override Task Start() {
+        public override Task Start()
+        {
             _previousLogger = Serilog.Log.Logger;
             _wrappingLogger = new LoggerConfiguration()
                 // Serilog defaults to Information, which would drop Debug and Verbose events before
@@ -35,13 +38,15 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Components {
             return base.Start();
         }
 
-        public override Task Destroy() {
+        public override Task Destroy()
+        {
             if (IsDestroyed) return Task.CompletedTask;
             // Only restore while ours is still installed. A plugin that wrapped after us writes through
             // ours, and putting NINA's back would drop its wrapper. Restore before disposing so nothing
             // logs into a disposed logger. WriteTo.Logger doesn't own NINA's logger, so its file sink
             // keeps running.
-            if (_previousLogger != null && ReferenceEquals(Serilog.Log.Logger, _wrappingLogger)) {
+            if (_previousLogger != null && ReferenceEquals(Serilog.Log.Logger, _wrappingLogger))
+            {
                 Serilog.Log.Logger = _previousLogger;
                 (_wrappingLogger as IDisposable)?.Dispose();
             }

@@ -5,11 +5,14 @@ using NINA.Core.Enum;
 using NINA.Equipment.Equipment.MyTelescope;
 using NUnit.Framework;
 
-namespace CosmicVaults.NINA.Astraeus.Tests.Components {
+namespace CosmicVaults.NINA.Astraeus.Tests.Components
+{
     // The limit maths, on the same fixture as the rest of the mount.
-    public partial class MountTests {
+    public partial class MountTests
+    {
         // A German equatorial, connected and tracking on the given side, with mount limits on and a 5 min meridian limit.
-        private static FakeNina GermanEquatorial(PierSide side, double raDegrees = 100, double decDegrees = 0) {
+        private static FakeNina GermanEquatorial(PierSide side, double raDegrees = 100, double decDegrees = 0)
+        {
             FakeNina nina = new FakeNina();
             nina.Settings.SetIsMountLimitEnabled(true);
             nina.SetMeridianLimit(maxMinutesAfterMeridian: 5);
@@ -28,7 +31,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         [TestCase(12, 12)]
         [TestCase(13, -11)]
         [TestCase(23.5, -0.5)]
-        public void AnHourAngleBecomesSignedHoursPastTheMeridian(double hourAngle, double expected) {
+        public void AnHourAngleBecomesSignedHoursPastTheMeridian(double hourAngle, double expected)
+        {
             Assert.That(Mount.HoursPastMeridian(hourAngle), Is.EqualTo(expected).Within(1e-9));
         }
 
@@ -38,7 +42,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         [TestCase(360, 0)]
         [TestCase(-90, 270)]
         [TestCase(725, 5)]
-        public void AnAzimuthIsBroughtIntoOneTurn(double azimuth, double expected) {
+        public void AnAzimuthIsBroughtIntoOneTurn(double azimuth, double expected)
+        {
             Assert.That(Mount.NormalizeAzimuth(azimuth), Is.EqualTo(expected).Within(1e-9));
         }
 
@@ -47,7 +52,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         [TestCase(20, "now")]
         [TestCase(100, "in 2 min")]
         [TestCase(300, "in 5 min")]
-        public void TheWhenLabelRoundsToWholeMinutesAndCallsTheFirstHalfMinuteNow(int secondsAhead, string expected) {
+        public void TheWhenLabelRoundsToWholeMinutesAndCallsTheFirstHalfMinuteNow(int secondsAhead, string expected)
+        {
             Assert.That(Mount.WhenLabel(TimeSpan.FromSeconds(secondsAhead)), Is.EqualTo(expected));
         }
 
@@ -58,7 +64,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         [TestCase(PierSide.pierWest, 5.0 / 60)]
         [TestCase(PierSide.pierEast, -5.0 / 60)]
         [TestCase(PierSide.pierUnknown, 5.0 / 60)]
-        public void TheMeridianThresholdMirrorsForTheEastSide(PierSide side, double expectedHours) {
+        public void TheMeridianThresholdMirrorsForTheEastSide(PierSide side, double expectedHours)
+        {
             FakeNina nina = GermanEquatorial(side);
 
             Assert.That(nina.Mount.MeridianThresholdHours(side), Is.EqualTo(expectedHours).Within(1e-9));
@@ -67,7 +74,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         // A pause before the meridian puts the west limit east of it, and the east side's mirror never crosses west, so it
         // clamps at zero.
         [Test]
-        public void APauseBeforeTheMeridianMovesTheWestLimitEastAndClampsTheEastLimitAtZero() {
+        public void APauseBeforeTheMeridianMovesTheWestLimitEastAndClampsTheEastLimitAtZero()
+        {
             FakeNina nina = GermanEquatorial(PierSide.pierWest);
             nina.SetMeridianLimit(maxMinutesAfterMeridian: 5, pauseMinutesBeforeMeridian: 10);
 
@@ -79,7 +87,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         [TestCase(0.0, null)]
         [TestCase(3.0 / 60, null)]
         [TestCase(6.0 / 60, "past meridian limit (6 min west of the meridian now on pierWest, limit 5 min past the meridian)")]
-        public void OnPierWestTheBreachIsWestOfTheLimit(double hoursPastMeridian, string? expected) {
+        public void OnPierWestTheBreachIsWestOfTheLimit(double hoursPastMeridian, string? expected)
+        {
             FakeNina nina = GermanEquatorial(PierSide.pierWest);
 
             Assert.That(nina.Mount.DescribeMeridianBreach(hoursPastMeridian, PierSide.pierWest, "now"), Is.EqualTo(expected));
@@ -89,7 +98,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         [TestCase(0.5, null)]
         [TestCase(-3.0 / 60, null)]
         [TestCase(-6.0 / 60, "past meridian limit (6 min east of the meridian now on pierEast, limit 5 min east of the meridian)")]
-        public void OnPierEastTheBreachIsEastOfTheMirroredLimit(double hoursPastMeridian, string? expected) {
+        public void OnPierEastTheBreachIsEastOfTheMirroredLimit(double hoursPastMeridian, string? expected)
+        {
             FakeNina nina = GermanEquatorial(PierSide.pierEast);
 
             Assert.That(nina.Mount.DescribeMeridianBreach(hoursPastMeridian, PierSide.pierEast, "now"), Is.EqualTo(expected));
@@ -97,7 +107,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
 
         // A GEM that doesn't report its side gets the pierWest rule, the cautious one, and the text leaves the side out.
         [Test]
-        public void AnUnknownSideIsJudgedLikePierWestWithoutNamingASide() {
+        public void AnUnknownSideIsJudgedLikePierWestWithoutNamingASide()
+        {
             FakeNina nina = GermanEquatorial(PierSide.pierUnknown);
 
             Assert.That(nina.Mount.DescribeMeridianBreach(6.0 / 60, PierSide.pierUnknown, "now"),
@@ -106,7 +117,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
 
         // With a pause before the meridian the limit is east of it, and the text quotes the pause rather than a limit.
         [Test]
-        public void APauseBeforeTheMeridianIsQuotedInTheBreach() {
+        public void APauseBeforeTheMeridianIsQuotedInTheBreach()
+        {
             FakeNina nina = GermanEquatorial(PierSide.pierWest);
             nina.SetMeridianLimit(maxMinutesAfterMeridian: 5, pauseMinutesBeforeMeridian: 10);
 
@@ -119,7 +131,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         [TestCase(AlignmentMode.Polar, true)]
         [TestCase(AlignmentMode.AltAz, true)]
         [TestCase(AlignmentMode.GermanPolar, false)]
-        public void OnlyAGermanEquatorialWithLimitsOnHasAMeridianRule(AlignmentMode mode, bool isLimitEnabled) {
+        public void OnlyAGermanEquatorialWithLimitsOnHasAMeridianRule(AlignmentMode mode, bool isLimitEnabled)
+        {
             FakeNina nina = GermanEquatorial(PierSide.pierWest);
             nina.TelescopeInfo.AlignmentMode = mode;
             nina.Settings.SetIsMountLimitEnabled(isLimitEnabled);
@@ -132,7 +145,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         // Below the altitude limit is a breach that names the altitude and the limit, and nothing waives it.
         [TestCase(15.0, null)]
         [TestCase(5.0, "below altitude limit (5.00° now, minimum 10.0°)")]
-        public void BelowTheAltitudeLimitIsABreach(double altitude, string? expected) {
+        public void BelowTheAltitudeLimitIsABreach(double altitude, string? expected)
+        {
             FakeNina nina = new FakeNina();
             nina.Settings.SetIsAltitudeLimitEnabled(true);
             nina.Settings.SetMountMinAltitudeDegrees(10);
@@ -142,7 +156,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
 
         // With the altitude limit off, a low altitude is nobody's business unless a horizon says otherwise.
         [Test]
-        public void WithTheAltitudeLimitOffALowAltitudeIsNoBreach() {
+        public void WithTheAltitudeLimitOffALowAltitudeIsNoBreach()
+        {
             FakeNina nina = new FakeNina();
             nina.Settings.SetIsAltitudeLimitEnabled(false);
 
@@ -153,7 +168,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         [TestCase(90.0, 15.0, "below custom horizon (15.00° now at azimuth 90°, horizon 20.0°)")]
         [TestCase(90.0, 25.0, null)]
         [TestCase(270.0, 15.0, null)]
-        public void BelowTheCustomHorizonAtThatAzimuthIsABreach(double azimuth, double altitude, string? expected) {
+        public void BelowTheCustomHorizonAtThatAzimuthIsABreach(double azimuth, double altitude, string? expected)
+        {
             FakeNina nina = new FakeNina();
             nina.Settings.SetIsCustomHorizonLimitEnabled(true);
             nina.SetCustomHorizon("0 10\n90 20\n180 10\n270 10\n360 10");
@@ -163,7 +179,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
 
         // The horizon only counts when its setting is on, so an observer who loaded one for framing isn't limited by it.
         [Test]
-        public void TheCustomHorizonIsIgnoredWhenItsSettingIsOff() {
+        public void TheCustomHorizonIsIgnoredWhenItsSettingIsOff()
+        {
             FakeNina nina = new FakeNina();
             nina.Settings.SetIsCustomHorizonLimitEnabled(false);
             nina.SetCustomHorizon("0 40\n360 40");
@@ -180,9 +197,12 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         [TestCase("NaN Dec", false)]
         [TestCase("finite", true)]
         [TestCase("finite with NaN altitude and azimuth", true)]
-        public void APositionIsReadableWithAFiniteRaAndDec(string position, bool isReadable) {
-            TelescopeInfo info = new TelescopeInfo {
-                Coordinates = position switch {
+        public void APositionIsReadableWithAFiniteRaAndDec(string position, bool isReadable)
+        {
+            TelescopeInfo info = new TelescopeInfo
+            {
+                Coordinates = position switch
+                {
                     "NaN RA" => Pointing(double.NaN, 20),
                     "NaN Dec" => Pointing(10, double.NaN),
                     "none" => null!,
@@ -198,7 +218,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         // The live check feeds the mount's own RA and the sidereal time into the meridian rule. A fixed sidereal time of 7 h
         // puts a mount at RA 100° (6 h 40 min) 20 min west, well past a 5 min limit.
         [Test]
-        public void ALivePositionPastTheMeridianLimitIsABreach() {
+        public void ALivePositionPastTheMeridianLimitIsABreach()
+        {
             FakeNina nina = GermanEquatorial(PierSide.pierWest, raDegrees: 100);
             nina.Mount.LocalSiderealTimeNow = _ => 7.0;
 
@@ -208,7 +229,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
 
         // With a flip lined up the caller asks to leave the meridian out, and the same position is clear.
         [Test]
-        public void TheMeridianIsLeftOutWhenTheCallerSaysAFlipIsComing() {
+        public void TheMeridianIsLeftOutWhenTheCallerSaysAFlipIsComing()
+        {
             FakeNina nina = GermanEquatorial(PierSide.pierWest, raDegrees: 100);
             nina.Mount.LocalSiderealTimeNow = _ => 7.0;
 
@@ -218,7 +240,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         // A NaN RA on a GEM is unreadable, not a breach, on either side. One bad poll must never park the mount and end the night.
         [TestCase(PierSide.pierEast)]
         [TestCase(PierSide.pierWest)]
-        public void ANaNRaIsNoBreachOnEitherSide(PierSide side) {
+        public void ANaNRaIsNoBreachOnEitherSide(PierSide side)
+        {
             FakeNina nina = GermanEquatorial(side, raDegrees: double.NaN);
             nina.Mount.LocalSiderealTimeNow = _ => 7.0;
 
@@ -227,7 +250,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
 
         // No coordinates at all is the same: unreadable, and left to the unknown-position watcher.
         [Test]
-        public void NoCoordinatesIsNoBreach() {
+        public void NoCoordinatesIsNoBreach()
+        {
             FakeNina nina = GermanEquatorial(PierSide.pierWest);
             nina.TelescopeInfo.Coordinates = null!;
             nina.Mount.LocalSiderealTimeNow = _ => 7.0;
@@ -237,7 +261,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
 
         // NaN altitude and azimuth with a good RA and Dec still get the meridian check, since the hour angle needs neither.
         [Test]
-        public void NaNAltitudeAndAzimuthStillGetTheMeridianCheck() {
+        public void NaNAltitudeAndAzimuthStillGetTheMeridianCheck()
+        {
             FakeNina nina = GermanEquatorial(PierSide.pierWest, raDegrees: 100);
             nina.TelescopeInfo.Altitude = double.NaN;
             nina.TelescopeInfo.Azimuth = double.NaN;
@@ -249,7 +274,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
 
         // The altitude floors come first. A mount below the limit says so even when it is also past the meridian.
         [Test]
-        public void AnAltitudeBreachIsReportedBeforeAMeridianBreach() {
+        public void AnAltitudeBreachIsReportedBeforeAMeridianBreach()
+        {
             FakeNina nina = GermanEquatorial(PierSide.pierWest, raDegrees: 100);
             nina.Settings.SetIsAltitudeLimitEnabled(true);
             nina.Settings.SetMountMinAltitudeDegrees(10);
@@ -264,7 +290,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         // The altitude is read to two decimals, so a reading a hundredth under the floor doesn't print as equal to it,
         // which is what a night ending on "30.0° now, minimum 30.0°" looked like.
         [Test]
-        public void AReadingJustUnderTheFloorShowsItsSecondDecimal() {
+        public void AReadingJustUnderTheFloorShowsItsSecondDecimal()
+        {
             FakeNina nina = new FakeNina();
             nina.Settings.SetIsAltitudeLimitEnabled(true);
             nina.Settings.SetMountMinAltitudeDegrees(30);
@@ -279,7 +306,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         [TestCase(30.50, 1.0, "within 1.0° of the altitude limit (30.50° now, minimum 30.0°)")]
         [TestCase(31.50, 1.0, null)]
         [TestCase(30.50, 0.0, null)]
-        public void APredictionDemandsClearanceAboveTheAltitudeFloor(double altitude, double margin, string? expected) {
+        public void APredictionDemandsClearanceAboveTheAltitudeFloor(double altitude, double margin, string? expected)
+        {
             FakeNina nina = new FakeNina();
             nina.Settings.SetIsAltitudeLimitEnabled(true);
             nina.Settings.SetMountMinAltitudeDegrees(30);
@@ -290,7 +318,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         // The same margin applies above the custom horizon at the pointing's azimuth.
         [TestCase(20.50, "within 1.0° of the custom horizon (20.50° now at azimuth 90°, horizon 20.0°)")]
         [TestCase(21.50, null)]
-        public void APredictionDemandsClearanceAboveTheCustomHorizon(double altitude, string? expected) {
+        public void APredictionDemandsClearanceAboveTheCustomHorizon(double altitude, string? expected)
+        {
             FakeNina nina = new FakeNina();
             nina.Settings.SetIsCustomHorizonLimitEnabled(true);
             nina.SetCustomHorizon("0 10\n90 20\n180 10\n270 10\n360 10");
@@ -300,7 +329,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
 
         // A parked mount never breaches, because parking is where every remedy ends.
         [Test]
-        public void AParkedMountNeverBreaches() {
+        public void AParkedMountNeverBreaches()
+        {
             FakeNina nina = GermanEquatorial(PierSide.pierWest, raDegrees: 100);
             nina.TelescopeInfo.AtPark = true;
             nina.Mount.LocalSiderealTimeNow = _ => 7.0;

@@ -1,5 +1,7 @@
-namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
-    internal enum StorageVerdict {
+namespace CosmicVaults.NINA.Astraeus.Engine.Imaging
+{
+    internal enum StorageVerdict
+    {
         /// <summary>There was headroom, or the server couldn't be asked, so send it.</summary>
         Upload,
 

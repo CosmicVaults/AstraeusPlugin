@@ -5,13 +5,16 @@ using CosmicVaults.NINA.Astraeus.Engine;
 using CosmicVaults.NINA.Astraeus.Tests.Helpers;
 using NUnit.Framework;
 
-namespace CosmicVaults.NINA.Astraeus.Tests.Components {
+namespace CosmicVaults.NINA.Astraeus.Tests.Components
+{
     // The backstop for a mount outside the autopilot whose position can't be read, on the same fixture as the rest of the mount.
-    public partial class MountTests {
+    public partial class MountTests
+    {
         private const string BlindHeadline = "Mount position unknown outside the autopilot.";
 
         // A tracking mount with limits on and no position to read, as a driver that has lost its link to the controller reports.
-        private static FakeNina BlindTrackingMount() {
+        private static FakeNina BlindTrackingMount()
+        {
             FakeNina nina = new FakeNina();
             nina.Settings.SetIsMountLimitEnabled(true);
             nina.SetMount(isConnected: true, isTracking: true);
@@ -22,7 +25,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
 
         // A mount blind for less than the grace is left alone, since one bad reading is a driver hiccup, not a lost mount.
         [Test]
-        public async Task AMountBlindForLessThanTheGraceIsLeftAlone() {
+        public async Task AMountBlindForLessThanTheGraceIsLeftAlone()
+        {
             FakeNina nina = BlindTrackingMount();
 
             await nina.Mount.LateUpdate();
@@ -36,7 +40,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         // At the grace the mount can't be held to its limits, so it is stopped and the observers told once, with the reason,
         // how long, and that tracking stopped.
         [Test]
-        public async Task AMountBlindForTheGraceIsStoppedAndReportedOnce() {
+        public async Task AMountBlindForTheGraceIsStoppedAndReportedOnce()
+        {
             FakeNina nina = BlindTrackingMount();
 
             await nina.Mount.LateUpdate();
@@ -45,7 +50,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
 
             Assert.That(nina.Commands, Is.EqualTo(new[] { "mount: SetTrackingEnabled(false)" }));
             Observatory.ReportedEvent alert = nina.Alerts.Single();
-            Assert.Multiple(() => {
+            Assert.Multiple(() =>
+            {
                 Assert.That(alert.Message, Is.EqualTo(BlindHeadline));
                 Assert.That(alert.Detail("reason"), Is.EqualTo("the mount reports no position"));
                 Assert.That(alert.Detail("duration"), Is.EqualTo("30 s"));
@@ -63,7 +69,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
 
         // A mount that won't confirm the stop is reported once with that failure, and not again while it stays blind.
         [Test]
-        public async Task AMountThatWillNotStopIsReportedOnceWithTheFailure() {
+        public async Task AMountThatWillNotStopIsReportedOnceWithTheFailure()
+        {
             FakeNina nina = BlindTrackingMount();
             nina.MountIgnoresTrackingStops();
 
@@ -79,7 +86,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
 
         // A mount that dropped off while tracking may still be tracking, and can't be told to stop, so it gets the alert alone.
         [Test]
-        public async Task ADisconnectedMountLastSeenTrackingGetsTheAlertAlone() {
+        public async Task ADisconnectedMountLastSeenTrackingGetsTheAlertAlone()
+        {
             FakeNina nina = BlindTrackingMount();
             nina.TelescopeInfo.Coordinates = Pointing(10, 20);
             await nina.Mount.LateUpdate();
@@ -97,7 +105,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
 
         // A position that reads again ends the spell, so a later blind stretch is counted from its own start.
         [Test]
-        public async Task AReadingAgainInsideTheGraceEndsTheSpell() {
+        public async Task AReadingAgainInsideTheGraceEndsTheSpell()
+        {
             FakeNina nina = BlindTrackingMount();
 
             await nina.Mount.LateUpdate();

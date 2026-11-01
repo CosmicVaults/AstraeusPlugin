@@ -16,25 +16,29 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine {
+namespace CosmicVaults.NINA.Astraeus.Engine
+{
     public class FilterWheel(
         Observatory observatory,
         IWebSocketBus webSocketBus,
         IFilterWheelMediator filterWheelMediator)
         : DeviceComponent<IFilterWheelVM, IFilterWheelConsumer, FilterWheelInfo>(
-            filterWheelMediator, observatory, webSocketBus) {
+            filterWheelMediator, observatory, webSocketBus)
+    {
 
         public override string DeviceType { get; } = "filterwheel";
         public override string DisplayName { get; } = "Filter Wheel";
         protected override string? RegistrationEndpoint => "filterwheels";
-        
+
         public override bool IsBusy => LastInfo?.IsMoving == true;
 
-        protected override async Task RegisterDeviceAsync() {
+        protected override async Task RegisterDeviceAsync()
+        {
             FilterWheelInfo info = filterWheelMediator.GetInfo();
             List<int> filterIds = await RegisterFiltersAsync(info);
 
-            await Observatory.AstraeusWebClient.PostObservatoryAsync("filterwheels", new {
+            await Observatory.AstraeusWebClient.PostObservatoryAsync("filterwheels", new
+            {
                 name = info.Name,
                 device_id = info.DeviceId,
                 last_connected = UtcTimestampNow(),
@@ -42,10 +46,12 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             });
         }
 
-        private async Task<List<int>> RegisterFiltersAsync(FilterWheelInfo info) {
+        private async Task<List<int>> RegisterFiltersAsync(FilterWheelInfo info)
+        {
             List<int> filterIds = new List<int>();
             if (!TryGetDeviceViewModel<FilterWheelVM>(out FilterWheelVM? filterWheelViewModel)
-                || filterWheelViewModel == null) {
+                || filterWheelViewModel == null)
+            {
                 return filterIds;
             }
             ICollection<FilterInfo>? allFilters = filterWheelViewModel.GetAllFilters();
@@ -53,8 +59,10 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
             // Posted together. One round trip per slot in series takes most of a second over the tunnel.
             List<Task<JObject?>> posts = new List<Task<JObject?>>();
-            foreach (FilterInfo filter in allFilters) {
-                posts.Add(Observatory.AstraeusWebClient.PostObservatoryAsync("filters", new {
+            foreach (FilterInfo filter in allFilters)
+            {
+                posts.Add(Observatory.AstraeusWebClient.PostObservatoryAsync("filters", new
+                {
                     name = filter.Name,
                     device_id = $"{info.DeviceId}-{filter.Position}",
                     position = (int)filter.Position,
@@ -62,24 +70,29 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 }));
             }
             JObject?[] results = await Task.WhenAll(posts);
-            foreach (JObject? result in results) {
+            foreach (JObject? result in results)
+            {
                 int? filterId = result?["id"]?.Value<int>();
                 if (filterId.HasValue) filterIds.Add(filterId.Value);
             }
             return filterIds;
         }
 
-        public FilterInfo GetCurrentFilter() {
+        public FilterInfo GetCurrentFilter()
+        {
             FilterWheelInfo info = filterWheelMediator.GetInfo();
             return info.SelectedFilter;
         }
-        
-        public override WsMessage? GetUpdateMessage() {
-            if (LastInfo is null) {
+
+        public override WsMessage? GetUpdateMessage()
+        {
+            if (LastInfo is null)
+            {
                 return null;
             }
             FilterInfo? selected = LastInfo.SelectedFilter;
-            FilterWheelPayload payload = new FilterWheelPayload{
+            FilterWheelPayload payload = new FilterWheelPayload
+            {
                 DeviceId = DeviceId,
                 Name = LastInfo.Name,
                 IsMoving = LastInfo.IsMoving,
@@ -90,9 +103,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return new FilterWheelUpdate(payload);
         }
 
-        public override WsMessage? GetDeviceStaticInfo() {
+        public override WsMessage? GetDeviceStaticInfo()
+        {
             FilterWheelInfo info = filterWheelMediator.GetInfo();
-            FilterWheelPayload payload = new FilterWheelPayload{
+            FilterWheelPayload payload = new FilterWheelPayload
+            {
                 DeviceId = DeviceId,
                 Name = info.Name,
                 IsConnected = info.Connected,
@@ -107,11 +122,14 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return new FilterWheelUpdate(payload);
         }
 
-        protected override Task HandleCommandAsync(WsCommand command) {
-            switch (command.Action) {
+        protected override Task HandleCommandAsync(WsCommand command)
+        {
+            switch (command.Action)
+            {
                 case "change":
                     if (JsonFields.ReadShort(command.Payload, "filter", out short filterPosition)
-                        != JsonFieldState.Valid) {
+                        != JsonFieldState.Valid)
+                    {
                         RejectMalformedCommandAsync(command, "filter").ObserveFaults(LogCommandFault);
                         break;
                     }
@@ -126,31 +144,40 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
         private CancellationTokenSource? _changeCancellationSource;
 
-        private async Task ChangeFilterCommandAsync(string id, short position) {
-            if (!TryGetDeviceViewModel<FilterWheelVM>(out FilterWheelVM? filterWheelViewModel)) {
+        private async Task ChangeFilterCommandAsync(string id, short position)
+        {
+            if (!TryGetDeviceViewModel<FilterWheelVM>(out FilterWheelVM? filterWheelViewModel))
+            {
                 await BroadcastMessageReceivedAsync(id, false, "N.I.N.A.'s filter wheel controls are not available");
                 return;
             }
             FilterInfo? newFilter = filterWheelViewModel.GetAllFilters()
                 ?.FirstOrDefault(filter => filter.Position == position);
-            if (newFilter == null) {
+            if (newFilter == null)
+            {
                 await BroadcastMessageReceivedAsync(id, false, $"There is no filter at position {position}");
                 return;
             }
 
             await BroadcastMessageReceivedAsync(id, true);
             Log("Changing filter...");
-            try {
+            try
+            {
                 await filterWheelMediator.ChangeFilter(newFilter, BeginOperation(ref _changeCancellationSource))!;
                 Log("Filter changed.");
-            } catch (OperationCanceledException) {
+            }
+            catch (OperationCanceledException)
+            {
                 Log("Filter change aborted.");
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 LogWarning($"Changing the filter failed: {ex.Message}");
             }
         }
 
-        private async Task FetchFiltersCommandAsync(string id) {
+        private async Task FetchFiltersCommandAsync(string id)
+        {
             await BroadcastMessageReceivedAsync(id, true);
             if (!TryGetDeviceViewModel<FilterWheelVM>(out FilterWheelVM? filterWheelViewModel)) return;
             ICollection<FilterInfo>? allFilters = filterWheelViewModel?.GetAllFilters();
@@ -165,17 +192,20 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// <summary>
         /// Changes to the named filter for the autopilot, since the scheduler identifies filters by name.
         /// </summary>
-        public async Task<bool> ChangeFilterByNameAsync(string name, CancellationToken cancellationToken) {
+        public async Task<bool> ChangeFilterByNameAsync(string name, CancellationToken cancellationToken)
+        {
             if (!IsConnected) return false;
             if (!TryGetDeviceViewModel<FilterWheelVM>(out FilterWheelVM? filterWheelViewModel)
-                || filterWheelViewModel == null) {
+                || filterWheelViewModel == null)
+            {
                 return false;
             }
             ICollection<FilterInfo>? allFilters = filterWheelViewModel.GetAllFilters();
             if (allFilters == null || allFilters.Count == 0) return false;
             FilterInfo? matchingFilter = allFilters.FirstOrDefault(
                 candidate => string.Equals(candidate.Name, name, StringComparison.OrdinalIgnoreCase));
-            if (matchingFilter == null) {
+            if (matchingFilter == null)
+            {
                 string available = string.Join(", ", allFilters.Select(filter => filter.Name));
                 LogWarning(
                     $"No filter named '{name}', so leaving the current filter in place. Available: {available}.");

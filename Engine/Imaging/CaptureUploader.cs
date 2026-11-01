@@ -7,13 +7,15 @@ using CosmicVaults.NINA.Astraeus.Engine.Autopilot;
 using CosmicVaults.NINA.Astraeus.Engine.Calibration;
 using CosmicVaults.NINA.Astraeus.Engine.Utility;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
+namespace CosmicVaults.NINA.Astraeus.Engine.Imaging
+{
     /// <summary>
     /// Uploads a captured frame (the calibrated copy, the raw, or both) and its preview to R2, then
     /// links them to their CapturedImage with the calibration report. Only CaptureUploadQueue calls
     /// this. Never throws except on cancellation.
     /// </summary>
-    internal sealed class CaptureUploader(Observatory observatory, string logDevice, LogCategory logCategory) {
+    internal sealed class CaptureUploader(Observatory observatory, string logDevice, LogCategory logCategory)
+    {
         // The confirm has to happen, or the server fails the upload after ~30 minutes. Retrying it is
         // cheap and idempotent since the bytes are already in R2. PUTs aren't retried here because the
         // queue restarts the chain. The exception is the calibrated frame, since a failed PUT there
@@ -32,7 +34,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
         /// re-upload.
         /// </summary>
         public async Task<UploadOutcome> UploadAsync(PendingUpload upload, string r2Filename,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken)
+        {
             _pendingConfirm = null;
             AstraeusWebClient client = observatory.AstraeusWebClient;
             int captureId = upload.CaptureId;
@@ -42,12 +45,14 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
 
             // 1) The calibrated frame, when CalibrateFrame produced one.
             string? calibratedKey = null;
-            if (upload.CalibratedFilePath is { } calibratedPath && File.Exists(calibratedPath)) {
+            if (upload.CalibratedFilePath is { } calibratedPath && File.Exists(calibratedPath))
+            {
                 string calibratedName = ObjectKey.ReplaceFileName(r2Filename, Path.GetFileName(calibratedPath));
                 (string? key, bool isStorageFull) = await PutFileAsync(captureId, frameName, calibratedName,
                     calibratedPath, "calibrated copy", cancellationToken);
                 if (isStorageFull) return ReportStorageFull(frameName);
-                if (key is null) {
+                if (key is null)
+                {
                     LogWarning($"Retrying the upload of {frameName}'s calibrated copy once.");
                     await Task.Delay(CalibratedPutRetryDelay, cancellationToken);
                     (key, isStorageFull) = await PutFileAsync(captureId, frameName, calibratedName,
@@ -62,7 +67,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
 
             // 2) The raw, when kept, or as a stand-in when the calibrated copy didn't make it.
             string? rawKey = null;
-            if (upload.ShouldKeepRaw || calibratedKey is null) {
+            if (upload.ShouldKeepRaw || calibratedKey is null)
+            {
                 if (!upload.ShouldKeepRaw)
                     LogWarning($"Uploading {frameName} uncalibrated: there is no calibrated copy to send.");
                 (string? key, bool isStorageFull) = await PutFileAsync(captureId, frameName, r2Filename,
@@ -70,7 +76,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
                 if (isStorageFull) return ReportStorageFull(frameName);
                 rawKey = key;
             }
-            if (rawKey is null && calibratedKey is null) {
+            if (rawKey is null && calibratedKey is null)
+            {
                 LogWarning($"{frameName} did not reach cloud storage; the upload is abandoned.");
                 return UploadOutcome.Failed;
             }
@@ -78,7 +85,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
             // 3) Preview thumbnail beside it, best effort, same key with a .jpg extension. A frame is
             //    already up by now, so if storage is full the card just goes without a thumbnail.
             string? previewKey = null;
-            if (upload.PreviewJpeg is { Length: > 0 } previewBytes) {
+            if (upload.PreviewJpeg is { Length: > 0 } previewBytes)
+            {
                 string previewFilename = ObjectKey.WithExtension(r2Filename, ".jpg");
                 (string? UploadUrl, string? R2Key, bool IsStorageFull) preview =
                     await client.PostR2UploadUrlAsync(captureId, previewFilename, cancellationToken);
@@ -106,7 +114,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
         /// Confirms again what the last UploadAsync put in R2, after it returned ConfirmFailed. Nothing
         /// is uploaded again.
         /// </summary>
-        public Task<UploadOutcome> RetryConfirmAsync(CancellationToken cancellationToken) {
+        public Task<UploadOutcome> RetryConfirmAsync(CancellationToken cancellationToken)
+        {
             if (_pendingConfirm is not { } pendingConfirm) return Task.FromResult(UploadOutcome.Failed);
             return ConfirmAsync(pendingConfirm, cancellationToken);
         }
@@ -114,12 +123,15 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
         /// <summary>
         /// Returns ConfirmFailed if the server never took it, and the caller decides whether to try again.
         /// </summary>
-        private async Task<UploadOutcome> ConfirmAsync(PendingConfirm confirm, CancellationToken cancellationToken) {
+        private async Task<UploadOutcome> ConfirmAsync(PendingConfirm confirm, CancellationToken cancellationToken)
+        {
             AstraeusWebClient client = observatory.AstraeusWebClient;
-            for (int attempt = 1; attempt <= MaxConfirmAttempts; attempt++) {
+            for (int attempt = 1; attempt <= MaxConfirmAttempts; attempt++)
+            {
                 bool isConfirmed = await client.PostUploadCompleteAsync(confirm.CaptureId, confirm.RawKey,
                     confirm.CalibratedKey, confirm.PreviewKey, confirm.Provenance);
-                if (isConfirmed) {
+                if (isConfirmed)
+                {
                     // Silent on success: the library tile is the observer's confirmation.
                     LogDebug($"Linked R2 objects to capture {confirm.CaptureId} ({confirm.Linked}).");
                     _pendingConfirm = null;
@@ -128,9 +140,12 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
                 if (attempt == MaxConfirmAttempts) break;
                 LogWarning($"{confirm.FrameName} is uploaded but not yet in your image library " +
                            $"(attempt {attempt} of {MaxConfirmAttempts}); retrying.");
-                try {
+                try
+                {
                     await Task.Delay(ConfirmRetryBackoffStep * attempt, cancellationToken);
-                } catch (OperationCanceledException) {
+                }
+                catch (OperationCanceledException)
+                {
                     return UploadOutcome.ConfirmFailed;
                 }
             }
@@ -143,21 +158,25 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
         /// other object would be refused too.
         /// </summary>
         private async Task<(string? Key, bool IsStorageFull)> PutFileAsync(int captureId, string frameName,
-            string r2Filename, string filePath, string objectDescription, CancellationToken cancellationToken) {
+            string r2Filename, string filePath, string objectDescription, CancellationToken cancellationToken)
+        {
             AstraeusWebClient client = observatory.AstraeusWebClient;
             string subject = objectDescription == "frame" ? frameName : $"{frameName}'s {objectDescription}";
-            if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) {
+            if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
+            {
                 LogWarning($"{subject} is not on disk, so it was not uploaded.");
                 return (null, false);
             }
             (string? UploadUrl, string? R2Key, bool IsStorageFull) target =
                 await client.PostR2UploadUrlAsync(captureId, r2Filename, cancellationToken);
             if (target.IsStorageFull) return (null, true);
-            if (target.UploadUrl is not { } uploadUrl || target.R2Key is not { } r2Key) {
+            if (target.UploadUrl is not { } uploadUrl || target.R2Key is not { } r2Key)
+            {
                 LogWarning($"The server gave {subject} no upload slot.");
                 return (null, false);
             }
-            if (!await client.PutR2FileAsync(uploadUrl, filePath, cancellationToken)) {
+            if (!await client.PutR2FileAsync(uploadUrl, filePath, cancellationToken))
+            {
                 LogWarning($"{subject} did not reach cloud storage.");
                 return (null, false);
             }
@@ -168,7 +187,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
         /// For a presign refused because the account is over quota. Nothing is confirmed, so the frame stays
         /// on disk and the server's own upload timeout re-offers the exposure.
         /// </summary>
-        private UploadOutcome ReportStorageFull(string frameName) {
+        private UploadOutcome ReportStorageFull(string frameName)
+        {
             LogWarning($"{frameName} was not uploaded: your cloud storage is full. The frame stays on this " +
                        "machine and the server will re-offer the exposure.");
             return UploadOutcome.StorageFull;

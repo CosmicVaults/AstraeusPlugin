@@ -2,19 +2,23 @@ using CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Payloads {
+namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Payloads
+{
 
-    public sealed record SwitchUpdate : WsMessage {
+    public sealed record SwitchUpdate : WsMessage
+    {
         public SwitchUpdate(SwitchPayload payload, string? context = null)
             : base(
                 type: "update",
                 device: "switch",
                 context: context,
                 payload: ToJsonElement(new DataPayload<SwitchPayload>(payload))
-            ) { }
+            )
+        { }
     }
 
-    public record SwitchPayload : DevicePayload {
+    public record SwitchPayload : DevicePayload
+    {
         public IReadOnlyList<SwitchItem>? Switches { get; init; }
     }
 
@@ -22,7 +26,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Payloads {
     /// One port, sent in full by the static-info frame and as id and value by the periodic one. Id is the
     /// only stable key since drivers let names change, and it's non-nullable so every frame carries it.
     /// </summary>
-    public record SwitchItem {
+    public record SwitchItem
+    {
         public short Id { get; init; }
         public string? Name { get; init; }
         public string? Description { get; init; }

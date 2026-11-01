@@ -3,8 +3,10 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.Components {
-    public interface IDeviceComponent : IComponent {
+namespace CosmicVaults.NINA.Astraeus.Engine.Components
+{
+    public interface IDeviceComponent : IComponent
+    {
         bool IsConnected { get; }
         string DisplayName { get; }
         /// <summary>Id of the default device. Null or "None" means none chosen.</summary>
@@ -25,7 +27,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Components {
         bool IsConnectedToDevice(string deviceId);
 
         Task<bool> TryConnectAsync(string deviceId);
-        
+
         Task<bool> TryConnectDefaultDeviceAsync();
 
         /// <summary>

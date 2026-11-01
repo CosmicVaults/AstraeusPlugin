@@ -4,22 +4,29 @@ using CosmicVaults.NINA.Astraeus.Engine.Calibration;
 using CosmicVaults.NINA.Astraeus.Tests.Helpers;
 using NUnit.Framework;
 
-namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
+namespace CosmicVaults.NINA.Astraeus.Tests.Calibration
+{
     [TestFixture]
-    public class MasterIndexTests {
+    public class MasterIndexTests
+    {
         private string _mastersFolder = "";
 
         [SetUp]
-        public void CreateMastersFolder() {
+        public void CreateMastersFolder()
+        {
             _mastersFolder = Path.Combine(Path.GetTempPath(), "Astraeus.Tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(_mastersFolder);
         }
 
         [TearDown]
-        public void DeleteMastersFolder() {
-            try {
+        public void DeleteMastersFolder()
+        {
+            try
+            {
                 Directory.Delete(_mastersFolder, recursive: true);
-            } catch (IOException) {
+            }
+            catch (IOException)
+            {
                 // A file a failed test left open shouldn't fail the next test too.
             }
         }
@@ -28,7 +35,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
 
         // Masters go to the output folder when the observer set one, so the scan folder stays input only.
         [Test]
-        public void TheOutputFolderWinsWhenBothAreSet() {
+        public void TheOutputFolderWinsWhenBothAreSet()
+        {
             FakeNina nina = new FakeNina();
             nina.Settings.SetCalibrationScanFolder(@"D:\Calibration\Scan");
             nina.Settings.SetCalibrationMastersOutputFolder(@"D:\Calibration\Masters");
@@ -38,7 +46,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
 
         // Without an output folder the scan folder is used, so an observer with one folder still gets masters.
         [Test]
-        public void TheScanFolderIsUsedWhenNoOutputFolderIsSet() {
+        public void TheScanFolderIsUsedWhenNoOutputFolderIsSet()
+        {
             FakeNina nina = new FakeNina();
             nina.Settings.SetCalibrationScanFolder(@"D:\Calibration\Scan");
 
@@ -47,7 +56,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
 
         // With neither set there is nowhere to write, and the caller must not invent a folder.
         [Test]
-        public void NoFolderIsNullWhenNeitherIsSet() {
+        public void NoFolderIsNullWhenNeitherIsSet()
+        {
             FakeNina nina = new FakeNina();
 
             Assert.That(MasterIndex.ResolveMastersFolder(nina.Settings), Is.Null);
@@ -57,7 +67,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
 
         // The whole point of the index: a master this PC uploaded is found again by the id and revision the server names.
         [Test]
-        public void ARecordedMasterIsFoundByItsIdAndRevision() {
+        public void ARecordedMasterIsFoundByItsIdAndRevision()
+        {
             MasterIndex index = new MasterIndex(_mastersFolder);
             string masterPath = WriteMaster("master-dark.fits");
             index.Record(masterFrameId: 12, revision: 3, checksumSha256: "abc123", masterPath);
@@ -70,7 +81,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
 
         // A master the server names that this PC never generated is reported, not guessed at, since there is no download.
         [Test]
-        public void AMasterNeverRecordedIsMissingBecauseItWasNotGeneratedHere() {
+        public void AMasterNeverRecordedIsMissingBecauseItWasNotGeneratedHere()
+        {
             MasterIndex index = new MasterIndex(_mastersFolder);
 
             string? found = index.FindLocalPath(new MasterRef(12, 3, null), out string? missingReason);
@@ -81,7 +93,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
 
         // A newer revision on the server means the file here is stale, so the old revision must not be handed out.
         [Test]
-        public void AMasterAtAnotherRevisionIsNotFound() {
+        public void AMasterAtAnotherRevisionIsNotFound()
+        {
             MasterIndex index = new MasterIndex(_mastersFolder);
             index.Record(12, 3, null, WriteMaster("master-dark.fits"));
 
@@ -93,7 +106,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
 
         // Re-recording an id replaces the entry and hands back the old file, so the generator can delete it.
         [Test]
-        public void RecordingTheSameIdAgainReplacesTheEntryAndReturnsTheOldFile() {
+        public void RecordingTheSameIdAgainReplacesTheEntryAndReturnsTheOldFile()
+        {
             MasterIndex index = new MasterIndex(_mastersFolder);
             string oldPath = WriteMaster("master-dark-r3.fits");
             string newPath = WriteMaster("master-dark-r4.fits");
@@ -109,7 +123,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
 
         // The index lives on disk, so a master recorded before a restart is still found after one.
         [Test]
-        public void TheIndexSurvivesANewInstanceOverTheSameFolder() {
+        public void TheIndexSurvivesANewInstanceOverTheSameFolder()
+        {
             string masterPath = WriteMaster("master-dark.fits");
             new MasterIndex(_mastersFolder).Record(12, 3, null, masterPath);
 
@@ -120,7 +135,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
 
         // A master the observer deleted can't be applied. The reason goes to the server, so it names the file but never the folder.
         [Test]
-        public void ADeletedFileIsMissingWithoutNamingTheFolder() {
+        public void ADeletedFileIsMissingWithoutNamingTheFolder()
+        {
             MasterIndex index = new MasterIndex(_mastersFolder);
             string masterPath = WriteMaster("master-dark.fits");
             index.Record(12, 3, null, masterPath);
@@ -135,7 +151,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
 
         // A file edited since upload is no longer the master the server knows, so it is refused rather than applied blind.
         [Test]
-        public void AFileWhoseLengthChangedIsMissingAsChanged() {
+        public void AFileWhoseLengthChangedIsMissingAsChanged()
+        {
             MasterIndex index = new MasterIndex(_mastersFolder);
             string masterPath = WriteMaster("master-dark.fits");
             index.Record(12, 3, null, masterPath);
@@ -149,7 +166,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
 
         // Same length is not proof: a rewrite that keeps the size still moves the write time, and that counts too.
         [Test]
-        public void AFileWhoseWriteTimeChangedIsMissingAsChanged() {
+        public void AFileWhoseWriteTimeChangedIsMissingAsChanged()
+        {
             MasterIndex index = new MasterIndex(_mastersFolder);
             string masterPath = WriteMaster("master-dark.fits");
             index.Record(12, 3, null, masterPath);
@@ -163,7 +181,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
 
         // When both sides have a checksum they must agree, or the server's plan was made for a different file.
         [Test]
-        public void AChecksumThatDisagreesWithTheServersIsMissingAsNotMatching() {
+        public void AChecksumThatDisagreesWithTheServersIsMissingAsNotMatching()
+        {
             MasterIndex index = new MasterIndex(_mastersFolder);
             index.Record(12, 3, "abc123", WriteMaster("master-dark.fits"));
 
@@ -175,7 +194,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
 
         // Hex digests differ only in case between tools, so case must not make a matching master look wrong.
         [Test]
-        public void ChecksumsAreComparedIgnoringCase() {
+        public void ChecksumsAreComparedIgnoringCase()
+        {
             MasterIndex index = new MasterIndex(_mastersFolder);
             string masterPath = WriteMaster("master-dark.fits");
             index.Record(12, 3, "ABC123", masterPath);
@@ -186,7 +206,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
         // A checksum on one side only can't be checked, and a master from an older server or upload is still usable.
         [TestCase("abc123", null)]
         [TestCase(null, "abc123")]
-        public void AChecksumOnOneSideOnlyIsNotChecked(string? recorded, string? named) {
+        public void AChecksumOnOneSideOnlyIsNotChecked(string? recorded, string? named)
+        {
             MasterIndex index = new MasterIndex(_mastersFolder);
             string masterPath = WriteMaster("master-dark.fits");
             index.Record(12, 3, recorded, masterPath);
@@ -196,7 +217,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
 
         // Masters sit in subfolders by type, and the index keeps the path relative to the masters folder, so it must round-trip.
         [Test]
-        public void AMasterInASubfolderIsFound() {
+        public void AMasterInASubfolderIsFound()
+        {
             MasterIndex index = new MasterIndex(_mastersFolder);
             string masterPath = WriteMaster(Path.Combine("darks", "master-dark.fits"));
             index.Record(12, 3, null, masterPath);
@@ -206,7 +228,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
 
         // The index is written to a temporary file and swapped in, so a crash mid-write can't leave a half-written index.
         [Test]
-        public void TheIndexIsWrittenInPlaceWithNoTemporaryFileLeftBehind() {
+        public void TheIndexIsWrittenInPlaceWithNoTemporaryFileLeftBehind()
+        {
             MasterIndex index = new MasterIndex(_mastersFolder);
             index.Record(12, 3, null, WriteMaster("master-dark.fits"));
             index.Record(13, 1, null, WriteMaster("master-flat.fits"));
@@ -215,7 +238,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
             Assert.That(File.Exists(Path.Combine(_mastersFolder, "astraeus-master-index.json.tmp")), Is.False);
         }
 
-        private string WriteMaster(string relativePath) {
+        private string WriteMaster(string relativePath)
+        {
             string path = Path.Combine(_mastersFolder, relativePath);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllBytes(path, new byte[16]);

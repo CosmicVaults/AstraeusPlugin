@@ -1,18 +1,22 @@
 ﻿using CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages;
 using System.Text.Json.Serialization;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Payloads {
-    public sealed record MountUpdate : WsMessage {
+namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Payloads
+{
+    public sealed record MountUpdate : WsMessage
+    {
         public MountUpdate(MountPayload payload, string? context = null)
             : base(
                 type: "update",
                 device: "mount",
                 context: context,
                 payload: ToJsonElement(new DataPayload<MountPayload>(payload))
-            ) { }
+            )
+        { }
     }
 
-    public record MountPayload : DevicePayload {
+    public record MountPayload : DevicePayload
+    {
         [JsonPropertyName("sidereal_time")]
         public double? SiderealTime { get; init; }
 

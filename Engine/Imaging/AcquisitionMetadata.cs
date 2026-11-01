@@ -1,11 +1,13 @@
 ﻿using System;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
+namespace CosmicVaults.NINA.Astraeus.Engine.Imaging
+{
     /// <summary>
     /// Normalises the acquisition settings the server uses to match a light to its masters. The capture
     /// path and the master generator both use these, so their rules can't drift apart.
     /// </summary>
-    internal static class AcquisitionMetadata {
+    internal static class AcquisitionMetadata
+    {
         /// <summary>
         /// Maps the -1 N.I.N.A. reports for an unexposed gain or offset to 0. Fixed-gain CCDs never report
         /// one, and the server rejects negatives, so 0 keeps a light matched to its masters.
@@ -22,7 +24,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
         /// The reading wins because a set point can be stale (some camera drivers reset it to 0 on
         /// connect), and a cooler short of its target isn't at it.
         /// </summary>
-        public static int? MatchingTemperature(double sensorTemperature, double setPoint) {
+        public static int? MatchingTemperature(double sensorTemperature, double setPoint)
+        {
             double reading = double.IsFinite(sensorTemperature) ? sensorTemperature : setPoint;
             return double.IsFinite(reading) ? (int)Math.Round(reading, MidpointRounding.AwayFromZero) : (int?)null;
         }

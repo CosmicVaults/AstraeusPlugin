@@ -1,5 +1,7 @@
-﻿namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages {
-    public sealed record WsNotification : WsMessage {
+﻿namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages
+{
+    public sealed record WsNotification : WsMessage
+    {
         public WsNotification(
             string device,
             string category,
@@ -12,7 +14,8 @@
             type: "notification",
             device: device,
             context: category,
-            payload: ToJsonElement(new {
+            payload: ToJsonElement(new
+            {
                 category = category,
                 message = message,
                 severity = severity,
@@ -20,6 +23,7 @@
                 clear = shouldClear,
                 isToast = isToast
             })
-        ) { }
+        )
+        { }
     }
 }

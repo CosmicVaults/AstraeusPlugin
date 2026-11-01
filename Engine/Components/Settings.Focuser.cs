@@ -6,11 +6,14 @@ using System.ComponentModel;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine {
-    public partial class Settings {
+namespace CosmicVaults.NINA.Astraeus.Engine
+{
+    public partial class Settings
+    {
         private DebouncedPush? _focuserSettingsPush;
 
-        private async Task HandleFocuserUpdateAsync(WsCommand command) {
+        private async Task HandleFocuserUpdateAsync(WsCommand command)
+        {
             if (!command.Payload.TryGetProperty("data", out JsonElement data)) return;
 
             IFocuserSettings focuserSettings = Profile!.FocuserSettings;
@@ -52,9 +55,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 $"method={focuserSettings.AutoFocusMethod}", device: "focuser");
         }
 
-        internal Task PushFocuserSettingsAsync() {
+        internal Task PushFocuserSettingsAsync()
+        {
             IFocuserSettings focuserSettings = Profile!.FocuserSettings;
-            FocuserSettingsPayload payload = new FocuserSettingsPayload {
+            FocuserSettingsPayload payload = new FocuserSettingsPayload
+            {
                 AutoFocusExposureTime = focuserSettings.AutoFocusExposureTime,
                 AutoFocusInitialOffsetSteps = focuserSettings.AutoFocusInitialOffsetSteps,
                 AutoFocusStepSize = focuserSettings.AutoFocusStepSize,
@@ -79,7 +84,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return WebSocketBus.SendAsync(SettingsUpdate.Create(payload, "focuser"));
         }
 
-        private void OnFocuserSettingsChanged(object? sender, PropertyChangedEventArgs eventArgs) {
+        private void OnFocuserSettingsChanged(object? sender, PropertyChangedEventArgs eventArgs)
+        {
             _focuserSettingsPush ??= CreatePush(PushFocuserSettingsAsync, "focuser");
             _focuserSettingsPush.Schedule();
         }

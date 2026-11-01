@@ -4,12 +4,15 @@ using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages {
-    public sealed record SettingsUpdate : WsMessage {
+namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages
+{
+    public sealed record SettingsUpdate : WsMessage
+    {
         private SettingsUpdate(string device, JsonElement payload)
             : base(type: "update", device: device, context: "settings", payload: payload) { }
 
-        public static SettingsUpdate Create<TPayload>(TPayload payload, string device) {
+        public static SettingsUpdate Create<TPayload>(TPayload payload, string device)
+        {
             return new SettingsUpdate(device, ToJsonElement(new DataPayload<TPayload>(payload)));
         }
 
@@ -18,12 +21,14 @@ namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages {
         /// scheduler fields the web sets, which N.I.N.A. doesn't own.
         /// </summary>
         public static SettingsUpdate CreatePartial(AutopilotSettingsPayload payload, string device,
-            IReadOnlyCollection<string> changedKeys) {
+            IReadOnlyCollection<string> changedKeys)
+        {
             return new SettingsUpdate(device, ToFilteredDataPayload(payload, changedKeys));
         }
     }
 
-    public record AstrometryPayload {
+    public record AstrometryPayload
+    {
         public double? Latitude { get; init; }
         public double? Longitude { get; init; }
         public double? Elevation { get; init; }
@@ -37,7 +42,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages {
         public string HorizonFileName { get; init; } = "";
     }
 
-    public record TelescopeSettingsPayload {
+    public record TelescopeSettingsPayload
+    {
         public string? Name { get; init; }
 
         [JsonPropertyName("mount_name")]
@@ -69,7 +75,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages {
     }
 
     /// <summary>N.I.N.A.'s Meridian Flip settings (IMeridianFlipSettings), in minutes and seconds.</summary>
-    public record MeridianFlipSettingsPayload {
+    public record MeridianFlipSettingsPayload
+    {
         [JsonPropertyName("minutes_after_meridian")]
         public double MinutesAfterMeridian { get; init; }
 
@@ -95,14 +102,16 @@ namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages {
         public bool RotateImageAfterFlip { get; init; }
     }
 
-    public record FilterWheelSettingsPayload {
+    public record FilterWheelSettingsPayload
+    {
         [JsonPropertyName("disable_guiding_on_filter_change")]
         public bool DisableGuidingOnFilterChange { get; init; }
 
         public List<FilterPayload> Filters { get; init; } = new();
     }
 
-    public record FilterPayload {
+    public record FilterPayload
+    {
         public int Position { get; init; }
         public string? Name { get; init; }
 
@@ -115,7 +124,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages {
         public bool IsAutofocusFilter { get; init; }
     }
 
-    public record CameraSettingsPayload {
+    public record CameraSettingsPayload
+    {
         [JsonPropertyName("pixel_size")]
         public double? PixelSize { get; init; }
 
@@ -126,7 +136,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages {
         public BayerPatternEnum? BayerPattern { get; init; }
     }
 
-    public record FocuserSettingsPayload {
+    public record FocuserSettingsPayload
+    {
         [JsonPropertyName("autofocus_exposure_time")]
         public double? AutoFocusExposureTime { get; init; }
 
@@ -188,7 +199,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages {
         public double? RSquaredThreshold { get; init; }
     }
 
-    public record AlpacaSettingsPayload {
+    public record AlpacaSettingsPayload
+    {
         [JsonPropertyName("number_of_polls")]
         public int NumberOfPolls { get; init; }
 
@@ -214,7 +226,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages {
         public bool UseHttps { get; init; }
     }
 
-    public record DomeSettingsPayload {
+    public record DomeSettingsPayload
+    {
         [JsonPropertyName("scope_position_east_west_mm")]
         public double? ScopePositionEastWest_mm { get; init; }
 
@@ -279,7 +292,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages {
         public int SettleTimeSeconds { get; init; }
     }
 
-    public record AutopilotSettingsPayload {
+    public record AutopilotSettingsPayload
+    {
         [JsonPropertyName("is_autopilot_enabled")]
         public bool IsAutopilotEnabled { get; init; }
 
@@ -340,7 +354,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages {
 
         [JsonPropertyName("safe_settle_seconds")]
         public int? SafeSettleSeconds { get; init; }
-        
+
         [JsonPropertyName("rotator_fallback_mode")]
         public string? RotatorFallbackMode { get; init; }
 
@@ -386,7 +400,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages {
         public bool IsCloudUploadEnabled { get; init; }
     }
 
-    public record ImageFileSettingsPayload {
+    public record ImageFileSettingsPayload
+    {
         [JsonPropertyName("file_pattern")]
         public string? FilePattern { get; init; }
 

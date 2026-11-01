@@ -3,7 +3,8 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
+namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States
+{
     /// <summary>
     /// Blocks until the user connects a device the run requires. A null component counts as satisfied,
     /// since waiting on it would hang the machine all night.
@@ -14,24 +15,29 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
     /// </param>
     internal sealed class WaitForEquipmentConnected(string name, Context context, IDeviceComponent? component,
         string? criticalHeadline = null, Func<object>? criticalDetails = null)
-        : WaitForConditionState(name) {
+        : WaitForConditionState(name)
+    {
         protected override Context RunContext => context;
 
         protected override AutopilotStatus Status => AutopilotStatus.WaitingEquipment;
 
-        public override Task OnEntryAsync(CancellationToken cancellationToken) {
+        public override Task OnEntryAsync(CancellationToken cancellationToken)
+        {
             bool wasConnectTried = context.ShouldAutoConnectEquipment && component is { HasDefaultDevice: true };
-            if (criticalHeadline != null && component is { IsConnected: false } && !wasConnectTried) {
+            if (criticalHeadline != null && component is { IsConnected: false } && !wasConnectTried)
+            {
                 context.ReportCritical(criticalHeadline, criticalDetails?.Invoke());
             }
             return Task.CompletedTask;
         }
 
-        protected override Task<bool> IsSatisfiedAsync(CancellationToken cancellationToken) {
+        protected override Task<bool> IsSatisfiedAsync(CancellationToken cancellationToken)
+        {
             return Task.FromResult(component?.IsConnected ?? true);
         }
 
-        protected override string WaitingMessage() {
+        protected override string WaitingMessage()
+        {
             return $"Waiting for {component?.DisplayName ?? "device"} to be connected...";
         }
     }

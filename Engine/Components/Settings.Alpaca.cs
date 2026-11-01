@@ -5,11 +5,14 @@ using System.ComponentModel;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine {
-    public partial class Settings {
+namespace CosmicVaults.NINA.Astraeus.Engine
+{
+    public partial class Settings
+    {
         private DebouncedPush? _alpacaSettingsPush;
 
-        private async Task HandleAlpacaUpdateAsync(WsCommand command) {
+        private async Task HandleAlpacaUpdateAsync(WsCommand command)
+        {
             if (!command.Payload.TryGetProperty("data", out JsonElement data)) return;
 
             IAlpacaSettings alpacaSettings = Profile!.AlpacaSettings;
@@ -28,9 +31,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 $"duration={alpacaSettings.DiscoveryDuration}");
         }
 
-        internal Task PushAlpacaSettingsAsync() {
+        internal Task PushAlpacaSettingsAsync()
+        {
             IAlpacaSettings alpacaSettings = Profile!.AlpacaSettings;
-            AlpacaSettingsPayload payload = new AlpacaSettingsPayload {
+            AlpacaSettingsPayload payload = new AlpacaSettingsPayload
+            {
                 NumberOfPolls = alpacaSettings.NumberOfPolls,
                 PollInterval = alpacaSettings.PollInterval,
                 DiscoveryPort = alpacaSettings.DiscoveryPort,
@@ -43,7 +48,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return WebSocketBus.SendAsync(SettingsUpdate.Create(payload, "alpaca"));
         }
 
-        private void OnAlpacaSettingsChanged(object? sender, PropertyChangedEventArgs eventArgs) {
+        private void OnAlpacaSettingsChanged(object? sender, PropertyChangedEventArgs eventArgs)
+        {
             _alpacaSettingsPush ??= CreatePush(PushAlpacaSettingsAsync, "Alpaca");
             _alpacaSettingsPush.Schedule();
         }

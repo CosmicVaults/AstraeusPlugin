@@ -1,8 +1,10 @@
 using System;
 using System.Text.Json;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket {
-    internal enum JsonFieldState {
+namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket
+{
+    internal enum JsonFieldState
+    {
         /// <summary>Not sent, or sent as null. Whatever it would set is left alone.</summary>
         Absent,
         Valid,
@@ -14,11 +16,14 @@ namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket {
     /// C# type. Callers that hand a value to a driver or a profile give a range as well. The server
     /// keeps values sensible, but a wrong one would move hardware, so it is checked here too.
     /// </summary>
-    internal static class JsonFields {
-        public static JsonFieldState ReadBool(JsonElement parent, string name, out bool value) {
+    internal static class JsonFields
+    {
+        public static JsonFieldState ReadBool(JsonElement parent, string name, out bool value)
+        {
             value = false;
             if (!TryGetPresent(parent, name, out JsonElement element)) return JsonFieldState.Absent;
-            if (element.ValueKind != JsonValueKind.True && element.ValueKind != JsonValueKind.False) {
+            if (element.ValueKind != JsonValueKind.True && element.ValueKind != JsonValueKind.False)
+            {
                 return JsonFieldState.Invalid;
             }
             value = element.GetBoolean();
@@ -26,7 +31,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket {
         }
 
         public static JsonFieldState ReadDouble(JsonElement parent, string name, out double value,
-            double min = double.NegativeInfinity, double max = double.PositiveInfinity) {
+            double min = double.NegativeInfinity, double max = double.PositiveInfinity)
+        {
             value = 0;
             if (!TryGetPresent(parent, name, out JsonElement element)) return JsonFieldState.Absent;
             bool isFiniteNumber = element.ValueKind == JsonValueKind.Number
@@ -38,10 +44,12 @@ namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket {
         }
 
         public static JsonFieldState ReadInt(JsonElement parent, string name, out int value,
-            int min = int.MinValue, int max = int.MaxValue) {
+            int min = int.MinValue, int max = int.MaxValue)
+        {
             value = 0;
             if (!TryGetPresent(parent, name, out JsonElement element)) return JsonFieldState.Absent;
-            if (element.ValueKind != JsonValueKind.Number || !element.TryGetInt32(out value)) {
+            if (element.ValueKind != JsonValueKind.Number || !element.TryGetInt32(out value))
+            {
                 value = 0;
                 return JsonFieldState.Invalid;
             }
@@ -49,7 +57,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket {
         }
 
         public static JsonFieldState ReadRoundedInt(JsonElement parent, string name, out int value,
-            int min = int.MinValue, int max = int.MaxValue) {
+            int min = int.MinValue, int max = int.MaxValue)
+        {
             value = 0;
             JsonFieldState state = ReadDouble(parent, name, out double number);
             if (state != JsonFieldState.Valid) return state;
@@ -60,17 +69,20 @@ namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket {
         }
 
         public static JsonFieldState ReadShort(JsonElement parent, string name, out short value,
-            short min = short.MinValue, short max = short.MaxValue) {
+            short min = short.MinValue, short max = short.MaxValue)
+        {
             value = 0;
             if (!TryGetPresent(parent, name, out JsonElement element)) return JsonFieldState.Absent;
-            if (element.ValueKind != JsonValueKind.Number || !element.TryGetInt16(out value)) {
+            if (element.ValueKind != JsonValueKind.Number || !element.TryGetInt16(out value))
+            {
                 value = 0;
                 return JsonFieldState.Invalid;
             }
             return value >= min && value <= max ? JsonFieldState.Valid : JsonFieldState.Invalid;
         }
 
-        public static JsonFieldState ReadString(JsonElement parent, string name, out string value) {
+        public static JsonFieldState ReadString(JsonElement parent, string name, out string value)
+        {
             value = string.Empty;
             if (!TryGetPresent(parent, name, out JsonElement element)) return JsonFieldState.Absent;
             if (element.ValueKind != JsonValueKind.String) return JsonFieldState.Invalid;
@@ -80,7 +92,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket {
 
         /// <summary>An enum sent as its number, as N.I.N.A.'s own profile enums are.</summary>
         public static JsonFieldState ReadEnumNumber<TEnum>(JsonElement parent, string name, out TEnum value)
-            where TEnum : struct, Enum {
+            where TEnum : struct, Enum
+        {
             value = default;
             JsonFieldState state = ReadInt(parent, name, out int number);
             if (state != JsonFieldState.Valid) return state;
@@ -92,18 +105,21 @@ namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket {
 
         /// <summary>An enum sent as its name, as the plugin's own settings are.</summary>
         public static JsonFieldState ReadEnumName<TEnum>(JsonElement parent, string name, out TEnum value)
-            where TEnum : struct, Enum {
+            where TEnum : struct, Enum
+        {
             value = default;
             JsonFieldState state = ReadString(parent, name, out string text);
             if (state != JsonFieldState.Valid) return state;
-            if (!Enum.TryParse(text, out TEnum parsed) || !Enum.IsDefined(typeof(TEnum), parsed)) {
+            if (!Enum.TryParse(text, out TEnum parsed) || !Enum.IsDefined(typeof(TEnum), parsed))
+            {
                 return JsonFieldState.Invalid;
             }
             value = parsed;
             return JsonFieldState.Valid;
         }
 
-        private static bool TryGetPresent(JsonElement parent, string name, out JsonElement element) {
+        private static bool TryGetPresent(JsonElement parent, string name, out JsonElement element)
+        {
             element = default;
             if (parent.ValueKind != JsonValueKind.Object) return false;
             if (!parent.TryGetProperty(name, out element)) return false;

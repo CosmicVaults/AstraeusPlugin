@@ -14,7 +14,8 @@ using System.Windows.Media.Imaging;
 // System.Windows.Media also has a MediaPlayer, so say which one we mean.
 using MediaPlayer = LibVLCSharp.Shared.MediaPlayer;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
+namespace CosmicVaults.NINA.Astraeus.Engine.Feed
+{
     /// <summary>
     /// Pulls frames from an RTSP camera using LibVLC. The connection stays open across captures,
     /// because a fresh decoder per frame pays the RTSP handshake and a wait for the next keyframe
@@ -29,7 +30,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
     /// would load them itself, but it throws away Windows' reason for a refusal, so every failure
     /// reads as "module not found".
     /// </summary>
-    internal sealed class LibVlcRtspSource : IFeedSource {
+    internal sealed class LibVlcRtspSource : IFeedSource
+    {
         private static readonly TimeSpan StartupTimeout = TimeSpan.FromSeconds(20);
         private static readonly TimeSpan FrameTimeout = TimeSpan.FromSeconds(10);
         private static readonly TimeSpan DisposeCaptureWait = TimeSpan.FromSeconds(5);
@@ -118,7 +120,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
         private LibVLC? _libVlc;
         private MediaPlayer? _player;
 
-        public LibVlcRtspSource(string url, string? username, string? password, int maxWidth) {
+        public LibVlcRtspSource(string url, string? username, string? password, int maxWidth)
+        {
             _url = url;
             (_username, _password) = FeedUrl.ResolveCredentials(url, username, password);
             _maxWidth = maxWidth;
@@ -130,21 +133,27 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
             _displayCallback = OnDisplay;
         }
 
-        public static bool TryInitialize(out string? error) {
-            lock (InitializationLock) {
+        public static bool TryInitialize(out string? error)
+        {
+            lock (InitializationLock)
+            {
                 if (_isInitialised) { error = null; return true; }
                 if (_initializationError != null) { error = _initializationError; return false; }
 
                 // A native load failure lasts for the life of the process, so the result is cached
                 // either way. Retrying every capture would just fail the same way.
-                try {
+                try
+                {
                     _initializationError = LoadLibVlc();
-                    if (_initializationError == null) {
+                    if (_initializationError == null)
+                    {
                         _isInitialised = true;
                         error = null;
                         return true;
                     }
-                } catch (Exception ex) {
+                }
+                catch (Exception ex)
+                {
                     _initializationError = $"RTSP support could not be loaded: {ex.Message}";
                 }
                 Logger.Warning($"[Astraeus] {_initializationError}");
@@ -153,7 +162,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
             }
         }
 
-        private static string? LoadLibVlc() {
+        private static string? LoadLibVlc()
+        {
             string? directory = ResolveLibVlcDirectory();
             if (directory == null) return MissingFilesError;
 
@@ -164,7 +174,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
             return null;
         }
 
-        private static string? ResolveLibVlcDirectory() {
+        private static string? ResolveLibVlcDirectory()
+        {
             string? pluginDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
             return string.IsNullOrEmpty(pluginDirectory)
                 ? null
@@ -176,13 +187,15 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
         /// hand can be incomplete, and each gap fails later as something vaguer, like "module not
         /// found" for a missing libvlccore or a stream that never opens for missing plugins.
         /// </summary>
-        private static string? FindMissingFiles(string directory) {
+        private static string? FindMissingFiles(string directory)
+        {
             List<string> missing = new List<string>();
             if (!File.Exists(Path.Combine(directory, LibVlcFile))) missing.Add(LibVlcFile);
             if (!File.Exists(Path.Combine(directory, LibVlcCoreFile))) missing.Add(LibVlcCoreFile);
             if (!Directory.Exists(Path.Combine(directory, "plugins"))) missing.Add("the plugins folder");
 
-            return missing.Count switch {
+            return missing.Count switch
+            {
                 0 => null,
                 3 => MissingFilesError,
                 _ => $"The RTSP support files are incomplete: {string.Join(" and ", missing)} " +
@@ -196,8 +209,10 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
         /// same calls but only traces the path on failure, so every cause reads as "module not found".
         /// The handles are never freed because libvlc stays loaded for the whole process.
         /// </summary>
-        private static string? PreloadNative(string directory) {
-            foreach (string file in new[] { LibVlcCoreFile, LibVlcFile }) {
+        private static string? PreloadNative(string directory)
+        {
+            foreach (string file in new[] { LibVlcCoreFile, LibVlcFile })
+            {
                 IntPtr handle = LoadLibraryExW(Path.Combine(directory, file), IntPtr.Zero, LoadWithAlteredSearchPath);
                 if (handle == IntPtr.Zero)
                     return $"RTSP support could not be loaded. {file} would not load: " +
@@ -210,9 +225,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
         /// Windows' reason for refusing a DLL, with a hint for causes the user can fix. We only ever
         /// report the file name, since the path has the Windows user name in it.
         /// </summary>
-        private static string DescribeLoadError(int code) {
+        private static string DescribeLoadError(int code)
+        {
             string reason = $"{new Win32Exception(code).Message.TrimEnd('.')} (error {code})";
-            return code switch {
+            return code switch
+            {
                 // Windows' own text for this one is "%1 is not a valid Win32 application".
                 ErrorBadExeFormat => "it is not a 64-bit Windows DLL (error 193). Reinstall Astraeus.",
                 ErrorAccessDenied or ErrorVirusInfected or ErrorVirusDeleted =>
@@ -223,11 +240,13 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
             };
         }
 
-        public async Task<SourceFrame?> CaptureAsync(CancellationToken cancellationToken) {
+        public async Task<SourceFrame?> CaptureAsync(CancellationToken cancellationToken)
+        {
             // One capture at a time. A second caller would overwrite the first one's request and leave
             // it waiting for a frame that goes to someone else.
             await _captureLock.WaitAsync(cancellationToken);
-            try {
+            try
+            {
                 // A capture that queued behind the dispose must not build a new player on a dead source.
                 ObjectDisposedException.ThrowIf(_isDisposed, this);
                 await EnsurePlayingAsync(cancellationToken);
@@ -242,22 +261,29 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
                     PixelFormats.Bgr32, null, decoded.Pixels, decoded.Pitch);
                 image.Freeze();
                 return SourceFrame.FromImage(image);
-            } finally {
+            }
+            finally
+            {
                 _captureLock.Release();
             }
         }
 
         private async Task<DecodedFrame> WaitForFrameAsync(
-            TaskCompletionSource<DecodedFrame> request, CancellationToken cancellationToken) {
+            TaskCompletionSource<DecodedFrame> request, CancellationToken cancellationToken)
+        {
             using CancellationTokenSource timeoutSource =
                 CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutSource.CancelAfter(FrameTimeout);
-            try {
+            try
+            {
                 return await request.Task.WaitAsync(timeoutSource.Token);
-            } catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) {
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
                 // Clear the request so the next display callback doesn't fill a capture that gave up.
                 // Only if it's still ours, though, since a teardown may have replaced it.
-                lock (_frameLock) {
+                lock (_frameLock)
+                {
                     if (ReferenceEquals(_pendingFrame, request)) _pendingFrame = null;
                 }
                 throw new TimeoutException(
@@ -265,7 +291,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
             }
         }
 
-        private async Task EnsurePlayingAsync(CancellationToken cancellationToken) {
+        private async Task EnsurePlayingAsync(CancellationToken cancellationToken)
+        {
             if (_player is { IsPlaying: true }) return;
 
             TearDownPlayer();
@@ -297,7 +324,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
             // seconds, UDP's lower latency isn't worth the dropped packets.
             media.AddOption(":rtsp-tcp");
             media.AddOption(":network-caching=300");
-            if (!string.IsNullOrEmpty(_username)) {
+            if (!string.IsNullOrEmpty(_username))
+            {
                 media.AddOption($":rtsp-user={_username}");
                 media.AddOption($":rtsp-pwd={_password ?? string.Empty}");
             }
@@ -318,9 +346,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
         /// Waits for the first display callback, since IsPlaying turns true as soon as the stream opens,
         /// well before there's anything to capture.
         /// </summary>
-        private async Task WaitForVideoAsync(MediaPlayer player, CancellationToken cancellationToken) {
+        private async Task WaitForVideoAsync(MediaPlayer player, CancellationToken cancellationToken)
+        {
             DateTime deadline = DateTime.UtcNow + StartupTimeout;
-            while (DateTime.UtcNow < deadline) {
+            while (DateTime.UtcNow < deadline)
+            {
                 cancellationToken.ThrowIfCancellationRequested();
 
                 // Fail fast instead of sitting out the timeout. A refused login or stream rarely reaches
@@ -328,7 +358,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
                 if (player.State is VLCState.Error or VLCState.Ended or VLCState.Stopped)
                     throw new InvalidOperationException(DescribeStreamFailure());
 
-                lock (_frameLock) {
+                lock (_frameLock)
+                {
                     if (_isFrameAvailable) return;
                 }
 
@@ -353,7 +384,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
             "the camera ended the stream without sending video (check the URL, port and login)";
 
         /// <summary>The camera's own reason for refusing the stream, or null when it gave none.</summary>
-        private string? KnownStreamProblem() {
+        private string? KnownStreamProblem()
+        {
             if (_isLoginRefused)
                 return string.IsNullOrEmpty(_username)
                     ? "the camera needs a login, so enter its username and password"
@@ -368,27 +400,38 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
         /// Notes the camera's reason from live555's messages, some of which only come at debug level. Runs
         /// on libvlc's threads for every message, so like the video callbacks it must not throw or log.
         /// </summary>
-        private void OnLibVlcLog(object? sender, LogEventArgs logEvent) {
-            try {
+        private void OnLibVlcLog(object? sender, LogEventArgs logEvent)
+        {
+            try
+            {
                 if (logEvent.Module != "live555" || string.IsNullOrEmpty(logEvent.Message)) return;
                 string message = logEvent.Message;
 
-                if (message.StartsWith("authentication failed", StringComparison.OrdinalIgnoreCase)) {
+                if (message.StartsWith("authentication failed", StringComparison.OrdinalIgnoreCase))
+                {
                     _isLoginRefused = true;
-                } else if (message.StartsWith("connection timeout", StringComparison.OrdinalIgnoreCase)) {
+                }
+                else if (message.StartsWith("connection timeout", StringComparison.OrdinalIgnoreCase))
+                {
                     _isCameraUnreachable = true;
-                } else if (message.StartsWith(ConnectionErrorPrefix, StringComparison.OrdinalIgnoreCase)) {
+                }
+                else if (message.StartsWith(ConnectionErrorPrefix, StringComparison.OrdinalIgnoreCase))
+                {
                     // Negative codes are socket errors. Positive ones are the camera's RTSP status.
                     if (int.TryParse(message[ConnectionErrorPrefix.Length..].Trim(), out int code) && code > 0)
                         Interlocked.CompareExchange(ref _streamRefusal, $"RTSP error {code}", null);
                     else
                         _isCameraUnreachable = true;
-                } else if (logEvent.Level == LogLevel.Error &&
+                }
+                else if (logEvent.Level == LogLevel.Error &&
                            !message.StartsWith("Failed to connect with", StringComparison.OrdinalIgnoreCase) &&
-                           !message.StartsWith("Nothing to play for", StringComparison.OrdinalIgnoreCase)) {
+                           !message.StartsWith("Nothing to play for", StringComparison.OrdinalIgnoreCase))
+                {
                     Interlocked.CompareExchange(ref _streamRefusal, Scrub(message), null);
                 }
-            } catch {
+            }
+            catch
+            {
                 // A reason is a nicety. Losing one only means the generic message is shown.
             }
         }
@@ -403,8 +446,10 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
         // log events to the dashboard and these run at the stream's frame rate.
 
         private uint OnFormat(ref IntPtr opaque, IntPtr chroma, ref uint width, ref uint height,
-            ref uint pitches, ref uint lines) {
-            try {
+            ref uint pitches, ref uint lines)
+        {
+            try
+            {
                 // RV32 is BGRA32, which is WPF's Bgr32 with no conversion at the other end.
                 WriteFourCc(chroma, "RV32");
 
@@ -422,7 +467,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
                 long bytes = (long)pitch * scaledHeight;
                 if (bytes <= 0 || bytes > MaxBufferBytes) return 0;
 
-                lock (_frameLock) {
+                lock (_frameLock)
+                {
                     FreeBuffer();
                     _bufferBytes = (int)bytes;
                     _buffer = Marshal.AllocHGlobal(_bufferBytes);
@@ -432,43 +478,58 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
                     _isFrameAvailable = false;
                 }
                 return 1;   // one plane
-            } catch {
+            }
+            catch
+            {
                 // Zero planes tells libvlc we refused the format, which shows up as a play failure
                 // instead of a crash.
                 return 0;
             }
         }
 
-        private void OnCleanup(ref IntPtr opaque) {
-            try {
+        private void OnCleanup(ref IntPtr opaque)
+        {
+            try
+            {
                 lock (_frameLock) FreeBuffer();
-            } catch {
+            }
+            catch
+            {
                 // Nothing useful to do on the decoder thread. Teardown frees the buffer again.
             }
         }
 
-        private IntPtr OnLock(IntPtr opaque, IntPtr planes) {
-            try {
-                lock (_frameLock) {
+        private IntPtr OnLock(IntPtr opaque, IntPtr planes)
+        {
+            try
+            {
+                lock (_frameLock)
+                {
                     // No buffer (a refused format, or one already cleaned up) leaves planes[0] alone.
                     if (_buffer != IntPtr.Zero) Marshal.WriteIntPtr(planes, _buffer);
                 }
-            } catch {
+            }
+            catch
+            {
                 // Leaving planes[0] untouched makes libvlc skip the picture rather than write wild.
             }
             return IntPtr.Zero;   // single buffer, so there is no picture identity to track
         }
 
-        private void OnUnlock(IntPtr opaque, IntPtr picture, IntPtr planes) {
+        private void OnUnlock(IntPtr opaque, IntPtr picture, IntPtr planes)
+        {
             // Nothing to do. The picture is only complete at display, and there's one buffer.
         }
 
-        private void OnDisplay(IntPtr opaque, IntPtr picture) {
-            try {
+        private void OnDisplay(IntPtr opaque, IntPtr picture)
+        {
+            try
+            {
                 TaskCompletionSource<DecodedFrame>? request;
                 DecodedFrame frame;
 
-                lock (_frameLock) {
+                lock (_frameLock)
+                {
                     _isFrameAvailable = true;
 
                     // Only copy for a waiting capture, not every multi-megabyte frame at the stream's
@@ -485,18 +546,22 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
                 // Completed outside the lock, and with RunContinuationsAsynchronously set on the
                 // source, so the waiting capture never resumes on the decoder thread.
                 request.TrySetResult(frame);
-            } catch {
+            }
+            catch
+            {
                 // A dropped frame isn't worth risking the decoder thread. The capture that asked for
                 // it times out and the loop backs off.
             }
         }
 
-        private static void WriteFourCc(IntPtr chroma, string fourCc) {
+        private static void WriteFourCc(IntPtr chroma, string fourCc)
+        {
             for (int i = 0; i < 4; i++) Marshal.WriteByte(chroma, i, (byte)fourCc[i]);
         }
 
         /// <summary>Dimensions are kept even because the scaler prefers them.</summary>
-        private static (int Width, int Height) Fit(int width, int height, int maxWidth) {
+        private static (int Width, int Height) Fit(int width, int height, int maxWidth)
+        {
             if (width <= 0 || height <= 0 || maxWidth <= 0 || width <= maxWidth)
                 return (Math.Max(MinFrameDimension, width & ~1), Math.Max(MinFrameDimension, height & ~1));
 
@@ -505,34 +570,43 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
         }
 
         /// <summary>Callers hold _frameLock.</summary>
-        private void FreeBuffer() {
+        private void FreeBuffer()
+        {
             if (_buffer == IntPtr.Zero) return;
             Marshal.FreeHGlobal(_buffer);
             _buffer = IntPtr.Zero;
             _bufferBytes = 0;
         }
 
-        private void TearDownPlayer() {
+        private void TearDownPlayer()
+        {
             // Stop and dispose first. The decoder thread must be gone before its buffer is freed, and
             // disposing the player runs the cleanup callback.
-            try {
+            try
+            {
                 _player?.Stop();
                 _player?.Dispose();
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Warning($"[Astraeus] RTSP player did not stop cleanly: {ex.Message}");
             }
             _player = null;
 
-            try {
+            try
+            {
                 if (_libVlc != null) _libVlc.Log -= OnLibVlcLog;
                 _libVlc?.Dispose();
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Warning($"[Astraeus] LibVLC did not dispose cleanly: {ex.Message}");
             }
             _libVlc = null;
 
             TaskCompletionSource<DecodedFrame>? abandoned;
-            lock (_frameLock) {
+            lock (_frameLock)
+            {
                 FreeBuffer();
                 _isFrameAvailable = false;
                 abandoned = _pendingFrame;
@@ -543,7 +617,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
                 new InvalidOperationException("the RTSP connection was closed while waiting for a frame"));
         }
 
-        public ValueTask DisposeAsync() {
+        public ValueTask DisposeAsync()
+        {
             // Stopping the player can block briefly on the decoder thread, so keep it off the caller.
             return new ValueTask(Task.Run(() => DisposeUnderCaptureLockAsync()));
         }
@@ -551,13 +626,18 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
         // A capture in flight gets a moment to finish before its player is torn down. One that runs
         // over is failed by the teardown, and the lock is left undisposed because that capture still
         // has to release it.
-        private async Task DisposeUnderCaptureLockAsync() {
+        private async Task DisposeUnderCaptureLockAsync()
+        {
             bool hasCaptureLock = await _captureLock.WaitAsync(DisposeCaptureWait);
             _isDisposed = true;
-            try {
+            try
+            {
                 TearDownPlayer();
-            } finally {
-                if (hasCaptureLock) {
+            }
+            finally
+            {
+                if (hasCaptureLock)
+                {
                     _captureLock.Release();
                     _captureLock.Dispose();
                 }

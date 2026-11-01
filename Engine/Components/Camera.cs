@@ -30,14 +30,16 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
 
-namespace CosmicVaults.NINA.Astraeus.Engine {
+namespace CosmicVaults.NINA.Astraeus.Engine
+{
     public class Camera(
         Observatory observatory,
         IWebSocketBus webSocketBus,
         ICameraMediator cameraMediator,
         IImagingMediator imagingMediator,
         IImageSaveMediator imageSaveMediator)
-        : DeviceComponent<ICameraVM, ICameraConsumer, CameraInfo>(cameraMediator, observatory, webSocketBus) {
+        : DeviceComponent<ICameraVM, ICameraConsumer, CameraInfo>(cameraMediator, observatory, webSocketBus)
+    {
         public override string DeviceType { get; } = "camera";
         public override string DisplayName { get; } = "Camera";
         protected override string? RegistrationEndpoint => "cameras";
@@ -119,24 +121,30 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         private volatile string? _currentProjectName;
         private volatile string? _currentTargetName;
 
-        public string? CurrentProjectName {
+        public string? CurrentProjectName
+        {
             get => _currentProjectName;
             set => _currentProjectName = value;
         }
 
-        public string? CurrentTargetName {
+        public string? CurrentTargetName
+        {
             get => _currentTargetName;
             set => _currentTargetName = value;
         }
 
         ///////////// Component overrides /////////////
-        public override async Task Start() {
+        public override async Task Start()
+        {
             await base.Start();
             _hasWarnedMissingGain = false;
             _hasWarnedMissingObservedAt = false;
-            if (Observatory.TryGetComponent<FilterWheel>(out FilterWheel? filterWheel)) {
+            if (Observatory.TryGetComponent<FilterWheel>(out FilterWheel? filterWheel))
+            {
                 _filterWheel = filterWheel;
-            } else {
+            }
+            else
+            {
                 LogWarning("No filter wheel component registered, so frames will be captured with no filter recorded.");
             }
 
@@ -146,7 +154,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             imagingMediator.ImagePrepared += OnImagePrepared;
         }
 
-        public override Task Destroy() {
+        public override Task Destroy()
+        {
             imageSaveMediator.BeforeFinalizeImageSaved -= OnBeforeFinalizeImageSaved;
             imageSaveMediator.ImageSaved -= OnImageSaved;
             imagingMediator.ImagePrepared -= OnImagePrepared;
@@ -158,19 +167,23 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         ///////////// Web socket messages /////////////
-        public override WsMessage? GetUpdateMessage() {
-            if (LastInfo == null) {
+        public override WsMessage? GetUpdateMessage()
+        {
+            if (LastInfo == null)
+            {
                 return null;
             }
 
             double secondsRemaining = 0.0;
-            if (LastInfo.IsExposing) {
+            if (LastInfo.IsExposing)
+            {
                 // The end time passes while the frame downloads, so clamp at zero.
                 double secondsToEnd = (LastInfo.ExposureEndTime - DateTime.Now).TotalSeconds;
                 secondsRemaining = Math.Round(Math.Max(0.0, secondsToEnd), 2);
             }
 
-            CameraPayload payload = new CameraPayload {
+            CameraPayload payload = new CameraPayload
+            {
                 DeviceId = DeviceId,
                 Temperature = DevicePayload.CleanValue(LastInfo.Temperature),
                 TemperatureSetPoint = DevicePayload.CleanValue(LastInfo.TemperatureSetPoint),
@@ -184,9 +197,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return new CameraUpdate(payload);
         }
 
-        public override WsMessage? GetDeviceStaticInfo() {
+        public override WsMessage? GetDeviceStaticInfo()
+        {
             CameraInfo info = cameraMediator.GetInfo();
-            CameraPayload payload = new CameraPayload() {
+            CameraPayload payload = new CameraPayload()
+            {
                 DeviceId = DeviceId,
                 Name = info.Name,
                 IsConnected = info.Connected,
@@ -244,8 +259,10 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return new CameraUpdate(payload);
         }
 
-        protected override Task HandleCommandAsync(WsCommand command) {
-            switch (command.Action) {
+        protected override Task HandleCommandAsync(WsCommand command)
+        {
+            switch (command.Action)
+            {
                 case "capture":
                     StartCaptureCommand(command);
                     break;
@@ -266,7 +283,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return Task.CompletedTask;
         }
 
-        private void StartCaptureCommand(WsCommand command) {
+        private void StartCaptureCommand(WsCommand command)
+        {
             JsonElement payload = command.Payload;
             if (JsonFields.ReadDouble(payload, "exposureTime", out double exposureTime) == JsonFieldState.Valid &&
                 JsonFields.ReadInt(payload, "count", out int count, min: 1, max: MaxManualFrames) ==
@@ -279,7 +297,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 JsonFields.ReadBool(payload, "save", out bool shouldSave) == JsonFieldState.Valid &&
                 TryOptionalInt(payload, "gain", out int gain) &&
                 TryOptionalInt(payload, "offset", out int offset) &&
-                TryOptionalString(payload, "readoutMode", out string? readoutMode)) {
+                TryOptionalString(payload, "readoutMode", out string? readoutMode))
+            {
                 // Calibrate needs Save, since an unsaved frame has no file to calibrate.
                 bool shouldCalibrate = shouldSave &&
                                        payload.TryGetProperty("calibrate", out JsonElement calibrateProperty) &&
@@ -291,7 +310,9 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 CaptureCommandAsync(command.Id, exposureTime, count, imageType ?? CaptureSequence.ImageTypes.LIGHT,
                         binX, binY, shouldSave, shouldCalibrate, gain, offset, readoutMode, shouldPlateSolve)
                     .ObserveFaults(LogCommandFault);
-            } else {
+            }
+            else
+            {
                 // A silent drop leaves the dashboard waiting on a 5 s timeout with no reason.
                 BroadcastMessageReceivedAsync(command.Id, false, "Malformed capture command")
                     .ObserveFaults(LogCommandFault);
@@ -299,7 +320,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         // Absent or null gives -1, so NINA uses the profile's value. False only for a malformed value.
-        private static bool TryOptionalInt(JsonElement payload, string name, out int value) {
+        private static bool TryOptionalInt(JsonElement payload, string name, out int value)
+        {
             value = UseProfileGainOrOffset;
             if (!payload.TryGetProperty(name, out JsonElement element) || element.ValueKind == JsonValueKind.Null)
                 return true;
@@ -307,7 +329,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         // Absent, null or blank gives null to leave the camera's setting alone. False only for a non-string.
-        private static bool TryOptionalString(JsonElement payload, string name, out string? value) {
+        private static bool TryOptionalString(JsonElement payload, string name, out string? value)
+        {
             value = null;
             if (!payload.TryGetProperty(name, out JsonElement element) || element.ValueKind == JsonValueKind.Null)
                 return true;
@@ -317,7 +340,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return true;
         }
 
-        private static bool TryGetBool(JsonElement payload, string name, out bool value) {
+        private static bool TryGetBool(JsonElement payload, string name, out bool value)
+        {
             value = false;
             if (!payload.TryGetProperty(name, out JsonElement element)) return false;
             if (element.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return false;
@@ -326,13 +350,15 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         ///////////// Imaging methods /////////////
-        private Task OnBeforeFinalizeImageSaved(object sender, BeforeFinalizeImageSavedEventArgs eventArgs) {
+        private Task OnBeforeFinalizeImageSaved(object sender, BeforeFinalizeImageSavedEventArgs eventArgs)
+        {
             eventArgs.AddImagePattern(ImagePatternDefinitions.CreateProjectNamePattern(CurrentProjectName));
             eventArgs.AddImagePattern(ImagePatternDefinitions.CreateTargetNamePattern(CurrentTargetName));
             return Task.CompletedTask;
         }
 
-        private void OnImageSaved(object? sender, ImageSavedEventArgs eventArgs) {
+        private void OnImageSaved(object? sender, ImageSavedEventArgs eventArgs)
+        {
             _ = HandleImageSavedAsync(eventArgs);
         }
 
@@ -340,18 +366,22 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Patches WCS into the saved FITS header, then releases the capture's awaiter. The patch is
         /// awaited first so CaptureAsync only returns once the header on disk is complete.
         /// </summary>
-        private async Task HandleImageSavedAsync(ImageSavedEventArgs eventArgs) {
+        private async Task HandleImageSavedAsync(ImageSavedEventArgs eventArgs)
+        {
             FrameCaptureOperationData? capture = _currentCapture;
             if (capture == null) return; // a save we didn't start, e.g. from NINA's own UI
 
-            try {
+            try
+            {
                 if (capture.TakePendingWcs() is { } wcs &&
                     eventArgs.PathToImage?.LocalPath is { } savedPath &&
                     _fitsHeaderPatcher is { } patcher)
                     // ComponentToken, not capture.Token, so the header write finishes even after the
                     // capture completes and disposes.
                     await patcher.InjectWcsAsync(savedPath, wcs, ComponentToken);
-            } finally {
+            }
+            finally
+            {
                 capture.CompleteSave(eventArgs);
             }
         }
@@ -360,7 +390,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// The frame's R2 object key. The target name is unvalidated server JSON, so ObjectKey cleans it,
         /// and ObjectKey.Join keeps forward slashes where System.IO.Path would use backslashes.
         /// </summary>
-        internal string BuildR2Filename(string filePath) {
+        internal string BuildR2Filename(string filePath)
+        {
             string date = DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             string fileName = Path.GetFileName(filePath);
             return ObjectKey.Join(ObjectKey.SafeSegment(CurrentTargetName), date, fileName);
@@ -373,8 +404,10 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// The set point (°C) the running cooler is regulating to, or null when disconnected, the
         /// cooler is off, or the driver reports none.
         /// </summary>
-        public double? CoolerSetPoint {
-            get {
+        public double? CoolerSetPoint
+        {
+            get
+            {
                 if (!IsConnected) return null;
                 CameraInfo info = cameraMediator.GetInfo();
                 return info.CoolerOn && !double.IsNaN(info.TemperatureSetPoint) ? info.TemperatureSetPoint : null;
@@ -387,8 +420,10 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// abort, but the caller's own cancellation propagates.
         /// </summary>
         public async Task<bool> CoolCameraAsync(double? targetTemperature = null,
-            CancellationToken cancellationToken = default) {
-            if (!cameraMediator.GetInfo().CanSetTemperature) {
+            CancellationToken cancellationToken = default)
+        {
+            if (!cameraMediator.GetInfo().CanSetTemperature)
+            {
                 Log("Camera does not support temperature control, skipping cooling.");
                 return false;
             }
@@ -399,29 +434,37 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             IProgress<ApplicationStatus> progress = NoProgress;
             using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(
                 BeginOperation(ref _coolingCancellationSource), cancellationToken);
-            try {
+            try
+            {
                 ICameraSettings cameraSettings = Observatory.Settings.ProfileService.ActiveProfile.CameraSettings;
                 TimeSpan coolingDuration = TimeSpan.FromMinutes(cameraSettings.CoolingDuration);
                 bool isAtTarget = await cameraMediator.CoolCamera(target, coolingDuration, progress, linked.Token);
                 double temperature = cameraMediator.GetInfo().Temperature;
-                if (isAtTarget) {
+                if (isAtTarget)
+                {
                     Log($"Cooling complete. Camera temperature: {temperature:F1}°C.");
-                } else {
+                }
+                else
+                {
                     LogWarning($"Camera could not reach {target}°C. It is at {temperature:F1}°C with the cooler " +
                                "still working towards it.");
                 }
 
                 return isAtTarget;
-            } catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) {
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
                 Log("Cooling aborted.");
                 return false;
             }
         }
 
         /// <summary>False on a dashboard abort, but the caller's own cancellation propagates.</summary>
-        public async Task<bool> WarmCameraAsync(CancellationToken cancellationToken = default) {
+        public async Task<bool> WarmCameraAsync(CancellationToken cancellationToken = default)
+        {
             CameraInfo? info = cameraMediator.GetInfo();
-            if (!info.CanSetTemperature) {
+            if (!info.CanSetTemperature)
+            {
                 Log("Camera does not support temperature control, skipping warming.");
                 return false;
             }
@@ -431,12 +474,14 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             Log("Warming camera...");
             using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(
                 BeginOperation(ref _coolingCancellationSource), cancellationToken);
-            try {
+            try
+            {
                 IProgress<ApplicationStatus> progress = NoProgress;
                 ICameraSettings cameraSettings = Observatory.Settings.ProfileService.ActiveProfile.CameraSettings;
                 TimeSpan warmingDuration = TimeSpan.FromMinutes(cameraSettings.WarmingDuration);
                 bool isWarmed = await cameraMediator.WarmCamera(warmingDuration, progress, linked.Token);
-                if (isWarmed) {
+                if (isWarmed)
+                {
                     bool isCoolerReadOff = await WaitForCoolerOffReadingAsync(linked.Token);
                     double temperature = cameraMediator.GetInfo().Temperature;
                     Log(isCoolerReadOff
@@ -446,7 +491,9 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 }
 
                 return isWarmed;
-            } catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) {
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
                 Log("Warming aborted.");
                 return false;
             }
@@ -458,9 +505,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         // N.I.N.A. turns the cooler off on the driver but only refreshes CameraInfo on its next poll
         // (about 5 s with some drivers), so a read straight after still says on, and the dawn disconnect
         // left the camera connected. Bounded, so a stale reading can't hang dawn.
-        private async Task<bool> WaitForCoolerOffReadingAsync(CancellationToken cancellationToken) {
+        private async Task<bool> WaitForCoolerOffReadingAsync(CancellationToken cancellationToken)
+        {
             DateTime deadlineUtc = DateTime.UtcNow + CoolerReadingTimeout;
-            while (cameraMediator.GetInfo().CoolerOn && DateTime.UtcNow < deadlineUtc) {
+            while (cameraMediator.GetInfo().CoolerOn && DateTime.UtcNow < deadlineUtc)
+            {
                 await Task.Delay(CoolerReadingPollInterval, cancellationToken);
             }
 
@@ -470,8 +519,10 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         ///////////// Capture functions /////////////
         private async Task CaptureCommandAsync(string? id, double exposureTime, int count, string imageType, short binX,
             short binY, bool shouldSave, bool shouldCalibrate, int gain, int offset, string? readoutMode,
-            bool shouldPlateSolve) {
-            if (!IsConnected) {
+            bool shouldPlateSolve)
+        {
+            if (!IsConnected)
+            {
                 await BroadcastMessageReceivedAsync(id, false, "Camera not connected");
                 return;
             }
@@ -481,14 +532,16 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             double exposureMax = cameraInfo.ExposureMax is > 0 and < double.PositiveInfinity
                 ? cameraInfo.ExposureMax
                 : MaxManualExposureSeconds;
-            if (count < 1 || exposureTime <= 0 || exposureTime > exposureMax) {
+            if (count < 1 || exposureTime <= 0 || exposureTime > exposureMax)
+            {
                 await BroadcastMessageReceivedAsync(id, false,
                     $"Exposure must be above 0 and at most {exposureMax:0} s, and the count at least 1");
                 return;
             }
 
             // A capture started over the autopilot's would cancel the frame it is taking.
-            if (IsAutopilotRunning) {
+            if (IsAutopilotRunning)
+            {
                 await BroadcastMessageReceivedAsync(id, false,
                     "The autopilot is running; switch it off to capture by hand");
                 return;
@@ -496,9 +549,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
             // Refused, not ignored, since a frame on the wrong mode never matches its masters.
             short? readoutIndex = null;
-            if (readoutMode != null) {
+            if (readoutMode != null)
+            {
                 int index = cameraMediator.GetInfo().ReadoutModes?.ToList().IndexOf(readoutMode) ?? -1;
-                if (index < 0) {
+                if (index < 0)
+                {
                     await BroadcastMessageReceivedAsync(id, false, $"Camera has no readout mode \"{readoutMode}\"");
                     return;
                 }
@@ -508,13 +563,15 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
             Observatory.TryGetComponent<Mount>(out Mount? mount);
             if (mount?.PlanManualExposure(TimeSpan.FromSeconds(exposureTime)) is
-                { Action: ManualExposureAction.Refuse, Reason: var refusal }) {
+                { Action: ManualExposureAction.Refuse, Reason: var refusal })
+            {
                 LogWarning($"Capture refused: {refusal}");
                 await BroadcastMessageReceivedAsync(id, false, refusal);
                 return;
             }
 
-            if (Interlocked.Exchange(ref _manualRunActive, 1) == 1) {
+            if (Interlocked.Exchange(ref _manualRunActive, 1) == 1)
+            {
                 await BroadcastMessageReceivedAsync(id, false, "A capture is already running");
                 return;
             }
@@ -525,7 +582,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             CancellationToken runToken = runCancellationSource.Token;
             Volatile.Write(ref _stopReason, null);
             int frame = 0, completed = 0;
-            try {
+            try
+            {
                 // Left set on purpose. NINA saves it to the profile, and the autopilot then shoots
                 // with whatever the hub chose.
                 if (readoutIndex is short mode) cameraMediator.SetReadoutModeForNormalImages(mode);
@@ -538,7 +596,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
                 CaptureRequest request = CaptureRequest.Manual(exposureTime, imageType, new BinningMode(binX, binY),
                     shouldSave, gain, offset, isPlateSolveRequested: shouldPlateSolve);
-                for (frame = 1; frame <= count; frame++) {
+                for (frame = 1; frame <= count; frame++)
+                {
                     runToken.ThrowIfCancellationRequested();
                     if (!await PrepareMountForFrameAsync(mount, exposureTime, frame, count, shouldSave, runToken))
                         break;
@@ -547,23 +606,30 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 }
 
                 Log($"Manual capture finished: {completed}/{count} frame(s).");
-            } catch (OperationCanceledException) {
+            }
+            catch (OperationCanceledException)
+            {
                 string? stopReason = Interlocked.Exchange(ref _stopReason, null);
                 if (stopReason == null && ComponentToken.IsCancellationRequested) stopReason = "N.I.N.A. is closing";
                 LogWarning(stopReason == null ? "Capture aborted." : $"Capture stopped: {stopReason}.");
                 await SendPreviewAsync(ImagePreviewPayload.Failure(Math.Max(frame, 1), count,
                     stopReason ?? "Aborted by user", shouldSave, null));
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 // Fire-and-forget from HandleCommandAsync, so unexpected failures only surface here.
                 LogError($"Manual capture failed: {ex.Message}");
-            } finally {
+            }
+            finally
+            {
                 Interlocked.CompareExchange(ref _manualRunCancellationSource, null, runCancellationSource);
                 runCancellationSource.Dispose();
                 Interlocked.Exchange(ref _manualRunActive, 0);
             }
         }
 
-        private static string DescribeSaving(bool shouldSave, bool shouldCalibrate) {
+        private static string DescribeSaving(bool shouldSave, bool shouldCalibrate)
+        {
             if (!shouldSave) return " (preview only, not saved).";
             if (shouldCalibrate) return ", calibrated.";
             return ".";
@@ -574,7 +640,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// MeridianFlipTrigger does. False when the frame must not be taken, which ends the run.
         /// </summary>
         private async Task<bool> PrepareMountForFrameAsync(Mount? mount, double exposureTime, int index, int count,
-            bool shouldSave, CancellationToken cancellationToken) {
+            bool shouldSave, CancellationToken cancellationToken)
+        {
             if (mount == null) return true;
             // A flip in progress stops tracking and may take N.I.N.A.'s own exposures.
             if (mount.IsFlipping) await mount.WaitForFlipAsync(cancellationToken);
@@ -582,11 +649,13 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             ManualExposurePlan plan = mount.PlanManualExposure(TimeSpan.FromSeconds(exposureTime));
             string? failReason = plan.Reason;
             if (plan.Action == ManualExposureAction.Proceed) return true;
-            if (plan.Action == ManualExposureAction.Flip) {
+            if (plan.Action == ManualExposureAction.Flip)
+            {
                 Log($"Frame {index}/{count} would carry the mount past the meridian limit " +
                     $"({mount.DescribeMeridianLimit()}), so flipping first.");
                 MeridianFlipOutcome outcome = await mount.FlipAsync(mount.CurrentFlipTarget(), null, cancellationToken);
-                if (outcome.HasReachedTargetSide) {
+                if (outcome.HasReachedTargetSide)
+                {
                     Log($"Meridian flip done ({outcome.Before} -> {outcome.After}); taking frame {index}/{count}.");
                     return true;
                 }
@@ -602,7 +671,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
         /// <summary>False when the frame failed, which ends the run. Cancellation propagates.</summary>
         private async Task<bool> CaptureManualFrameAsync(CaptureRequest request, int index, int count,
-            bool shouldCalibrate, CancellationToken cancellationToken) {
+            bool shouldCalibrate, CancellationToken cancellationToken)
+        {
             string clientRef = Guid.NewGuid().ToString("N");
 
             // 1. Everything that needs the capture slot. A saved frame waits for NINA's ImageSaved before
@@ -611,7 +681,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
             // 2. A failed frame shows as an error toast and as a failure frame that moves the
             //    dashboard's counter on.
-            if (!result.IsSuccess) {
+            if (!result.IsSuccess)
+            {
                 LogError($"Frame {index}/{count} failed: {result.FailReason}");
                 await SendPreviewAsync(ImagePreviewPayload.Failure(
                     index, count, result.FailReason ?? "Capture failed", request.ShouldSaveToDisk, clientRef));
@@ -626,7 +697,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             bool shouldUploadToCloud = Observatory.Settings.IsCloudUploadEnabled();
             if (request.ShouldSaveToDisk && !shouldUploadToCloud)
                 Log($"Cloud upload is off, so frame {index}/{count} stays on this machine; preview shown live only.");
-            if (request.ShouldSaveToDisk && (shouldUploadToCloud || shouldCalibrate)) {
+            if (request.ShouldSaveToDisk && (shouldUploadToCloud || shouldCalibrate))
+            {
                 if (Observatory.Authenticator.IsAuthenticated)
                     (captureId, plan) = await Observatory.AstraeusWebClient.PostManualCaptureAsync(
                         result, clientRef, shouldUploadToCloud, shouldCalibrate);
@@ -655,9 +727,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         private async Task<CaptureResult> ExposeManualFrameAsync(CaptureRequest request,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken)
+        {
             using FrameCaptureOperationData capture = BeginCapture(request, cancellationToken);
-            try {
+            try
+            {
                 IRenderedImage rendered = await CaptureFrameAsync(capture);
                 ImageSavedEventArgs? saved = null;
                 if (request.ShouldSaveToDisk)
@@ -670,36 +744,55 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 if (result.IsSuccess)
                     result.PreviewJpeg = await EncodePreviewAsync(saved?.Image ?? rendered.Image, capture.Token);
                 return result;
-            } catch (OperationCanceledException) {
+            }
+            catch (OperationCanceledException)
+            {
                 throw;
-            } catch (TimeoutException) {
-                return new CaptureResult {
+            }
+            catch (TimeoutException)
+            {
+                return new CaptureResult
+                {
                     IsSuccess = false,
                     FailReason = $"N.I.N.A. did not report the saved file within {SaveTimeout.TotalMinutes:0} minutes"
                 };
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 return new CaptureResult { IsSuccess = false, FailReason = ex.Message };
-            } finally {
+            }
+            finally
+            {
                 EndCapture(capture);
             }
         }
 
-        private async Task<byte[]?> EncodePreviewAsync(BitmapSource source, CancellationToken cancellationToken) {
-            try {
+        private async Task<byte[]?> EncodePreviewAsync(BitmapSource source, CancellationToken cancellationToken)
+        {
+            try
+            {
                 return await Task.Run(() => ImagePreviewEncoder.EncodeJpeg(source), cancellationToken);
-            } catch (OperationCanceledException) {
+            }
+            catch (OperationCanceledException)
+            {
                 throw;
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 LogWarning($"Preview encode failed: {ex.Message}"); // the statistics still go out
                 return null;
             }
         }
 
         /// <summary>A send failure is logged and never ends the run.</summary>
-        private async Task SendPreviewAsync(ImagePreviewPayload payload) {
-            try {
+        private async Task SendPreviewAsync(ImagePreviewPayload payload)
+        {
+            try
+            {
                 await WebSocketBus.SendAsync(new ImagePreviewMessage(payload));
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 string frame = payload.FrameIndex is int index
                     ? $"frame {index}/{payload.FrameCount}"
                     : $"the {payload.Source} frame";
@@ -717,7 +810,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Runs on N.I.N.A.'s prepare path for every frame, so it only decides and hands off. The
         /// encode and send happen in RelaySnapshotsAsync.
         /// </summary>
-        private void OnImagePrepared(object? sender, ImagePreparedEventArgs eventArgs) {
+        private void OnImagePrepared(object? sender, ImagePreparedEventArgs eventArgs)
+        {
             IRenderedImage? rendered = eventArgs?.RenderedImage;
             if (rendered == null) return;
             string? source = Observatory.FrameLabel.Current;
@@ -736,11 +830,15 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Sends the newest waiting frame, then at most one per SnapshotMinInterval until none is left.
         /// An autofocus burst costs one encode per interval, and the card always ends on the latest.
         /// </summary>
-        private async Task RelaySnapshotsAsync() {
-            try {
-                while (true) {
+        private async Task RelaySnapshotsAsync()
+        {
+            try
+            {
+                while (true)
+                {
                     SnapshotFrame? next = Interlocked.Exchange(ref _pendingSnapshot, null);
-                    if (next != null) {
+                    if (next != null)
+                    {
                         await RelaySnapshotAsync(next);
                         await Task.Delay(SnapshotMinInterval, ComponentToken);
                         continue;
@@ -753,14 +851,18 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                         || Interlocked.CompareExchange(ref _snapshotRelayRunning, 1, 0) != 0)
                         return;
                 }
-            } catch (OperationCanceledException) {
+            }
+            catch (OperationCanceledException)
+            {
                 Volatile.Write(ref _snapshotRelayRunning, 0);
             }
         }
 
         /// <summary>Never throws.</summary>
-        private async Task RelaySnapshotAsync(SnapshotFrame frame) {
-            try {
+        private async Task RelaySnapshotAsync(SnapshotFrame frame)
+        {
+            try
+            {
                 // The last viewer may have gone while this frame waited its turn.
                 if (!Observatory.Cadence.HasSubscribers) return;
                 IImageData raw = frame.Image.RawImageData;
@@ -773,13 +875,16 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 result.PreviewJpeg = ImagePreviewEncoder.EncodeJpeg(frame.Image.Image);
                 await SendPreviewAsync(ImagePreviewPayload.FromResult(result, frame.Source, isSaved: false));
                 LogDebug($"Sent {frame.Source} frame ({result.ExposureSeconds ?? "?"} s) to the dashboard.");
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 LogDebug($"Could not send {frame.Source} frame to the dashboard: {ex.Message}");
             }
         }
 
         private void QueueManualFrame(int captureId, string filePath, byte[]? previewJpeg, CalibrationPlan? plan,
-            bool shouldUpload) {
+            bool shouldUpload)
+        {
             _manualFrames = _manualFrames
                 .ContinueWith(_ => ProcessManualFrameAsync(captureId, filePath, previewJpeg, plan, shouldUpload),
                     TaskScheduler.Default)
@@ -791,28 +896,38 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// already recorded.
         /// </summary>
         private async Task ProcessManualFrameAsync(int captureId, string filePath, byte[]? previewJpeg,
-            CalibrationPlan? plan, bool shouldUpload) {
-            try {
+            CalibrationPlan? plan, bool shouldUpload)
+        {
+            try
+            {
                 PendingUpload pending = new PendingUpload(captureId, filePath, previewJpeg);
-                if (plan != null) {
+                if (plan != null)
+                {
                     string fileName = Path.GetFileName(filePath);
                     Log($"Calibrating {fileName}: {plan.Describe()}.");
                     FrameCalibrator calibrator = new FrameCalibrator(Observatory);
                     CalibrationOutcome outcome = await calibrator.CalibrateAsync(filePath, plan, ComponentToken);
-                    if (outcome.IsSuccess) {
+                    if (outcome.IsSuccess)
+                    {
                         string? outputName = Path.GetFileName(outcome.OutputPath);
                         Log($"Calibrated {fileName} in {outcome.DurationSeconds:F1}s -> {outputName}.");
-                    } else if (outcome.SkipReason != null) {
+                    }
+                    else if (outcome.SkipReason != null)
+                    {
                         string rawFrameFate = shouldUpload
                             ? "The raw frame is uploaded uncalibrated."
                             : "The raw frame stands.";
                         Log($"Calibration of {fileName} skipped: {outcome.SkipReason} {rawFrameFate}");
-                    } else {
+                    }
+                    else
+                    {
                         LogWarning($"Calibration of {fileName} failed: {outcome.Error} The raw frame stands.");
                     }
 
-                    pending = pending with {
-                        CalibratedFilePath = outcome.OutputPath, Provenance = CalibrationProvenance.From(plan, outcome),
+                    pending = pending with
+                    {
+                        CalibratedFilePath = outcome.OutputPath,
+                        Provenance = CalibrationProvenance.From(plan, outcome),
                     };
                 }
 
@@ -821,7 +936,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 // Check storage before the transfer, as the autopilot does. Nothing here can pause the
                 // autopilot, so either kind of full just means the frame stays on this machine.
                 StorageVerdict verdict = await StorageGate.CheckAsync(Observatory, DeviceType, DefaultLogCategory);
-                if (verdict != StorageVerdict.Upload) {
+                if (verdict != StorageVerdict.Upload)
+                {
                     LogWarning($"{Path.GetFileName(filePath)} was not uploaded: there is no room in your cloud " +
                                "storage. The frame is still on this machine.");
                     return;
@@ -832,9 +948,13 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 // one this frame was taken under.
                 Observatory.CaptureUploads.TryEnqueue(pending, BuildR2Filename(filePath), DeviceType,
                     DefaultLogCategory);
-            } catch (OperationCanceledException) {
+            }
+            catch (OperationCanceledException)
+            {
                 // The plugin is shutting down.
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 LogWarning($"Post-processing of {Path.GetFileName(filePath)} failed: {ex.Message}");
             }
         }
@@ -850,14 +970,16 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             int gain,
             int offset,
             int frameNumber,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken)
+        {
             if (!IsConnected)
                 return new CaptureResult { IsSuccess = false, FailReason = "Camera not connected" };
 
             using FrameCaptureOperationData capture = BeginCapture(
                 CaptureRequest.Autopilot(exposureTime, binning, hintCoordinates, gain, offset, frameNumber),
                 cancellationToken);
-            try {
+            try
+            {
                 await CaptureFrameAsync(capture);
                 // HandleImageSavedAsync patches the WCS in before completing the capture, so the header
                 // is written by the time this returns. The FITS and preview go to R2 later from the
@@ -868,11 +990,15 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
                 // Render the preview while the BitmapSource still exists, since the FITS on disk can't be
                 // re-rendered later without NINA's pipeline. A failure here isn't fatal.
-                if (result.IsSuccess && saved?.Image is { } previewSource) {
-                    try {
+                if (result.IsSuccess && saved?.Image is { } previewSource)
+                {
+                    try
+                    {
                         result.PreviewJpeg = await Task.Run(() => ImagePreviewEncoder.EncodeJpeg(previewSource),
                             cancellationToken);
-                    } catch (Exception ex) {
+                    }
+                    catch (Exception ex)
+                    {
                         LogWarning($"Preview encode failed: {ex.Message}");
                     }
                 }
@@ -885,27 +1011,37 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                         isSaved: true));
 
                 return result;
-            } catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) {
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
                 // Something other than the caller cancelled the frame.
                 LogWarning("Capture was aborted outside the autopilot.");
-                return new CaptureResult {
-                    IsSuccess = false, FailReason = "the exposure was aborted outside the autopilot"
+                return new CaptureResult
+                {
+                    IsSuccess = false,
+                    FailReason = "the exposure was aborted outside the autopilot"
                 };
 
-            } catch (OperationCanceledException) {
+            }
+            catch (OperationCanceledException)
+            {
                 throw;
             }
-            catch (Exception ex) {
+            catch (Exception ex)
+            {
                 LogError($"Capture failed: {ex.Message}");
                 return new CaptureResult { IsSuccess = false, FailReason = ex.Message };
-            } finally {
+            }
+            finally
+            {
                 EndCapture(capture);
             }
         }
 
         private CaptureResult BuildCaptureResult(
             ImageSavedEventArgs? savedImage, PlateSolveResult? solveResult, ImageMetaData? metadata,
-            DateTime? shutterOpenedAtUtc, Coordinates? solveHint = null, bool wasSolveAttempted = false) {
+            DateTime? shutterOpenedAtUtc, Coordinates? solveHint = null, bool wasSolveAttempted = false)
+        {
             if (savedImage == null)
                 return new CaptureResult { IsSuccess = false, FailReason = "Image was not saved" };
             return BuildCaptureResult(savedImage.Statistics, savedImage.StarDetectionAnalysis,
@@ -918,7 +1054,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// the same statistics and star detection ImageSaved would, just with no file.
         /// </summary>
         private async Task<CaptureResult> BuildCaptureResultAsync(IRenderedImage rendered, ImageMetaData? metadata,
-            DateTime? shutterOpenedAtUtc) {
+            DateTime? shutterOpenedAtUtc)
+        {
             IImageData raw = rendered.RawImageData;
             IImageStatistics? statistics = await raw.Statistics;
             return BuildCaptureResult(statistics, raw.StarDetectionAnalysis, null, null, metadata, shutterOpenedAtUtc);
@@ -927,19 +1064,22 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         private CaptureResult BuildCaptureResult(
             IImageStatistics? imageStatistics, IStarDetectionAnalysis? starDetectionAnalysis, string? filePath,
             PlateSolveResult? solveResult, ImageMetaData? metadata, DateTime? shutterOpenedAtUtc,
-            Coordinates? solveHint = null, bool wasSolveAttempted = false) {
+            Coordinates? solveHint = null, bool wasSolveAttempted = false)
+        {
             // A driver that can't report gain/offset gives NINA -1, which the server rejects, so the
             // frame would never match a master. Normalise the same way the master generator does.
             bool isGainOrOffsetMissing = AcquisitionMetadata.IsMissing(metadata?.Camera.Gain ?? 0) ||
                                          AcquisitionMetadata.IsMissing(metadata?.Camera.Offset ?? 0);
-            if (!_hasWarnedMissingGain && isGainOrOffsetMissing) {
+            if (!_hasWarnedMissingGain && isGainOrOffsetMissing)
+            {
                 _hasWarnedMissingGain = true;
                 LogWarning($"Camera reports no GAIN/OFFSET (gain={metadata?.Camera.Gain}, " +
                            $"offset={metadata?.Camera.Offset}); reporting 0 so frames still match their masters.");
             }
 
             double? exposureTimeSeconds = NullIfNaN(metadata?.Image.ExposureTime);
-            return new CaptureResult {
+            return new CaptureResult
+            {
                 IsSuccess = true,
                 IsPlateSolved = solveResult is { Success: true },
                 WasPlateSolveAttempted = wasSolveAttempted,
@@ -984,7 +1124,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         private static double? NullIfNaN(double? value) =>
             value is double number && !double.IsNaN(number) ? number : null;
 
-        private static double? OffsetFromHintArcmin(PlateSolveResult? solveResult, Coordinates? solveHint) {
+        private static double? OffsetFromHintArcmin(PlateSolveResult? solveResult, Coordinates? solveHint)
+        {
             if (solveHint == null || solveResult is not { Success: true } || solveResult.Coordinates == null)
                 return null;
             Coordinates solved = solveResult.Coordinates.Transform(Epoch.J2000);
@@ -996,11 +1137,13 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// The frame's DATE-OBS, else the time we asked for the exposure. Without it the server would time
         /// the frame from when the report arrived, stretching each cadence interval.
         /// </summary>
-        private string? ResolveObservedAt(ImageMetaData? metadata, DateTime? shutterOpenedAtUtc) {
+        private string? ResolveObservedAt(ImageMetaData? metadata, DateTime? shutterOpenedAtUtc)
+        {
             if (metadata != null && metadata.Image.ExposureStart != default)
                 return metadata.Image.ExposureStart.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture);
             if (shutterOpenedAtUtc is not DateTime requested) return null;
-            if (!_hasWarnedMissingObservedAt) {
+            if (!_hasWarnedMissingObservedAt)
+            {
                 _hasWarnedMissingObservedAt = true;
                 LogWarning("Frames have no DATE-OBS, so the time each exposure was requested is reported as " +
                            "its start instead (slightly early).");
@@ -1013,7 +1156,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Shared by the manual command and the autopilot. The pixels saved here are always raw, since
         /// calibration happens later from the server's plan.
         /// </summary>
-        private async Task<IRenderedImage> CaptureFrameAsync(FrameCaptureOperationData capture) {
+        private async Task<IRenderedImage> CaptureFrameAsync(FrameCaptureOperationData capture)
+        {
             CaptureRequest request = capture.Request;
             CancellationToken cancellationToken = capture.Token;
             IProgress<ApplicationStatus> progress = NoProgress;
@@ -1038,7 +1182,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             PrepareImageParameters prepareParameters = new PrepareImageParameters(autoStretch: true, detectStars: true);
             Task<IRenderedImage> prepareTask =
                 imagingMediator.PrepareImage(imageData, prepareParameters, cancellationToken);
-            if (request.IsPlateSolveRequested) {
+            if (request.IsPlateSolveRequested)
+            {
                 // A manual frame has no target, so start from where the mount said it pointed at exposure.
                 if ((request.SolveHint ?? imageData.MetaData.Telescope.Coordinates) is { } hint)
                     await TrySolveAndEmbedWcsAsync(capture, imageData, hint, cancellationToken);
@@ -1057,12 +1202,14 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Makes the request the in-flight capture, abandoning any still running. The camera takes one
         /// frame at a time, and letting two overlap gives a frame's result to the wrong capture.
         /// </summary>
-        private FrameCaptureOperationData BeginCapture(CaptureRequest request, CancellationToken cancellationToken) {
+        private FrameCaptureOperationData BeginCapture(CaptureRequest request, CancellationToken cancellationToken)
+        {
             FrameCaptureOperationData capture =
                 new FrameCaptureOperationData(request, ComponentToken, cancellationToken);
             // One exchange, so there is never a moment with no capture in the slot for another to take.
             FrameCaptureOperationData? previous = Interlocked.Exchange(ref _currentCapture, capture);
-            if (previous != null) {
+            if (previous != null)
+            {
                 LogWarning("A capture was still in flight when a new one started, so abandoning the earlier frame.");
                 previous.Abandon();
             }
@@ -1077,18 +1224,21 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Cancels the in-flight capture, and every frame still to come in a manual run. The physical
         /// abort is the mediator's job.
         /// </summary>
-        public void AbortCapture() {
+        public void AbortCapture()
+        {
             _currentCapture?.Cancel();
             CancelManualRun();
         }
 
         /// <summary>Cancels the manual run's token, tolerating the race with the run's own cleanup.</summary>
-        private void CancelManualRun() {
+        private void CancelManualRun()
+        {
             try { _manualRunCancellationSource?.Cancel(); } catch (ObjectDisposedException) { }
         }
 
         /// <summary>Safe when nothing is exposing.</summary>
-        public void StopExposure() {
+        public void StopExposure()
+        {
             AbortCapture();
             cameraMediator.AbortExposure();
         }
@@ -1097,7 +1247,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// StopExposure for a stop the observer didn't ask for. A manual run ends with this reason
         /// instead of "Aborted by user".
         /// </summary>
-        public void StopExposure(string reason) {
+        public void StopExposure(string reason)
+        {
             Volatile.Write(ref _stopReason, reason);
             LogWarning($"Stopping the exposure: {reason}.");
             StopExposure();
@@ -1106,8 +1257,10 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// <summary>Cancels an in-flight cool-down or warm-up.</summary>
         public void AbortCooling() => AbortOperation(ref _coolingCancellationSource);
 
-        private async Task AbortCommandAsync(string? id) {
-            if (IsAutopilotRunning) {
+        private async Task AbortCommandAsync(string? id)
+        {
+            if (IsAutopilotRunning)
+            {
                 // The autopilot's frame is the autopilot's to stop. User should not be able to get here without the server
                 // disabling autopilot first
                 await BroadcastMessageReceivedAsync(id, false,
@@ -1121,28 +1274,35 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         // Acked before cooling or warming starts, since either runs for minutes, far past the 5 s ack window.
-        private async Task SetCoolerCommandAsync(string? id, JsonElement payload) {
-            if (!TryGetBool(payload, "on", out bool shouldCoolerBeOn)) {
+        private async Task SetCoolerCommandAsync(string? id, JsonElement payload)
+        {
+            if (!TryGetBool(payload, "on", out bool shouldCoolerBeOn))
+            {
                 await BroadcastMessageReceivedAsync(id, false, "Malformed setCooler command");
                 return;
             }
 
             if (await RejectUnlessTemperatureControlAsync(id)) return;
             await BroadcastMessageReceivedAsync(id, true);
-            try {
+            try
+            {
                 if (shouldCoolerBeOn) await CoolCameraAsync();
                 else await WarmCameraAsync();
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 // Fire-and-forget from HandleCommandAsync, so driver failures only surface here.
                 LogError($"{(shouldCoolerBeOn ? "Cooling" : "Warming")} failed: {ex.Message}");
             }
         }
 
-        private async Task SetTemperatureCommandAsync(string? id, JsonElement payload) {
+        private async Task SetTemperatureCommandAsync(string? id, JsonElement payload)
+        {
             // The same bounds the autopilot's cooling setting is clamped to.
             if (JsonFields.ReadDouble(payload, "temperature", out double temperatureCelsius,
                     min: AstraeusSettings.MinCameraCoolingTemperature,
-                    max: AstraeusSettings.MaxCameraCoolingTemperature) != JsonFieldState.Valid) {
+                    max: AstraeusSettings.MaxCameraCoolingTemperature) != JsonFieldState.Valid)
+            {
                 await BroadcastMessageReceivedAsync(id, false,
                     $"Temperature must be a number between {AstraeusSettings.MinCameraCoolingTemperature:0} and " +
                     $"{AstraeusSettings.MaxCameraCoolingTemperature:0} °C");
@@ -1150,7 +1310,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             }
 
             if (await RejectUnlessTemperatureControlAsync(id)) return;
-            if (!TryGetDeviceViewModel<CameraVM>(out CameraVM? cameraViewModel)) {
+            if (!TryGetDeviceViewModel<CameraVM>(out CameraVM? cameraViewModel))
+            {
                 await BroadcastMessageReceivedAsync(id, false, "Device view model not available");
                 return;
             }
@@ -1159,18 +1320,22 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             await BroadcastMessageReceivedAsync(id, true);
         }
 
-        private async Task SetDewHeaterCommandAsync(string? id, JsonElement payload) {
-            if (!TryGetBool(payload, "on", out bool shouldHeaterBeOn)) {
+        private async Task SetDewHeaterCommandAsync(string? id, JsonElement payload)
+        {
+            if (!TryGetBool(payload, "on", out bool shouldHeaterBeOn))
+            {
                 await BroadcastMessageReceivedAsync(id, false, "Malformed setDewHeater command");
                 return;
             }
 
-            if (!IsConnected) {
+            if (!IsConnected)
+            {
                 await BroadcastMessageReceivedAsync(id, false, "Camera not connected");
                 return;
             }
 
-            if (!cameraMediator.GetInfo().HasDewHeater) {
+            if (!cameraMediator.GetInfo().HasDewHeater)
+            {
                 await BroadcastMessageReceivedAsync(id, false, "This camera has no dew heater");
                 return;
             }
@@ -1180,7 +1345,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         // True when it has already sent the rejection.
-        private async Task<bool> RejectUnlessTemperatureControlAsync(string? id) {
+        private async Task<bool> RejectUnlessTemperatureControlAsync(string? id)
+        {
             string? reason = null;
             if (!IsConnected) reason = "Camera not connected";
             else if (!cameraMediator.GetInfo().CanSetTemperature) reason = "This camera does not support cooling";
@@ -1195,17 +1361,21 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// cancellation.
         /// </summary>
         private async Task TrySolveAndEmbedWcsAsync(FrameCaptureOperationData capture, IImageData imageData,
-            Coordinates hint, CancellationToken cancellationToken) {
-            try {
+            Coordinates hint, CancellationToken cancellationToken)
+        {
+            try
+            {
                 IPlateSolverFactory factory = Observatory.PlateSolverFactory;
                 IProfile? profile = Observatory.Settings.ProfileService.ActiveProfile;
                 IPlateSolver? solver = factory.GetPlateSolver(profile.PlateSolveSettings);
-                if (solver == null) {
+                if (solver == null)
+                {
                     LogWarning("No plate solver configured, so saving without WCS.");
                     return;
                 }
 
-                PlateSolveParameter parameter = new PlateSolveParameter {
+                PlateSolveParameter parameter = new PlateSolveParameter
+                {
                     Binning = imageData.MetaData.Camera.BinX,
                     Coordinates = hint,
                     FocalLength = profile.TelescopeSettings.FocalLength,
@@ -1220,7 +1390,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 capture.RecordSolveAttempt();
                 PlateSolveResult? result = await solver.SolveAsync(imageData, parameter, progress, cancellationToken);
 
-                if (!result.Success) {
+                if (!result.Success)
+                {
                     LogWarning("Per-frame plate solve failed, so saving without WCS.");
                     return;
                 }
@@ -1235,9 +1406,13 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
                 Log($"WCS embedded: RA={result.Coordinates.RAString}, Dec={result.Coordinates.DecString}, " +
                     $"Pixscale={result.Pixscale:F2}\"/px, PA={result.PositionAngle:F2}°, Flipped={result.Flipped}");
-            } catch (OperationCanceledException) {
+            }
+            catch (OperationCanceledException)
+            {
                 throw;
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 LogWarning($"Per-frame plate solve error: {ex.Message} (saving without WCS)");
             }
         }

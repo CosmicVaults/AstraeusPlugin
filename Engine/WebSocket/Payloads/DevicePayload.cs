@@ -1,7 +1,9 @@
 ﻿using System.Text.Json.Serialization;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Payloads {
-    public record DevicePayload {
+namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Payloads
+{
+    public record DevicePayload
+    {
         public string? Name { get; init; }
 
         [JsonPropertyName("device_id")]
@@ -20,7 +22,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Payloads {
         /// Turns NaN and infinity into null, never 0. N.I.N.A. reports a missing reading as NaN, and a
         /// made-up zero would look real on the dashboard.
         /// </summary>
-        public static double? CleanValue(double? value) {
+        public static double? CleanValue(double? value)
+        {
             if (value is not { } number) return null;
             return double.IsFinite(number) ? number : null;
         }

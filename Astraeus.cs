@@ -23,14 +23,19 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus {
+
+using ProfileChangedEventArgs = NINA.Profile.ProfileChangedEventArgs;
+
+namespace CosmicVaults.NINA.Astraeus
+{
     [Export(typeof(IPluginManifest))]
-    public class Astraeus : PluginBase, INotifyPropertyChanged {
+    public class Astraeus : PluginBase, INotifyPropertyChanged
+    {
         private readonly IProfileService _profileService;
 
         private CancellationTokenSource? _backgroundLoopCancellation;
         private Task? _backgroundTask;
-        
+
         // Gives the other plugins time to finish loading before this one starts.
         private static readonly TimeSpan PluginLoadDelay = TimeSpan.FromSeconds(5);
         private static readonly TimeSpan DisabledPollInterval = TimeSpan.FromSeconds(2);
@@ -69,10 +74,11 @@ namespace CosmicVaults.NINA.Astraeus {
             [Import(AllowDefault = true)] IImageHistoryVM imageHistory,
             [Import(AllowDefault = true)] ISequenceMediator sequenceMediator,
             [Import(AllowDefault = true)] IMeridianFlipVMFactory meridianFlipFactory
-            ) {
+            )
+        {
             Guid pluginGuid = Guid.Parse(Identifier);
             _profileService = profileService;
-            profileService.ProfileChanged += ProfileService_ProfileChanged;
+            profileService.ProfileChanged += OnProfileChanged;
             AstraeusSettings = new AstraeusSettings(profileService, options, pluginGuid);
 
             AstraeusThemeMode.Bind(AstraeusSettings);
@@ -100,7 +106,7 @@ namespace CosmicVaults.NINA.Astraeus {
                 imageHistory,
                 sequenceRunner,
                 meridianFlipFactory);
-            
+
             LoginViewModel = new LoginViewModel(Observatory.Authenticator, Observatory);
             AutopilotSettingsViewModel = new AutopilotSettingsViewModel(Observatory);
 
@@ -115,37 +121,53 @@ namespace CosmicVaults.NINA.Astraeus {
             _backgroundTask = Task.Run(() => BackgroundLoopAsync(_backgroundLoopCancellation.Token));
         }
 
-        private async Task BackgroundLoopAsync(CancellationToken cancellationToken) {
-            try {
+        private async Task BackgroundLoopAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
                 await Task.Delay(PluginLoadDelay, cancellationToken);
-                while (!IsPluginEnabled) {
+                while (!IsPluginEnabled)
+                {
                     await Task.Delay(DisabledPollInterval, cancellationToken);
                 }
                 await InitializeObservatoryAsync();
                 await RunHeartbeatAsync(cancellationToken);
-            } catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
                 // Teardown.
             }
         }
 
-        private async Task InitializeObservatoryAsync() {
-            try {
+        private async Task InitializeObservatoryAsync()
+        {
+            try
+            {
                 await Observatory.Awake();
                 await Observatory.Start();
                 AutopilotSettingsViewModel.RefreshDevices();
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Error($"Astraeus could not finish starting: {ex.Message}");
                 Logger.Debug(ex.ToString());
             }
         }
 
-        private async Task RunHeartbeatAsync(CancellationToken cancellationToken) {
-            while (!cancellationToken.IsCancellationRequested) {
-                try {
+        private async Task RunHeartbeatAsync(CancellationToken cancellationToken)
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
                     await RunHeartbeatPassAsync(cancellationToken);
-                } catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
                     throw;
-                } catch (Exception ex) {
+                }
+                catch (Exception ex)
+                {
                     Logger.Error($"Astraeus background loop error: {ex.Message}");
                     Logger.Debug(ex.ToString());
                     await Task.Delay(ErrorRetryDelay, cancellationToken);
@@ -153,12 +175,16 @@ namespace CosmicVaults.NINA.Astraeus {
             }
         }
 
-        private async Task RunHeartbeatPassAsync(CancellationToken cancellationToken) {
-            if (!IsPluginEnabled) {
-                if (Observatory.TryGetComponent(out Autopilot? autopilot)) {
+        private async Task RunHeartbeatPassAsync(CancellationToken cancellationToken)
+        {
+            if (!IsPluginEnabled)
+            {
+                if (Observatory.TryGetComponent(out Autopilot? autopilot))
+                {
                     autopilot.IsEnabled = false;
                 }
-                if (Observatory.IsSocketOpen) {
+                if (Observatory.IsSocketOpen)
+                {
                     await Observatory.WebSocketClient.StopAsync();
                 }
                 await Observatory.Cadence.WaitAsync(() => DisabledPollInterval, cancellationToken);
@@ -169,17 +195,24 @@ namespace CosmicVaults.NINA.Astraeus {
             await Observatory.Cadence.WaitAsync(() => Observatory.NextTickDelay, cancellationToken);
         }
 
-        public override async Task Teardown() {
-            _profileService.ProfileChanged -= ProfileService_ProfileChanged;
+        public override async Task Teardown()
+        {
+            _profileService.ProfileChanged -= OnProfileChanged;
             Log("Plugin Teardown called");
             _backgroundLoopCancellation?.Cancel();
-            if (_backgroundTask != null) {
-                try {
+            if (_backgroundTask != null)
+            {
+                try
+                {
                     await _backgroundTask;
-                } catch (Exception ex) when (ex is not OperationCanceledException) {
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
                     Logger.Error($"Astraeus background loop ended with an error: {ex.Message}");
                     Logger.Debug(ex.ToString());
-                } catch (OperationCanceledException) {
+                }
+                catch (OperationCanceledException)
+                {
                     // Teardown.
                 }
             }
@@ -190,24 +223,32 @@ namespace CosmicVaults.NINA.Astraeus {
         }
 
         // Every Astraeus setting, the stored sign-in included, belongs to the N.I.N.A. profile.
-        private async void ProfileService_ProfileChanged(object? sender, EventArgs eventArgs) {
-            try {
+        private async void OnProfileChanged(object? sender, EventArgs eventArgs)
+        {
+            try
+            {
                 Log("Profile changed, reloading Astraeus session");
-                await Observatory.Authenticator.ReloadForProfileChangeAsync();
-                if (Observatory.TryGetComponent(out Autopilot? autopilot)) {
+                IProfile? oldProfile = (eventArgs as ProfileChangedEventArgs)?.OldProfile;
+                await Observatory.Authenticator.ReloadForProfileChangeAsync(oldProfile);
+                if (Observatory.TryGetComponent(out Autopilot? autopilot))
+                {
                     autopilot.OnProfileChanged();
                 }
-                if (Observatory.TryGetComponent(out Settings? settingsComponent)) {
+                if (Observatory.TryGetComponent(out Settings? settingsComponent))
+                {
                     await settingsComponent.RebindProfileAsync();
                 }
                 RefreshOptionsPage();
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Error($"Astraeus could not reload after the profile change: {ex.Message}");
                 Logger.Debug(ex.ToString());
             }
         }
 
-        private void RefreshOptionsPage() {
+        private void RefreshOptionsPage()
+        {
             RaisePropertyChanged(nameof(IsPluginEnabled));
             RaisePropertyChanged(nameof(IsNinaThemeEnabled));
             AutopilotSettingsViewModel.RefreshAllProperties();
@@ -217,18 +258,22 @@ namespace CosmicVaults.NINA.Astraeus {
             AstraeusThemeMode.Raise();
         }
 
-        public bool IsPluginEnabled {
+        public bool IsPluginEnabled
+        {
             get => AstraeusSettings.IsPluginEnabled();
-            set {
+            set
+            {
                 AstraeusSettings.SetIsPluginEnabled(value);
                 Observatory.Cadence.Signal();
                 RaisePropertyChanged();
             }
         }
 
-        public bool IsNinaThemeEnabled {
+        public bool IsNinaThemeEnabled
+        {
             get => AstraeusSettings.IsNinaThemeEnabled();
-            set {
+            set
+            {
                 AstraeusSettings.SetIsNinaThemeEnabled(value);
                 // Re-dresses the dictionaries the page already uses, so the switch shows without
                 // leaving the page.
@@ -238,7 +283,8 @@ namespace CosmicVaults.NINA.Astraeus {
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;
-        protected void RaisePropertyChanged([CallerMemberName] string? propertyName = null) {
+        protected void RaisePropertyChanged([CallerMemberName] string? propertyName = null)
+        {
             this.PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
     }

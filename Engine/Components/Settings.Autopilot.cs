@@ -8,8 +8,10 @@ using CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine {
-    public partial class Settings {
+namespace CosmicVaults.NINA.Astraeus.Engine
+{
+    public partial class Settings
+    {
 
         ///////////// Change-driven push /////////////
         // Autopilot settings and default devices write straight to the profile and raise a Changed
@@ -29,7 +31,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         private readonly HashSet<string> _pendingAutopilotKeys = new();
         private readonly object _pendingAutopilotKeysLock = new();
 
-        private void SubscribeAutopilotSettings() {
+        private void SubscribeAutopilotSettings()
+        {
             _autopilotPush = new DebouncedPush(
                 PushChangedAutopilotSettingsAsync,
                 message => LogError($"Failed to push autopilot settings: {message}", device: "autopilot"));
@@ -39,14 +42,16 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 device.DefaultDeviceChanged += OnAutopilotDefaultDeviceChanged;
         }
 
-        private void UnsubscribeAutopilotSettings() {
+        private void UnsubscribeAutopilotSettings()
+        {
             if (Observatory.TryGetComponent<Autopilot.Autopilot>(out Autopilot.Autopilot? autopilot))
                 autopilot.SettingsChanged -= OnAutopilotSettingChanged;
             foreach (IDeviceComponent device in Observatory.GetComponents<IDeviceComponent>())
                 device.DefaultDeviceChanged -= OnAutopilotDefaultDeviceChanged;
         }
 
-        private void OnAutopilotSettingChanged(object? sender, Autopilot.SettingChangedEventArgs eventArgs) {
+        private void OnAutopilotSettingChanged(object? sender, Autopilot.SettingChangedEventArgs eventArgs)
+        {
             if (_isApplyingAutopilotUpdate) return;
             // No key means a machine-local setting the server doesn't carry.
             if (eventArgs.Key is null) return;
@@ -57,24 +62,28 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// A default-device change sends the whole device map plus the two flat safety and roof fields
         /// kept for compatibility. The plugin owns all three, so sending them together keeps them consistent.
         /// </summary>
-        private void OnAutopilotDefaultDeviceChanged(object? sender, EventArgs eventArgs) {
+        private void OnAutopilotDefaultDeviceChanged(object? sender, EventArgs eventArgs)
+        {
             if (_isApplyingAutopilotUpdate) return;
             QueueAutopilotKeys("default_devices", "safety_device_id", "roof_device_id");
         }
 
-        private void QueueAutopilotKeys(params string[] keys) {
+        private void QueueAutopilotKeys(params string[] keys)
+        {
             lock (_pendingAutopilotKeysLock)
                 foreach (string key in keys)
                     _pendingAutopilotKeys.Add(key);
             _autopilotPush?.Schedule();
         }
 
-        private async Task HandleAutopilotUpdateAsync(WsCommand command) {
+        private async Task HandleAutopilotUpdateAsync(WsCommand command)
+        {
             if (!command.Payload.TryGetProperty("data", out JsonElement data)) return;
             if (!Observatory.TryGetComponent<Autopilot.Autopilot>(out Autopilot.Autopilot? autopilot)) return;
 
             SettingsUpdateBatch update = BuildAutopilotUpdate(autopilot, data);
-            if (!TryApplyWithoutEcho(update)) {
+            if (!TryApplyWithoutEcho(update))
+            {
                 LogWarning("Ignored an autopilot settings update from the server: wrong type for " +
                            $"{update.InvalidFieldNames}.", device: "autopilot");
                 await PushAutopilotSettingsAsync();
@@ -83,18 +92,23 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             LogAutopilotSettings();
         }
 
-        private static bool TryApplyWithoutEcho(SettingsUpdateBatch update) {
+        private static bool TryApplyWithoutEcho(SettingsUpdateBatch update)
+        {
             _isApplyingAutopilotUpdate = true;
-            try {
+            try
+            {
                 return update.TryApply();
-            } finally {
+            }
+            finally
+            {
                 _isApplyingAutopilotUpdate = false;
             }
         }
 
         // The flat panel mode and auto-connect decide what the next roof opening does, so a mid-night
         // change to either has to show in the log.
-        private void LogAutopilotSettings() {
+        private void LogAutopilotSettings()
+        {
             AstraeusSettings settings = Observatory.Settings;
             string devices = $"safetyDeviceId={settings.GetDefaultDeviceId("safetymonitor")}, " +
                              $"roofDeviceId={settings.GetDefaultDeviceId("dome")}";
@@ -107,7 +121,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 $"autoConnect={settings.ShouldAutoConnectEquipment()}, {cooling}", device: "autopilot");
         }
 
-        private SettingsUpdateBatch BuildAutopilotUpdate(Autopilot.Autopilot autopilot, JsonElement data) {
+        private SettingsUpdateBatch BuildAutopilotUpdate(Autopilot.Autopilot autopilot, JsonElement data)
+        {
             bool hasDefaultDevices = data.TryGetProperty("default_devices", out JsonElement defaultDevices)
                                      && defaultDevices.ValueKind != JsonValueKind.Null;
             Dictionary<string, string>? defaultDeviceIds =
@@ -160,11 +175,13 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// The device map as device type -> device id. Null when it has the wrong shape, which rejects
         /// the whole update. Null entries are left out.
         /// </summary>
-        private static Dictionary<string, string>? ReadDefaultDeviceIds(JsonElement defaultDevices) {
+        private static Dictionary<string, string>? ReadDefaultDeviceIds(JsonElement defaultDevices)
+        {
             if (defaultDevices.ValueKind != JsonValueKind.Object) return null;
 
             Dictionary<string, string> defaultDeviceIds = new Dictionary<string, string>();
-            foreach (JsonProperty entry in defaultDevices.EnumerateObject()) {
+            foreach (JsonProperty entry in defaultDevices.EnumerateObject())
+            {
                 if (entry.Value.ValueKind == JsonValueKind.Null) continue;
                 if (entry.Value.ValueKind != JsonValueKind.String) return null;
                 defaultDeviceIds[entry.Name] = entry.Value.GetString() ?? BaseComponent.NoDevice;
@@ -173,22 +190,27 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         // Unknown device types are ignored, so nothing gets written to a dead setting key.
-        private void ApplyDefaultDeviceIds(Dictionary<string, string> defaultDeviceIds) {
-            foreach ((string deviceType, string deviceId) in defaultDeviceIds) {
+        private void ApplyDefaultDeviceIds(Dictionary<string, string> defaultDeviceIds)
+        {
+            foreach ((string deviceType, string deviceId) in defaultDeviceIds)
+            {
                 SetDefaultDevice(deviceType, deviceId);
             }
         }
 
-        private void SetDefaultDevice(string deviceType, string deviceId) {
+        private void SetDefaultDevice(string deviceType, string deviceId)
+        {
             IDeviceComponent? component = Observatory.GetComponents<IDeviceComponent>()
                 .FirstOrDefault(candidate => candidate.DeviceType == deviceType);
             component?.SetDefaultDevice(deviceId, "web settings");
         }
 
         /// <summary>Sends nothing if the queue is empty, since a full push may already have drained it.</summary>
-        private Task PushChangedAutopilotSettingsAsync() {
+        private Task PushChangedAutopilotSettingsAsync()
+        {
             string[] changedKeys;
-            lock (_pendingAutopilotKeysLock) {
+            lock (_pendingAutopilotKeysLock)
+            {
                 if (_pendingAutopilotKeys.Count == 0) return Task.CompletedTask;
                 changedKeys = _pendingAutopilotKeys.ToArray();
                 _pendingAutopilotKeys.Clear();
@@ -201,13 +223,16 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Sends the whole block, used on connect where NINA's values win for the settings it owns.
         /// Fields it doesn't own are left out, so a merging server keeps them. Replaces any queued partial push.
         /// </summary>
-        internal Task PushAutopilotSettingsAsync() {
+        internal Task PushAutopilotSettingsAsync()
+        {
             lock (_pendingAutopilotKeysLock) _pendingAutopilotKeys.Clear();
             return WebSocketBus.SendAsync(SettingsUpdate.Create(BuildAutopilotPayload(), "autopilot"));
         }
 
-        private AutopilotSettingsPayload BuildAutopilotPayload() {
-            return new AutopilotSettingsPayload {
+        private AutopilotSettingsPayload BuildAutopilotPayload()
+        {
+            return new AutopilotSettingsPayload
+            {
                 IsAutopilotEnabled = Observatory.Settings.IsAutopilotEnabled(),
                 SafetyDeviceId = Observatory.Settings.GetDefaultDeviceId("safetymonitor"),
                 RoofMode = Observatory.Settings.GetAutopilotRoofMode().ToString(),

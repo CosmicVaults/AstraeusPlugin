@@ -4,7 +4,8 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
+namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States
+{
     /// <summary>
     /// Decides whether the mount must flip, once before the slew and again before the exposure. The server
     /// can't see the side of pier, so the geometry is worked out here. A target past the limit stays past
@@ -13,22 +14,26 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
     /// </summary>
     internal sealed class IsMeridianFlipRequired(string name, Context context,
         Func<AutopilotNextResponse?, TimeSpan> window)
-        : DecisionState(name) {
-        protected internal override bool ShouldWatchMountLimits => true;
+        : DecisionState(name)
+    {
+        protected internal override Aborts AbortsOn => Aborts.RoofClosed | Aborts.LimitReached | Aborts.WindowClosed;
 
         // What was last said, so an unchanged verdict isn't repeated at INFO every frame. The state
         // lives for one autopilot run, which is the lifetime the de-duplication needs.
         private string? _lastVerdictKey;
 
-        protected override Task<bool> DecideAsync(CancellationToken cancellationToken) {
-            AutopilotNextResponse? target = context.CurrentTarget;
+        protected override Task<bool> DecideAsync(CancellationToken cancellationToken)
+        {
+            AutopilotNextResponse? target = context.Frame.Target;
             if (target?.Ra is not double ra || target.Dec is not double dec) return Task.FromResult(false);
 
             // Not a German equatorial, or one that won't report its side (Mount's westward test refuses
             // instead), so nothing to decide. Only worth a line when the server pinned a side, since
             // then it believes something about this observatory that isn't true.
-            if (context.Mount is not { IsGermanEquatorial: true, IsPierSideKnown: true } mount) {
-                if (context.RequiredPierSide is PierSide unusableSide) {
+            if (context.Mount is not { IsGermanEquatorial: true, IsPierSideKnown: true } mount)
+            {
+                if (context.Frame.RequiredPierSide is PierSide unusableSide)
+                {
                     Announce($"{target.TargetName}|unusable-pin", isWarning: true,
                         $"Server requires {target.TargetName} on {unusableSide}, but this mount reports " +
                         $"alignment {context.Mount?.SideOfPier.ToString() ?? "unknown"} and no usable " +
@@ -50,8 +55,10 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
 
             // A pinned side settles it. The server uses it to keep a non-flipping project's frames
             // consistent, or to say the mount can't change side, and our geometry gets no vote.
-            if (context.RequiredPierSide is PierSide requiredSide) {
-                if (requiredSide != side) {
+            if (context.Frame.RequiredPierSide is PierSide requiredSide)
+            {
+                if (requiredSide != side)
+                {
                     Verdict(target, side, hoursPastMeridian, $"pinned-{requiredSide}",
                         $"The server requires this frame on {requiredSide} and the mount is on {side}.");
                     return Task.FromResult(true);
@@ -60,7 +67,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
                 // Already on the pinned side. The server guarantees it holds for the whole exposure, so
                 // if our geometry disagrees the two sides have diverged and that's a fault. Returning
                 // true lets RunMeridianFlip report it with a reason that reaches the project's History.
-                if (willBreachOnCurrentSide) {
+                if (willBreachOnCurrentSide)
+                {
                     context.LogError(
                         $"Refusing {target.TargetName}: the server requires {requiredSide}, but the exposure " +
                         $"would cross this observatory's meridian limit there (hour angle " +
@@ -74,11 +82,13 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
             // refuses instead, and CheckTargetLimits explains why.
             if (!context.IsMeridianFlipEnabled) return Task.FromResult(false);
 
-            if (!willBreachOnCurrentSide) {
+            if (!willBreachOnCurrentSide)
+            {
                 // The limit is far off, or the mount is already on the side this target needs (true
                 // for the rest of the night once flipped). Only worth a line when the limit is in view.
                 if (mount.SecondsToMeridianLimit(coordinates) is double secondsToLimit
-                    && secondsToLimit <= window(target).TotalSeconds) {
+                    && secondsToLimit <= window(target).TotalSeconds)
+                {
                     Verdict(target, side, hoursPastMeridian, "settled",
                         "No flip, since the mount is already on the side of the pier this target needs.");
                 }
@@ -91,8 +101,10 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
         }
 
         private static string DescribeFlipReason(Mount mount, Coordinates coordinates,
-            double hoursPastMeridian, TimeSpan lookAhead) {
-            if (mount.WouldBreachMeridianOnCurrentSide(coordinates, TimeSpan.Zero)) {
+            double hoursPastMeridian, TimeSpan lookAhead)
+        {
+            if (mount.WouldBreachMeridianOnCurrentSide(coordinates, TimeSpan.Zero))
+            {
                 return hoursPastMeridian < 0
                     ? "Flipping because the target is east of the meridian, which this side of the pier cannot reach."
                     : "Flipping because the target is already past the limit for this side of the pier.";
@@ -102,7 +114,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
         }
 
         private void Verdict(AutopilotNextResponse target, PierSide side, double hoursPastMeridian,
-            string verdict, string explanation) {
+            string verdict, string explanation)
+        {
             string limit = context.Mount?.DescribeMeridianLimit() ?? "the meridian limit";
             string message =
                 $"Meridian flip check for {target.TargetName} ({Name}): hour angle {hoursPastMeridian * 60:F1} min " +
@@ -113,15 +126,20 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
             Announce($"{target.TargetName}|{side}|{verdict}", isWarning: false, message);
         }
 
-        private void Announce(string key, bool isWarning, string message) {
-            if (key == _lastVerdictKey) {
+        private void Announce(string key, bool isWarning, string message)
+        {
+            if (key == _lastVerdictKey)
+            {
                 context.LogDebug(message);
                 return;
             }
             _lastVerdictKey = key;
-            if (isWarning) {
+            if (isWarning)
+            {
                 context.LogWarning(message);
-            } else {
+            }
+            else
+            {
                 context.Log(message);
             }
         }

@@ -1,8 +1,10 @@
 ﻿using CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine {
-    public interface IComponent {
+namespace CosmicVaults.NINA.Astraeus.Engine
+{
+    public interface IComponent
+    {
         string DeviceType { get; }
         bool IsBusy { get; }
         Task Awake();

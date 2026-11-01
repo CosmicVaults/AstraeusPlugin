@@ -9,22 +9,26 @@ using System;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine {
+namespace CosmicVaults.NINA.Astraeus.Engine
+{
     public class SafetyMonitor(
         Observatory observatory,
         IWebSocketBus webSocketBus,
         ISafetyMonitorMediator mediator)
         : DeviceComponent<ISafetyMonitorVM, ISafetyMonitorConsumer, SafetyMonitorInfo>(mediator, observatory,
-            webSocketBus) {
+            webSocketBus)
+    {
         public override string DeviceType { get; } = "safetymonitor";
         public override string DisplayName { get; } = "Safety Monitor";
 
         public string DeviceName => (IsConnected ? Mediator.GetInfo().Name : null) ?? DisplayName;
 
-        public override WsMessage? GetUpdateMessage() {
+        public override WsMessage? GetUpdateMessage()
+        {
             if (!IsConnected || LastInfo == null)
                 return null;
-            SafetyMonitorPayload payload = new SafetyMonitorPayload {
+            SafetyMonitorPayload payload = new SafetyMonitorPayload
+            {
                 DeviceId = DeviceId,
                 IsSafe = LastInfo.IsSafe,
                 IsConnected = true
@@ -32,9 +36,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return new SafetyMonitorUpdate(payload, "dashboard");
         }
 
-        public override WsMessage? GetDeviceStaticInfo() {
+        public override WsMessage? GetDeviceStaticInfo()
+        {
             SafetyMonitorInfo info = mediator.GetInfo();
-            SafetyMonitorPayload payload = new SafetyMonitorPayload {
+            SafetyMonitorPayload payload = new SafetyMonitorPayload
+            {
                 DeviceId = info.DeviceId,
                 Name = info.Name,
                 IsConnected = info.Connected,
@@ -50,17 +56,22 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// don't lean on N.I.N.A. clearing IsSafe on disconnect. A read error counts as unsafe instead
         /// of escaping the watcher as a fault.
         /// </summary>
-        public bool IsSafe() {
-            try {
+        public bool IsSafe()
+        {
+            try
+            {
                 SafetyMonitorInfo info = Mediator.GetInfo();
                 return info.Connected && info.IsSafe;
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 LogDebug($"Could not read the safety monitor, so treating conditions as unsafe: {ex.Message}");
                 return false;
             }
         }
 
-        protected override Task HandleCommandAsync(WsCommand command) {
+        protected override Task HandleCommandAsync(WsCommand command)
+        {
             return Task.CompletedTask;
         }
     }

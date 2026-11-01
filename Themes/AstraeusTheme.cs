@@ -3,14 +3,16 @@ using System;
 using System.Collections.Generic;
 using System.Windows;
 
-namespace CosmicVaults.NINA.Astraeus.Themes {
+namespace CosmicVaults.NINA.Astraeus.Themes
+{
 
     /// <summary>
     /// Holds BrandTheme.xaml or NinaTheme.xaml by AstraeusThemeMode, for the options views to merge. Not
     /// exported, since N.I.N.A. merges every exported dictionary into the app's resources and the brand's
     /// implicit styles would spread over the whole app.
     /// </summary>
-    public class AstraeusTheme : ResourceDictionary {
+    public class AstraeusTheme : ResourceDictionary
+    {
 
         private const string BrandSource = "Themes/BrandTheme.xaml";
         private const string NinaSource = "Themes/NinaTheme.xaml";
@@ -19,7 +21,8 @@ namespace CosmicVaults.NINA.Astraeus.Themes {
         // a 700-line dictionary five times on load and five more on every toggle.
         private static readonly Dictionary<string, ResourceDictionary> Cache = new();
 
-        public AstraeusTheme() {
+        public AstraeusTheme()
+        {
             Apply();
             AstraeusThemeMode.Subscribe(this);
         }
@@ -28,14 +31,19 @@ namespace CosmicVaults.NINA.Astraeus.Themes {
         /// It runs again when the setting changes, and the toggle lands without reopening the page since
         /// the views use DynamicResource for every Ast.* key.
         /// </summary>
-        internal void Apply() {
+        internal void Apply()
+        {
             List<ResourceDictionary> dictionariesToMerge = new List<ResourceDictionary>();
 
-            if (AstraeusThemeMode.IsNinaThemeEnabled) {
-                try {
+            if (AstraeusThemeMode.IsNinaThemeEnabled)
+            {
+                try
+                {
                     dictionariesToMerge.Add(NinaBrushAliases.Build());
                     dictionariesToMerge.Add(Load(NinaSource));
-                } catch (Exception ex) {
+                }
+                catch (Exception ex)
+                {
                     // Every Ast.* key has to resolve or the page throws on load, so a broken N.I.N.A.
                     // theme falls back to the brand look instead of taking the options page down.
                     Logger.Error($"[Astraeus] Could not load the N.I.N.A. theme, keeping the Astraeus look: {ex}");
@@ -49,11 +57,13 @@ namespace CosmicVaults.NINA.Astraeus.Themes {
             foreach (ResourceDictionary dictionary in dictionariesToMerge) { MergedDictionaries.Add(dictionary); }
         }
 
-        private static ResourceDictionary Load(string relativePath) {
+        private static ResourceDictionary Load(string relativePath)
+        {
             if (Cache.TryGetValue(relativePath, out ResourceDictionary? cached)) { return cached; }
 
             // An absolute pack URI, since a dictionary built in code has no base URI for a relative one.
-            ResourceDictionary dictionary = new ResourceDictionary {
+            ResourceDictionary dictionary = new ResourceDictionary
+            {
                 Source = new Uri($"pack://application:,,,/CosmicVaults.NINA.Astraeus;component/{relativePath}",
                                  UriKind.Absolute)
             };

@@ -6,7 +6,8 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
+namespace CosmicVaults.NINA.Astraeus.Engine.Imaging
+{
     /// <summary>
     /// In-flight capture state for one frame, from its request to the save the caller awaits. Not
     /// thread-safe, since the camera runs one operation at a time and handles the swapping.
@@ -15,7 +16,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
         CaptureRequest request,
         CancellationToken componentToken,
         CancellationToken callerToken)
-        : IDisposable {
+        : IDisposable
+    {
         private readonly CancellationTokenSource _cancellationSource =
             CancellationTokenSource.CreateLinkedTokenSource(componentToken, callerToken);
         private readonly TaskCompletionSource<ImageSavedEventArgs?> _saved =
@@ -46,7 +48,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
         /// <summary>Completes when this frame's ImageSaved event has been handled.</summary>
         public Task<ImageSavedEventArgs?> Saved => _saved.Task;
 
-        public void RecordImageData(IImageData imageData) {
+        public void RecordImageData(IImageData imageData)
+        {
             ImageData = imageData;
             MetaData = imageData.MetaData;
         }
@@ -55,13 +58,15 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
 
         public void RecordSolveAttempt() => WasSolveAttempted = true;
 
-        public void RecordSolve(PlateSolveResult result, FrameWcs wcs) {
+        public void RecordSolve(PlateSolveResult result, FrameWcs wcs)
+        {
             SolveResult = result;
             _pendingWcs = wcs;
         }
 
         /// <summary>Takes the pending WCS, if any, and clears it so a solve goes into only one file.</summary>
-        public FrameWcs? TakePendingWcs() {
+        public FrameWcs? TakePendingWcs()
+        {
             FrameWcs? wcs = _pendingWcs;
             _pendingWcs = null;
             return wcs;
@@ -69,18 +74,21 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
 
         public void CompleteSave(ImageSavedEventArgs? eventArgs) => _saved.TrySetResult(eventArgs);
 
-        public void Cancel() {
+        public void Cancel()
+        {
             try { _cancellationSource.Cancel(); } catch (ObjectDisposedException) { }
         }
 
         /// <summary>For a frame that's superseded or torn down.</summary>
-        public void Abandon() {
+        public void Abandon()
+        {
             Cancel();
             _saved.TrySetCanceled();
         }
 
         /// <summary>Disposal always releases the awaiter, so nothing can wait on a dead operation.</summary>
-        public void Dispose() {
+        public void Dispose()
+        {
             _saved.TrySetCanceled();
             _cancellationSource.Dispose();
         }

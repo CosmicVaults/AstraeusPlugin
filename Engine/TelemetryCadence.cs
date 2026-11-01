@@ -5,13 +5,15 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine {
+namespace CosmicVaults.NINA.Astraeus.Engine
+{
     /// <summary>
     /// Who the server says is watching, and the one wake-up shared by everything that waits on it. The
     /// counts are zero while the socket is closed, so a dropped connection doesn't leave the plugin
     /// capturing for viewers it has lost.
     /// </summary>
-    public sealed class TelemetryCadence {
+    public sealed class TelemetryCadence
+    {
         /// <summary>
         /// Tick while something is moving (a slew, focus move, rotation or filter change) so the screen
         /// keeps up with the hardware. Exposing doesn't count, since the dashboard counts exposures down
@@ -45,7 +47,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
         // Presence isn't logged. Who is watching and when is about the user, not the observatory,
         // and logs get pasted into forum posts.
-        public TelemetryCadence(IWebSocketBus bus, TimeProvider clock) {
+        public TelemetryCadence(IWebSocketBus bus, TimeProvider clock)
+        {
             _clock = clock;
             bus.CommandReceived += OnCommandReceived;
             bus.Connected += OnConnected;
@@ -72,8 +75,10 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// The gap between frames while somebody is watching. The server's tickRateMs is a ceiling we may go
         /// slower than, and the busy tick is the one agreed exception.
         /// </summary>
-        public TimeSpan CurrentInterval {
-            get {
+        public TimeSpan CurrentInterval
+        {
+            get
+            {
                 TimeSpan serverTick = TimeSpan.FromTicks(Volatile.Read(ref _serverTickTicks));
                 return IsBusy && BusyTick < serverTick ? BusyTick : serverTick;
             }
@@ -98,9 +103,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Returns what until said last.
         /// </summary>
         public async Task<bool> WaitUntilAsync(Func<bool> until, TimeSpan timeout,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken)
+        {
             DateTime deadline = _clock.GetUtcNow().UtcDateTime + timeout;
-            while (true) {
+            while (true)
+            {
                 Task changed = Changed;
                 if (until()) return true;
                 TimeSpan remaining = deadline - _clock.GetUtcNow().UtcDateTime;
@@ -112,7 +119,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// <summary>
         /// The delay is worked out after the signal is captured, so its inputs can't change unnoticed in between.
         /// </summary>
-        public async Task WaitAsync(Func<TimeSpan> timeout, CancellationToken cancellationToken) {
+        public async Task WaitAsync(Func<TimeSpan> timeout, CancellationToken cancellationToken)
+        {
             Task changed = Changed;
             TimeSpan delay = timeout();
             if (delay <= TimeSpan.Zero) return;
@@ -121,12 +129,14 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
         /// <summary>True when the change came first, false when the delay ran out. Throws on cancellation.</summary>
         private async Task<bool> WaitForChangeAsync(Task changed, TimeSpan delay,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken)
+        {
             using CancellationTokenSource delayCancellationSource =
                 CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             Task delayTask = Task.Delay(delay, _clock, delayCancellationSource.Token);
             Task winner = await Task.WhenAny(changed, delayTask);
-            if (winner == delayTask) {
+            if (winner == delayTask)
+            {
                 cancellationToken.ThrowIfCancellationRequested();
                 return false;
             }
@@ -141,14 +151,16 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         // trip, and they were already reset on the previous Disconnected.
         private void OnConnected() => Signal();
 
-        private void OnDisconnected() {
+        private void OnDisconnected()
+        {
             Volatile.Write(ref _subscribers, 0);
             Volatile.Write(ref _feedSubscribers, 0);
             Volatile.Write(ref _serverTickTicks, DefaultTick.Ticks);
             Signal();
         }
 
-        private void OnCommandReceived(WsCommand command) {
+        private void OnCommandReceived(WsCommand command)
+        {
             if (!command.Device.Equals("system", StringComparison.OrdinalIgnoreCase)) return;
             if (!command.Action.Equals("presence", StringComparison.OrdinalIgnoreCase)) return;
 
@@ -169,14 +181,16 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             Signal();
         }
 
-        private static int ReadCount(JsonElement payload, string name, int fallback) {
+        private static int ReadCount(JsonElement payload, string name, int fallback)
+        {
             if (payload.TryGetProperty(name, out JsonElement value) &&
                 value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out int count))
                 return Math.Max(0, count);
             return fallback;
         }
 
-        private static TimeSpan Clamp(TimeSpan value) {
+        private static TimeSpan Clamp(TimeSpan value)
+        {
             if (value < MinTick) return MinTick;
             if (value > MaxTick) return MaxTick;
             return value;

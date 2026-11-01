@@ -31,21 +31,26 @@ using NINA.Image.Interfaces;
 using NINA.PlateSolving.Interfaces;
 using NINA.Profile;
 using NINA.Profile.Interfaces;
+using NINA.Sequencer.Interfaces.Mediator;
 using NINA.WPF.Base.Interfaces.Mediator;
 using NINA.WPF.Base.Interfaces.ViewModel;
 
-namespace CosmicVaults.NINA.Astraeus.Tests.Helpers {
+namespace CosmicVaults.NINA.Astraeus.Tests.Helpers
+{
     /// <summary>
     /// N.I.N.A. around the real plugin, as Astraeus.cs builds it on load: N.I.N.A.'s services as Moq mocks,
     /// its real settings store with nothing behind it, and each device's readings as a plain info object
     /// the test can set. The Observatory is built but never woken or started, so nothing here reaches a
     /// device, a file or the server.
     /// </summary>
-    internal sealed class FakeNina {
+    internal sealed class FakeNina
+    {
         public static readonly Guid PluginGuid = new Guid("fd1225f8-142d-4cab-9262-8f423822d905");
 
-        // N.I.N.A.'s real store, which is only dictionaries underneath. Nothing reaches a profile file.
-        public PluginSettings PluginSettings { get; } = new PluginSettings();
+        public static readonly Guid ProfileId = new Guid("6f0c2b9e-4d71-4a3e-b8f5-1c9e7d2a5b40");
+
+        // N.I.N.A.'s real store for the active profile, which is only dictionaries underneath. Nothing reaches a profile file.
+        public PluginSettings PluginSettings { get; private set; } = new PluginSettings();
         public FakeWebSocketBus Bus { get; } = new FakeWebSocketBus();
 
         /// <summary>The plugin's clock. Advance it instead of waiting.</summary>
@@ -57,6 +62,9 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Helpers {
         // Auto-mocking, so every settings object the profile hands out exists without a setup each.
         public Mock<IProfileService> ProfileService { get; } = new Mock<IProfileService> { DefaultValue = DefaultValue.Mock };
         public Mock<IOptionsVM> OptionsViewModel { get; } = new();
+        // A real collection, because the auto-mock's one drops everything added to it.
+        public AsyncObservableCollection<ProfileMeta> Profiles { get; } = new();
+        public Mock<ISequenceMediator> SequenceMediator { get; } = new();
 
         public Mock<ITelescopeMediator> TelescopeMediator { get; } = new();
         public Mock<ICameraMediator> CameraMediator { get; } = new();
@@ -98,7 +106,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Helpers {
         /// <summary>Raised for every command the fake drivers log, so a test can react mid-sequence.</summary>
         public event Action<string>? CommandIssued;
 
-        private void Issue(string command) {
+        private void Issue(string command)
+        {
             Commands.Add(command);
             CommandIssued?.Invoke(command);
         }
@@ -120,9 +129,13 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Helpers {
         public Guider Guider => Observatory.GetComponent<Guider>();
         public Camera Camera => Observatory.GetComponent<Camera>();
 
-        public FakeNina() {
+        public FakeNina()
+        {
             IProfile profile = ProfileService.Object.ActiveProfile;
             Mock.Get(profile).Setup(activeProfile => activeProfile.PluginSettings).Returns(PluginSettings);
+            Mock.Get(profile).Setup(activeProfile => activeProfile.Id).Returns(ProfileId);
+            Profiles.Add(new ProfileMeta { Id = ProfileId, Name = "Profile A", IsActive = true });
+            ProfileService.Setup(service => service.Profiles).Returns(Profiles);
             // The Settings component enumerates and subscribes to this on Start, so it has to be a real collection.
             Mock.Get(profile.FilterWheelSettings).Setup(settings => settings.FilterWheelFilters)
                 .Returns(new ObserveAllCollection<FilterInfo>());
@@ -141,19 +154,22 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Helpers {
 
             // The fake drivers obey at once and log what they were told, so a test reads the commands in
             // order and no stop waits out the plugin's settle time.
-            TelescopeMediator.Setup(mediator => mediator.StopSlew()).Callback(() => {
+            TelescopeMediator.Setup(mediator => mediator.StopSlew()).Callback(() =>
+            {
                 Issue("mount: StopSlew");
                 TelescopeInfo.Slewing = false;
             });
             TelescopeMediator
                 .Setup(mediator => mediator.SetTrackingEnabled(It.IsAny<bool>()))
-                .Callback<bool>(isEnabled => {
+                .Callback<bool>(isEnabled =>
+                {
                     LogMountTracking(isEnabled);
                     TelescopeInfo.TrackingEnabled = isEnabled;
                 })
                 .Returns(true);
             FlatDeviceMediator.Setup(mediator => mediator.CloseCover(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
-                .Callback(() => {
+                .Callback(() =>
+                {
                     Issue("flat panel: CloseCover");
                     FlatDeviceInfo.CoverState = CoverState.Closed;
                 })
@@ -179,6 +195,7 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Helpers {
                 GuiderMediator.Object,
                 DomeFollower.Object,
                 NighttimeCalculator.Object,
+                sequenceRunner: new SequenceRunner(SequenceMediator.Object),
                 clock: Clock,
                 serverHandler: Server);
             Observatory.EventReported += Alerts.Add;
@@ -203,7 +220,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Helpers {
         ///////////// Devices as N.I.N.A. would report them /////////////
 
         /// <summary>The mount's state. Disconnected when isConnected is false, whatever the rest says.</summary>
-        public void SetMount(bool isConnected, bool isParked = false, bool isTracking = false, bool isSlewing = false) {
+        public void SetMount(bool isConnected, bool isParked = false, bool isTracking = false, bool isSlewing = false)
+        {
             TelescopeInfo.Connected = isConnected;
             TelescopeInfo.AtPark = isParked;
             TelescopeInfo.TrackingEnabled = isTracking;
@@ -214,40 +232,46 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Helpers {
         }
 
         /// <summary>The dome connected with the shutter reading this, or disconnected when null.</summary>
-        public void SetRoof(ShutterState? shutter) {
+        public void SetRoof(ShutterState? shutter)
+        {
             DomeInfo.Connected = shutter != null;
             DomeInfo.ShutterStatus = shutter ?? ShutterState.ShutterNone;
             Dome.IsConnected = shutter != null;
         }
 
         /// <summary>The safety monitor connected and reading this, or disconnected when null.</summary>
-        public void SetSafety(bool? isSafe) {
+        public void SetSafety(bool? isSafe)
+        {
             SafetyMonitorInfo.Connected = isSafe != null;
             SafetyMonitorInfo.IsSafe = isSafe ?? false;
             SafetyMonitor.IsConnected = isSafe != null;
         }
 
         /// <summary>The camera connected, with a driver that logs an aborted exposure, or disconnected.</summary>
-        public void SetCamera(bool isConnected) {
+        public void SetCamera(bool isConnected)
+        {
             CameraInfo.Connected = isConnected;
             Camera.IsConnected = isConnected;
             CameraMediator.Setup(mediator => mediator.AbortExposure()).Callback(() => Issue("camera: AbortExposure"));
         }
 
         /// <summary>The guider connected, with a driver that stops guiding at once, or disconnected.</summary>
-        public void SetGuider(bool isConnected) {
+        public void SetGuider(bool isConnected)
+        {
             GuiderInfo.Connected = isConnected;
             Guider.IsConnected = isConnected;
             GuiderMediator
                 .Setup(mediator => mediator.StopGuiding(It.IsAny<CancellationToken>()))
-                .Returns(() => {
+                .Returns(() =>
+                {
                     Issue("guider: StopGuiding");
                     return Task.FromResult(true);
                 });
         }
 
         /// <summary>The flat panel connected with its cover reading this, or disconnected when null.</summary>
-        public void SetFlatPanel(CoverState? cover) {
+        public void SetFlatPanel(CoverState? cover)
+        {
             FlatDeviceInfo.Connected = cover != null;
             FlatDeviceInfo.SupportsOpenClose = cover is not null and not CoverState.NotPresent;
             FlatDeviceInfo.CoverState = cover ?? CoverState.Unknown;
@@ -255,15 +279,24 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Helpers {
         }
 
         /// <summary>N.I.N.A.'s "Refuse unsafe shutter move" dome setting, which makes it refuse to move the shutter over an unparked mount.</summary>
-        public void SetNinaRefusesShutterMoveWithUnparkedMount(bool value) {
+        public void SetNinaRefusesShutterMoveWithUnparkedMount(bool value)
+        {
             IDomeSettings settings = ProfileService.Object.ActiveProfile.DomeSettings;
             Mock.Get(settings).Setup(dome => dome.RefuseUnsafeShutterMove).Returns(value);
         }
 
         /// <summary>N.I.N.A.'s "Close on unsafe" dome setting.</summary>
-        public void SetNinaClosesRoofOnUnsafe(bool value) {
+        public void SetNinaClosesRoofOnUnsafe(bool value)
+        {
             IDomeSettings settings = ProfileService.Object.ActiveProfile.DomeSettings;
             Mock.Get(settings).Setup(dome => dome.CloseOnUnsafe).Returns(value);
+        }
+
+        /// <summary>N.I.N.A.'s advanced sequencer running or not, as the plugin's sequence check reads it.</summary>
+        public void SetNinaSequenceRunning(bool isRunning)
+        {
+            SequenceMediator.Setup(mediator => mediator.Initialized).Returns(true);
+            SequenceMediator.Setup(mediator => mediator.IsAdvancedSequenceRunning()).Returns(isRunning);
         }
 
         ///////////// Reconnects /////////////
@@ -272,37 +305,42 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Helpers {
         /// The night under way with auto-connect on and the dome configured, so a dome that drops gets the autopilot's one
         /// reconnect, answered by the given connect.
         /// </summary>
-        public void LetDomeReconnect(Context context, Func<bool> connect) {
-            context.IsStartupComplete = true;
+        public void LetDomeReconnect(Context context, Func<bool> connect)
+        {
+            context.Night.IsStartupComplete = true;
             Settings.SetShouldAutoConnectEquipment(true);
             Dome.SetDefaultDevice("Dome 1", "test");
             Dome.ConnectDevice = _ => Task.FromResult(connect());
         }
 
         /// <summary>The same for the safety monitor.</summary>
-        public void LetSafetyMonitorReconnect(Context context, Func<bool> connect) {
-            context.IsStartupComplete = true;
+        public void LetSafetyMonitorReconnect(Context context, Func<bool> connect)
+        {
+            context.Night.IsStartupComplete = true;
             Settings.SetShouldAutoConnectEquipment(true);
             SafetyMonitor.SetDefaultDevice("Monitor 1", "test");
             SafetyMonitor.ConnectDevice = _ => Task.FromResult(connect());
         }
 
         /// <summary>N.I.N.A.'s meridian flip settings, which the meridian limit is read from.</summary>
-        public void SetMeridianLimit(double maxMinutesAfterMeridian, double pauseMinutesBeforeMeridian = 0) {
+        public void SetMeridianLimit(double maxMinutesAfterMeridian, double pauseMinutesBeforeMeridian = 0)
+        {
             IMeridianFlipSettings settings = ProfileService.Object.ActiveProfile.MeridianFlipSettings;
             Mock.Get(settings).Setup(flip => flip.MaxMinutesAfterMeridian).Returns(maxMinutesAfterMeridian);
             Mock.Get(settings).Setup(flip => flip.PauseTimeBeforeMeridian).Returns(pauseMinutesBeforeMeridian);
         }
 
         /// <summary>A custom horizon in N.I.N.A.'s standard format, one "azimuth altitude" pair per line.</summary>
-        public void SetCustomHorizon(string standardFormat) {
+        public void SetCustomHorizon(string standardFormat)
+        {
             IAstrometrySettings settings = ProfileService.Object.ActiveProfile.AstrometrySettings;
             Mock.Get(settings).Setup(astrometry => astrometry.Horizon)
                 .Returns(CustomHorizon.FromReader_Standard(new StringReader(standardFormat)));
         }
 
         /// <summary>What the night-time calculator reports for today: the sun's, nautical and astronomical set and rise.</summary>
-        public void SetTwilight(RiseAndSetEvent sun, RiseAndSetEvent nautical, RiseAndSetEvent astronomical) {
+        public void SetTwilight(RiseAndSetEvent sun, RiseAndSetEvent nautical, RiseAndSetEvent astronomical)
+        {
             DateTime date = Clock.GetUtcNow().UtcDateTime.Date;
             NighttimeData data = new NighttimeData(date, date, AstroUtil.MoonPhase.Unknown, null,
                 twilightRiseAndSet: astronomical, nauticalTwilightRiseAndSet: nautical, sunRiseAndSet: sun,
@@ -322,10 +360,12 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Helpers {
         public void MountParksAtOnce() => MountParkAnswers(true, isAtPark: true);
 
         /// <summary>A mount driver whose park call answers as given and leaves the mount as given, logged as "mount: Park".</summary>
-        public void MountParkAnswers(bool answer, bool isAtPark = false, bool isSlewing = false) {
+        public void MountParkAnswers(bool answer, bool isAtPark = false, bool isSlewing = false)
+        {
             TelescopeMediator
                 .Setup(mediator => mediator.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
-                .Returns(() => {
+                .Returns(() =>
+                {
                     Issue("mount: Park");
                     TelescopeInfo.AtPark = isAtPark;
                     TelescopeInfo.Slewing = isSlewing;
@@ -338,10 +378,12 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Helpers {
         /// A mount driver whose park keeps slewing until FinishPark, or until the park is cancelled, which it answers by
         /// throwing like N.I.N.A.'s own wait does.
         /// </summary>
-        public void MountParksSlowly() {
+        public void MountParksSlowly()
+        {
             TelescopeMediator
                 .Setup(mediator => mediator.ParkTelescope(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
-                .Returns<IProgress<ApplicationStatus>, CancellationToken>((_, token) => {
+                .Returns<IProgress<ApplicationStatus>, CancellationToken>((_, token) =>
+                {
                     Issue("mount: Park");
                     TelescopeInfo.Slewing = true;
                     TaskCompletionSource<bool> park = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -354,7 +396,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Helpers {
         private TaskCompletionSource<bool>? _pendingPark;
 
         /// <summary>The slow park reaches the park position and the driver answers true.</summary>
-        public void FinishPark() {
+        public void FinishPark()
+        {
             SetMount(isConnected: true, isParked: true);
             _pendingPark?.TrySetResult(true);
         }
@@ -370,10 +413,12 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Helpers {
         /// </summary>
         public void RoofClosesButStillReadsOpen() => RoofCloseLeavesTheShutter(ShutterState.ShutterOpen);
 
-        private void RoofCloseLeavesTheShutter(ShutterState shutter) {
+        private void RoofCloseLeavesTheShutter(ShutterState shutter)
+        {
             DomeMediator
                 .Setup(mediator => mediator.CloseShutter(It.IsAny<CancellationToken>()))
-                .Returns(() => {
+                .Returns(() =>
+                {
                     Issue("dome: CloseShutter");
                     DomeInfo.ShutterStatus = shutter;
                     return Task.FromResult(true);
@@ -384,14 +429,45 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Helpers {
         public void RoofOpensAtOnce() => RoofOpenLeavesTheShutter(ShutterState.ShutterOpen);
 
         /// <summary>A dome driver that answers the open with "done" and leaves the shutter reading as given.</summary>
-        public void RoofOpenLeavesTheShutter(ShutterState shutter) {
+        public void RoofOpenLeavesTheShutter(ShutterState shutter)
+        {
             DomeMediator
                 .Setup(mediator => mediator.OpenShutter(It.IsAny<CancellationToken>()))
-                .Returns(() => {
+                .Returns(() =>
+                {
                     Issue("dome: OpenShutter");
                     DomeInfo.ShutterStatus = shutter;
                     return Task.FromResult(true);
                 });
+        }
+
+        ///////////// Drivers that disconnect /////////////
+
+        /// <summary>A mount driver that disconnects at once, logged as "mount: Disconnect".</summary>
+        public void MountDisconnectsAtOnce() => MountDisconnectLeaves(isConnected: false);
+
+        /// <summary>A mount driver that answers the disconnect and stays connected, logged as "mount: Disconnect".</summary>
+        public void MountRefusesToDisconnect() => MountDisconnectLeaves(isConnected: true);
+
+        private void MountDisconnectLeaves(bool isConnected)
+        {
+            TelescopeMediator.Setup(mediator => mediator.Disconnect()).Returns(() =>
+            {
+                Issue("mount: Disconnect");
+                TelescopeInfo.Connected = isConnected;
+                return Task.CompletedTask;
+            });
+        }
+
+        /// <summary>A camera driver that disconnects at once, logged as "camera: Disconnect".</summary>
+        public void CameraDisconnectsAtOnce()
+        {
+            CameraMediator.Setup(mediator => mediator.Disconnect()).Returns(() =>
+            {
+                Issue("camera: Disconnect");
+                CameraInfo.Connected = false;
+                return Task.CompletedTask;
+            });
         }
 
         ///////////// Drivers that misbehave /////////////
@@ -412,7 +488,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Helpers {
         /// A mount driver that acknowledges a tracking stop and does nothing about it, so the plugin's settle
         /// runs out. The command is still logged.
         /// </summary>
-        public void MountIgnoresTrackingStops() {
+        public void MountIgnoresTrackingStops()
+        {
             TelescopeMediator
                 .Setup(mediator => mediator.SetTrackingEnabled(It.IsAny<bool>()))
                 .Callback<bool>(isEnabled => LogMountTracking(isEnabled))
@@ -422,13 +499,69 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Helpers {
         private void LogMountTracking(bool isEnabled) =>
             Issue($"mount: SetTrackingEnabled({(isEnabled ? "true" : "false")})");
 
+        ///////////// Profiles /////////////
+
+        /// <summary>Another profile in N.I.N.A.'s list, not active.</summary>
+        public ProfileMeta AddProfile(string name)
+        {
+            ProfileMeta meta = new ProfileMeta { Id = Guid.NewGuid(), Name = name };
+            Profiles.Add(meta);
+            return meta;
+        }
+
+        /// <summary>
+        /// Makes this profile the active one with an empty settings store. Raises nothing. The profile left
+        /// behind keeps its own store.
+        /// </summary>
+        public void SwitchActiveProfile(ProfileMeta meta)
+        {
+            Mock<IProfile> profile = new Mock<IProfile> { DefaultValue = DefaultValue.Mock };
+            PluginSettings = new PluginSettings();
+            profile.Setup(activeProfile => activeProfile.Id).Returns(meta.Id);
+            profile.Setup(activeProfile => activeProfile.PluginSettings).Returns(PluginSettings);
+            Mock.Get(profile.Object.FilterWheelSettings).Setup(settings => settings.FilterWheelFilters)
+                .Returns(new ObserveAllCollection<FilterInfo>());
+            ProfileService.Setup(service => service.ActiveProfile).Returns(profile.Object);
+            foreach (ProfileMeta each in Profiles) each.IsActive = each.Id == meta.Id;
+        }
+
+        /// <summary>
+        /// SelectProfile as N.I.N.A. runs it: the profile becomes active, ProfileChanged is raised with the old
+        /// and new profile, and it answers true. Logged as "profile: SelectProfile".
+        /// </summary>
+        public void LetSelectProfileSucceed()
+        {
+            ProfileService.Setup(service => service.SelectProfile(It.IsAny<ProfileMeta>()))
+                .Returns<ProfileMeta>(meta =>
+                {
+                    Issue("profile: SelectProfile");
+                    IProfile oldProfile = ProfileService.Object.ActiveProfile;
+                    SwitchActiveProfile(meta);
+                    ProfileService.Raise(service => service.ProfileChanged += null,
+                        new ProfileChangedEventArgs(oldProfile, ProfileService.Object.ActiveProfile));
+                    return true;
+                });
+        }
+
+        /// <summary>A SelectProfile that changes nothing and answers false, as for a profile open in another N.I.N.A.</summary>
+        public void LetSelectProfileFail()
+        {
+            ProfileService.Setup(service => service.SelectProfile(It.IsAny<ProfileMeta>()))
+                .Returns(() =>
+                {
+                    Issue("profile: SelectProfile");
+                    return false;
+                });
+        }
+
         ///////////// The clock /////////////
 
         /// <summary>
         /// The clock at this local time on the night of 1 March, with sunset 18:00, nautical dusk 19:00, astronomical dusk
         /// 20:00, and the dawns at 04:00, 05:00 and 06:00 the next morning.
         /// </summary>
-        public void SetTypicalNight(DateTime localNow) {
+        public void SetTypicalNight(DateTime localNow)
+        {
             Clock.SetUtcNow(new DateTimeOffset(localNow, TimeSpan.Zero));
             SetTwilight(
                 sun: new FixedRiseAndSet(set: new DateTime(2026, 3, 1, 18, 0, 0), rise: new DateTime(2026, 3, 2, 6, 0, 0)),
@@ -439,14 +572,19 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Helpers {
         /// <summary>
         /// Moves the clock in steps until the task finishes or the budget is spent, yielding a millisecond of real
         /// time between steps so the code under test can schedule its next wait. Returns whether it finished.
+        /// A timer that fires on the last step still has its continuations to run, so the task gets a short grace
+        /// of real time after the budget before it is judged. The clock does not move during the grace.
         /// </summary>
-        public async Task<bool> AdvanceUntilAsync(Task task, TimeSpan step, TimeSpan budget) {
+        public async Task<bool> AdvanceUntilAsync(Task task, TimeSpan step, TimeSpan budget)
+        {
             TimeSpan advanced = TimeSpan.Zero;
-            while (!task.IsCompleted && advanced < budget) {
+            while (!task.IsCompleted && advanced < budget)
+            {
                 Clock.Advance(step);
                 advanced += step;
                 await Task.Delay(1);
             }
+            for (int wait = 0; wait < 10 && !task.IsCompleted; wait++) await Task.Delay(10);
             return task.IsCompleted;
         }
     }

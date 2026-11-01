@@ -8,14 +8,16 @@ using CosmicVaults.NINA.Astraeus.Engine.Autopilot;
 using NINA.Astrometry;
 using NINA.Equipment.Interfaces;
 
-namespace CosmicVaults.NINA.Astraeus.Tests.Helpers {
+namespace CosmicVaults.NINA.Astraeus.Tests.Helpers
+{
     /// <summary>
-    /// A night under way on the real state machine, with the real abort routes and every state they lead to, driven by
-    /// the clock. The imaging chain is one state playing "exposing". The night starts at 22:00 with the roof open, the
+    /// A night under way on the real state machine, with the real default edges and exits and every state they lead to,
+    /// driven by the clock. The imaging chain is one state playing "exposing". The night starts at 22:00 with the roof open, the
     /// mount tracking at RA 6 h 40 min, the guider and camera connected, conditions safe, the session started, and
     /// drivers that park, close and open at once.
     /// </summary>
-    internal sealed class NightScenario {
+    internal sealed class NightScenario
+    {
         private static readonly TimeSpan Soon = TimeSpan.FromSeconds(5);
         private readonly RoofMode _roofMode;
         private readonly CancellationTokenSource _switch = new();
@@ -25,7 +27,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Helpers {
         public List<string> Trace { get; } = new();
         public Task Run { get; private set; } = Task.CompletedTask;
 
-        public NightScenario(RoofMode roofMode = RoofMode.Operate) {
+        public NightScenario(RoofMode roofMode = RoofMode.Operate)
+        {
             _roofMode = roofMode;
             Nina.SetTypicalNight(new DateTime(2026, 3, 1, 22, 0, 0));
             Nina.Settings.SetAutopilotRoofMode(roofMode);
@@ -52,22 +55,25 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Helpers {
         /// The session is opened first, since that resets the night's flags, and the flags are then set as a night in
         /// progress has them.
         /// </summary>
-        public async Task StartAsync(StateBase? initial = null) {
+        public async Task StartAsync(StateBase? initial = null)
+        {
             await Context.StartSessionAsync();
-            Context.IsStartupComplete = true;
-            Context.IsRoofExpectedOpen = _roofMode != RoofMode.Ignore;
-            Context.IsRoofUnderAutopilotControl = _roofMode == RoofMode.Operate;
-            Context.HasOpenedRoofTonight = _roofMode == RoofMode.Operate;
+            Context.Night.IsStartupComplete = true;
+            Context.Roof.IsExpectedOpen = _roofMode != RoofMode.Ignore;
+            Context.Roof.IsUnderAutopilotControl = _roofMode == RoofMode.Operate;
+            Context.Roof.HasOpenedTonight = _roofMode == RoofMode.Operate;
             AutopilotStates states = new AutopilotStates(Context);
             states.WireTransitions();
-            Run = new StateMachine(Context).RunAsync(initial ?? new ExposingState("Exposing", Trace), states.CreateAbortRoutes(),
-                _switch.Token);
+            Run = new StateMachine(Context).RunAsync(
+                states.CreateRoutes() with { Entry = initial ?? new ExposingState("Exposing", Trace) }, _switch.Token);
         }
 
         /// <summary>Moves the clock in steps until the condition holds, the machine ends or the budget is spent.</summary>
-        public async Task<bool> AdvanceUntilAsync(Func<bool> condition, TimeSpan step, TimeSpan budget) {
+        public async Task<bool> AdvanceUntilAsync(Func<bool> condition, TimeSpan step, TimeSpan budget)
+        {
             TimeSpan advanced = TimeSpan.Zero;
-            while (!condition() && !Run.IsCompleted && advanced < budget) {
+            while (!condition() && !Run.IsCompleted && advanced < budget)
+            {
                 Nina.Clock.Advance(step);
                 advanced += step;
                 await Task.Delay(1);
@@ -76,7 +82,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Helpers {
         }
 
         /// <summary>Switches the autopilot off, as the observer would, and waits for the machine to wind down.</summary>
-        public async Task SwitchOffAsync() {
+        public async Task SwitchOffAsync()
+        {
             _switch.Cancel();
             await Run.WaitAsync(Soon);
         }

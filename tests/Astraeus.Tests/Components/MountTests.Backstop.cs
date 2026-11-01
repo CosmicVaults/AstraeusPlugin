@@ -5,14 +5,17 @@ using CosmicVaults.NINA.Astraeus.Engine;
 using CosmicVaults.NINA.Astraeus.Tests.Helpers;
 using NUnit.Framework;
 
-namespace CosmicVaults.NINA.Astraeus.Tests.Components {
+namespace CosmicVaults.NINA.Astraeus.Tests.Components
+{
     // The limit backstop outside the autopilot, on the same fixture as the rest of the mount.
-    public partial class MountTests {
+    public partial class MountTests
+    {
         private const string BackstopHeadline = "Mount limit reached outside the autopilot.";
 
         // A mount tracking with limits on and a 30° altitude floor, at the given altitude, with a position to judge. The
         // sidereal time is pinned, since it comes from a native library the test box doesn't have.
-        private static FakeNina TrackingAt(double altitudeDegrees, bool isSlewing = false) {
+        private static FakeNina TrackingAt(double altitudeDegrees, bool isSlewing = false)
+        {
             FakeNina nina = new FakeNina();
             nina.Settings.SetIsMountLimitEnabled(true);
             nina.Settings.SetIsAltitudeLimitEnabled(true);
@@ -28,7 +31,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         // A mount tracking below the altitude floor with nobody driving it is stopped and reported once, since the driver
         // may have no limit of its own and nothing else is watching.
         [Test]
-        public async Task AMountTrackingBelowTheAltitudeLimitIsStoppedAndReportedOnce() {
+        public async Task AMountTrackingBelowTheAltitudeLimitIsStoppedAndReportedOnce()
+        {
             FakeNina nina = TrackingAt(20);
 
             await nina.Mount.LateUpdate();
@@ -46,7 +50,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         // A slew in progress is judged on arrival. Its target passed the check that let it start, and the path a driver
         // takes to get there is the driver's concern, so a low reading on the way is not a breach and nothing is stopped.
         [Test]
-        public async Task AMountSlewingThroughALowAltitudeIsLeftToFinish() {
+        public async Task AMountSlewingThroughALowAltitudeIsLeftToFinish()
+        {
             FakeNina nina = TrackingAt(4.9, isSlewing: true);
 
             await nina.Mount.LateUpdate();
@@ -59,7 +64,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         // stopped and reported like any tracking mount.
         [TestCase(70, false)]
         [TestCase(20, true)]
-        public async Task AMountIsJudgedWhereItsSlewEnds(double arrivalAltitude, bool isStopped) {
+        public async Task AMountIsJudgedWhereItsSlewEnds(double arrivalAltitude, bool isStopped)
+        {
             FakeNina nina = TrackingAt(4.9, isSlewing: true);
             await nina.Mount.LateUpdate();
             nina.TelescopeInfo.Slewing = false;

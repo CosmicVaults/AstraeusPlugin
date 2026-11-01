@@ -7,9 +7,11 @@ using CosmicVaults.NINA.Astraeus.Tests.Helpers;
 using Microsoft.Extensions.Time.Testing;
 using NUnit.Framework;
 
-namespace CosmicVaults.NINA.Astraeus.Tests {
+namespace CosmicVaults.NINA.Astraeus.Tests
+{
     [TestFixture]
-    public class TelemetryCadenceTests {
+    public class TelemetryCadenceTests
+    {
         // A cap on waits that should end at once, so a regression fails instead of hanging the run.
         private static readonly TimeSpan Soon = TimeSpan.FromSeconds(5);
 
@@ -24,10 +26,12 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
 
         // Nobody is watching until the server says so, so a fresh plugin publishes nothing and ticks at the default.
         [Test]
-        public void NobodyIsWatchingUntilTheServerSaysSo() {
+        public void NobodyIsWatchingUntilTheServerSaysSo()
+        {
             TelemetryCadence cadence = Cadence(new FakeWebSocketBus());
 
-            Assert.Multiple(() => {
+            Assert.Multiple(() =>
+            {
                 Assert.That(cadence.Subscribers, Is.Zero);
                 Assert.That(cadence.FeedSubscribers, Is.Zero);
                 Assert.That(cadence.ShouldPublish, Is.False);
@@ -38,13 +42,15 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
 
         // The server's presence message is what turns telemetry on and sets its pace.
         [Test]
-        public void APresenceMessageSetsTheCountsAndTheTick() {
+        public void APresenceMessageSetsTheCountsAndTheTick()
+        {
             FakeWebSocketBus bus = new FakeWebSocketBus();
             TelemetryCadence cadence = Cadence(bus);
 
             bus.Receive(Presence("""{"subscribers": 3, "feedSubscribers": 1, "tickRateMs": 500}"""));
 
-            Assert.Multiple(() => {
+            Assert.Multiple(() =>
+            {
                 Assert.That(cadence.Subscribers, Is.EqualTo(3));
                 Assert.That(cadence.FeedSubscribers, Is.EqualTo(1));
                 Assert.That(cadence.ShouldPublish, Is.True);
@@ -55,7 +61,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
 
         // An older server sends one count, and treating everyone as a webcam viewer keeps the feed working with it.
         [Test]
-        public void WithoutAFeedCountEveryViewerCountsAsAFeedViewer() {
+        public void WithoutAFeedCountEveryViewerCountsAsAFeedViewer()
+        {
             FakeWebSocketBus bus = new FakeWebSocketBus();
             TelemetryCadence cadence = Cadence(bus);
 
@@ -66,7 +73,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
 
         // A server bug sending a negative count must not read as "somebody is watching".
         [Test]
-        public void ANegativeCountReadsAsZero() {
+        public void ANegativeCountReadsAsZero()
+        {
             FakeWebSocketBus bus = new FakeWebSocketBus();
             TelemetryCadence cadence = Cadence(bus);
 
@@ -79,7 +87,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
         // A tick the server gets wrong must neither flood the loop nor wedge it, so it is held between 100 ms and 60 s.
         [TestCase(10, 100)]
         [TestCase(600000, 60000)]
-        public void TheTickIsClampedToASaneRange(int tickRateMs, int expectedMs) {
+        public void TheTickIsClampedToASaneRange(int tickRateMs, int expectedMs)
+        {
             FakeWebSocketBus bus = new FakeWebSocketBus();
             TelemetryCadence cadence = Cadence(bus);
 
@@ -90,7 +99,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
 
         // A tick that isn't a number is ignored rather than resetting the pace, so a malformed keepalive changes nothing.
         [Test]
-        public void ATickThatIsNotANumberKeepsThePreviousTick() {
+        public void ATickThatIsNotANumberKeepsThePreviousTick()
+        {
             FakeWebSocketBus bus = new FakeWebSocketBus();
             TelemetryCadence cadence = Cadence(bus);
             bus.Receive(Presence("""{"subscribers": 1, "tickRateMs": 500}"""));
@@ -103,7 +113,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
         // While something moves the screen must keep up, but busy may only speed the tick up, never slow it down.
         [TestCase(2000, 1000)]
         [TestCase(500, 500)]
-        public void BusyShortensTheTickToOneSecondButNeverLengthensIt(int tickRateMs, int expectedMs) {
+        public void BusyShortensTheTickToOneSecondButNeverLengthensIt(int tickRateMs, int expectedMs)
+        {
             FakeWebSocketBus bus = new FakeWebSocketBus();
             TelemetryCadence cadence = Cadence(bus);
             bus.Receive(Presence($$"""{"subscribers": 1, "tickRateMs": {{tickRateMs}}}"""));
@@ -116,7 +127,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
         // Only the server's presence message counts, so a command for another device or action can't change who is watching.
         [TestCase("mount", "presence")]
         [TestCase("system", "ping")]
-        public void CommandsForAnythingElseAreIgnored(string device, string action) {
+        public void CommandsForAnythingElseAreIgnored(string device, string action)
+        {
             FakeWebSocketBus bus = new FakeWebSocketBus();
             TelemetryCadence cadence = Cadence(bus);
 
@@ -129,14 +141,16 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
 
         // A dropped socket must not leave the plugin capturing for viewers it has lost, so the counts reset to nobody.
         [Test]
-        public void ADisconnectResetsTheCountsAndTheTick() {
+        public void ADisconnectResetsTheCountsAndTheTick()
+        {
             FakeWebSocketBus bus = new FakeWebSocketBus();
             TelemetryCadence cadence = Cadence(bus);
             bus.Receive(Presence("""{"subscribers": 3, "feedSubscribers": 1, "tickRateMs": 500}"""));
 
             bus.RaiseDisconnected();
 
-            Assert.Multiple(() => {
+            Assert.Multiple(() =>
+            {
                 Assert.That(cadence.Subscribers, Is.Zero);
                 Assert.That(cadence.FeedSubscribers, Is.Zero);
                 Assert.That(cadence.CurrentInterval, Is.EqualTo(TimeSpan.FromSeconds(2)));
@@ -145,7 +159,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
 
         // A reconnect leaves the counts alone, since the server's snapshot follows within a round trip and they were reset on the drop.
         [Test]
-        public void AConnectLeavesTheCountsAlone() {
+        public void AConnectLeavesTheCountsAlone()
+        {
             FakeWebSocketBus bus = new FakeWebSocketBus();
             TelemetryCadence cadence = Cadence(bus);
             bus.Receive(Presence("""{"subscribers": 3}"""));
@@ -159,7 +174,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
 
         // Every loop waits on Changed, so a Signal must release all of them at once and arm a fresh one for the next wait.
         [Test]
-        public void SignalCompletesTheCurrentChangedAndArmsANewOne() {
+        public void SignalCompletesTheCurrentChangedAndArmsANewOne()
+        {
             TelemetryCadence cadence = Cadence(new FakeWebSocketBus());
             Task before = cadence.Changed;
 
@@ -171,7 +187,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
 
         // Presence, connect and disconnect all have to wake the loops, or a viewer arriving would sit out a 60 s idle sleep.
         [Test]
-        public void PresenceConnectAndDisconnectAllSignal() {
+        public void PresenceConnectAndDisconnectAllSignal()
+        {
             FakeWebSocketBus bus = new FakeWebSocketBus();
             TelemetryCadence cadence = Cadence(bus);
 
@@ -182,7 +199,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
             Task onDisconnect = cadence.Changed;
             bus.RaiseDisconnected();
 
-            Assert.Multiple(() => {
+            Assert.Multiple(() =>
+            {
                 Assert.That(onPresence.IsCompleted, Is.True);
                 Assert.That(onConnect.IsCompleted, Is.True);
                 Assert.That(onDisconnect.IsCompleted, Is.True);
@@ -191,7 +209,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
 
         // A condition that already holds must return at once, so a loop never sleeps when there is work to do.
         [Test]
-        public async Task WaitUntilReturnsAtOnceWhenTheConditionAlreadyHolds() {
+        public async Task WaitUntilReturnsAtOnceWhenTheConditionAlreadyHolds()
+        {
             TelemetryCadence cadence = Cadence(new FakeWebSocketBus());
 
             bool isMet = await cadence.WaitUntilAsync(() => true, TimeSpan.FromMinutes(10), CancellationToken.None);
@@ -201,7 +220,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
 
         // A timeout that is already up reports the condition as not met without waiting.
         [Test]
-        public async Task WaitUntilReportsFalseWhenTheTimeoutIsAlreadyUp() {
+        public async Task WaitUntilReportsFalseWhenTheTimeoutIsAlreadyUp()
+        {
             TelemetryCadence cadence = Cadence(new FakeWebSocketBus());
 
             bool isMet = await cadence.WaitUntilAsync(() => false, TimeSpan.Zero, CancellationToken.None);
@@ -211,7 +231,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
 
         // The wait re-checks the condition on every signal, which is how a viewer arriving ends an idle wait early.
         [Test]
-        public async Task WaitUntilEndsWhenASignalMakesTheConditionTrue() {
+        public async Task WaitUntilEndsWhenASignalMakesTheConditionTrue()
+        {
             TelemetryCadence cadence = Cadence(new FakeWebSocketBus());
             bool isReady = false;
             Task<bool> wait = cadence.WaitUntilAsync(() => isReady, TimeSpan.FromMinutes(10), CancellationToken.None);
@@ -224,7 +245,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
 
         // A zero delay returns without touching the timer, so a loop asked to wait for nothing doesn't lose a tick.
         [Test]
-        public async Task WaitReturnsAtOnceForAZeroDelay() {
+        public async Task WaitReturnsAtOnceForAZeroDelay()
+        {
             TelemetryCadence cadence = Cadence(new FakeWebSocketBus());
 
             await cadence.WaitAsync(() => TimeSpan.Zero, CancellationToken.None).WaitAsync(Soon);
@@ -232,7 +254,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
 
         // A long idle sleep must end as soon as presence changes, not when the sleep would have.
         [Test]
-        public async Task WaitIsReleasedByASignal() {
+        public async Task WaitIsReleasedByASignal()
+        {
             TelemetryCadence cadence = Cadence(new FakeWebSocketBus());
             Task wait = cadence.WaitAsync(() => TimeSpan.FromMinutes(10), CancellationToken.None);
 
@@ -243,7 +266,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
 
         // Shutdown cancels the loops' token, and a wait must throw on it rather than report a timeout and carry on.
         [Test]
-        public void WaitThrowsWhenCancelled() {
+        public void WaitThrowsWhenCancelled()
+        {
             TelemetryCadence cadence = Cadence(new FakeWebSocketBus());
             using CancellationTokenSource cancellation = new CancellationTokenSource();
             cancellation.Cancel();
@@ -254,7 +278,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
 
         // With nobody signalling, the wait ends when the clock passes the timeout and reports the condition as not met.
         [Test]
-        public async Task WaitUntilReportsFalseWhenTheTimeoutRunsOut() {
+        public async Task WaitUntilReportsFalseWhenTheTimeoutRunsOut()
+        {
             TelemetryCadence cadence = Cadence(new FakeWebSocketBus());
             Task<bool> wait = cadence.WaitUntilAsync(() => false, TimeSpan.FromMinutes(1), CancellationToken.None);
 
@@ -265,7 +290,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
 
         // An idle sleep ends when its delay runs out on the clock and not a second before, so the loop isn't woken for nothing.
         [Test]
-        public async Task WaitEndsWhenTheDelayRunsOutOnTheClock() {
+        public async Task WaitEndsWhenTheDelayRunsOutOnTheClock()
+        {
             TelemetryCadence cadence = Cadence(new FakeWebSocketBus());
             Task wait = cadence.WaitAsync(() => TimeSpan.FromSeconds(60), CancellationToken.None);
 

@@ -3,17 +3,20 @@ using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Media;
 
-namespace CosmicVaults.NINA.Astraeus.Themes {
+namespace CosmicVaults.NINA.Astraeus.Themes
+{
 
     /// <summary>
     /// Maps every Ast.* colour and font key onto its N.I.N.A. equivalent. Built in code so it hands back
     /// N.I.N.A.'s own brush instances and the page follows a schema change. A brush declared in a
     /// standalone ResourceDictionary has no inheritance context for a binding or DynamicResource.
     /// </summary>
-    internal static class NinaBrushAliases {
+    internal static class NinaBrushAliases
+    {
 
         /// <summary>The N.I.N.A. keys come from NINA.WPF.Base/Resources/StaticResources/Brushes.xaml.</summary>
-        private static readonly Dictionary<string, string> Aliases = new() {
+        private static readonly Dictionary<string, string> Aliases = new()
+        {
             // Text. N.I.N.A. has no dim tier, and thinning PrimaryBrush to fake one could be unreadable
             // on a schema we don't control, so all three use the colour of N.I.N.A.'s own labels.
             ["Ast.Text"] = "PrimaryBrush",
@@ -52,10 +55,12 @@ namespace CosmicVaults.NINA.Astraeus.Themes {
         /// </summary>
         private static readonly SolidColorBrush Safe = Freeze(Color.FromRgb(0x74, 0xD8, 0x9B));
 
-        internal static ResourceDictionary Build() {
+        internal static ResourceDictionary Build()
+        {
             ResourceDictionary dictionary = new ResourceDictionary();
 
-            foreach (KeyValuePair<string, string> alias in Aliases) {
+            foreach (KeyValuePair<string, string> alias in Aliases)
+            {
                 dictionary[alias.Key] = Find(alias.Value);
             }
             dictionary["Ast.Safe"] = Safe;
@@ -74,13 +79,15 @@ namespace CosmicVaults.NINA.Astraeus.Themes {
         /// Throws instead of guessing. A missing key means N.I.N.A. moved its brushes, and AstraeusTheme
         /// then falls back to the whole brand look instead of a page half in colours nobody chose.
         /// </summary>
-        private static Brush Find(string ninaKey) {
+        private static Brush Find(string ninaKey)
+        {
             if (Application.Current?.TryFindResource(ninaKey) is Brush brush) { return brush; }
             throw new InvalidOperationException(
                 $"N.I.N.A. brush '{ninaKey}' is not in Application.Current.Resources");
         }
 
-        private static SolidColorBrush Freeze(Color color) {
+        private static SolidColorBrush Freeze(Color color)
+        {
             SolidColorBrush brush = new SolidColorBrush(color);
             brush.Freeze();
             return brush;

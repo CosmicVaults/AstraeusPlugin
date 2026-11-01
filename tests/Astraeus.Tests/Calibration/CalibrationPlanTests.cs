@@ -3,12 +3,14 @@ using CosmicVaults.NINA.Astraeus.Engine.Calibration;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 
-namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
+namespace CosmicVaults.NINA.Astraeus.Tests.Calibration
+{
     /// <summary>
     /// Ensure calibration plan is parsed correctly. 
     /// </summary>
     [TestFixture]
-    public class CalibrationPlanTests {
+    public class CalibrationPlanTests
+    {
         private const string FullBlock = """
             {
                 "strategy": "scaled_dark",
@@ -26,11 +28,13 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
         // Every field of a full block reads through. This is the test that catches a renamed field in the server's
         // serializer, so it checks them all at once.
         [Test]
-        public void APlanReadsEveryField() {
+        public void APlanReadsEveryField()
+        {
             CalibrationPlan? plan = CalibrationPlan.Parse(JObject.Parse(FullBlock));
 
             Assert.That(plan, Is.Not.Null);
-            Assert.Multiple(() => {
+            Assert.Multiple(() =>
+            {
                 Assert.That(plan!.Strategy, Is.EqualTo("scaled_dark"));
                 Assert.That(plan.DarkScalingRatio, Is.EqualTo(2.5));
                 Assert.That(plan.ShouldKeepRaw, Is.False);
@@ -44,11 +48,13 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
         // A sparse block takes safe defaults, and keep raw defaults to on, since a calibrated-only frame can't be
         // redone.
         [Test]
-        public void MissingFieldsTakeTheirDefaults() {
+        public void MissingFieldsTakeTheirDefaults()
+        {
             CalibrationPlan? plan = CalibrationPlan.Parse(JObject.Parse("""{"masters": {"flat": {"id": 7}}}"""));
 
             Assert.That(plan, Is.Not.Null);
-            Assert.Multiple(() => {
+            Assert.Multiple(() =>
+            {
                 Assert.That(plan!.Strategy, Is.EqualTo("none"));
                 Assert.That(plan.DarkScalingRatio, Is.Null);
                 Assert.That(plan.ShouldKeepRaw, Is.True);
@@ -61,14 +67,16 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
         [TestCase("""{"strategy": "none", "masters": {}}""")]
         [TestCase("""{"strategy": "none"}""")]
         [TestCase("""{"masters": {"dark": {"revision": 2}}}""")]
-        public void ABlockThatNamesNoMasterIsNoPlan(string json) {
+        public void ABlockThatNamesNoMasterIsNoPlan(string json)
+        {
             Assert.That(CalibrationPlan.Parse(JObject.Parse(json)), Is.Null);
         }
 
         // No block, or a block that isn't an object, means don't calibrate, with no exception on the registration
         // path.
         [Test]
-        public void AMissingOrNonObjectBlockIsNoPlan() {
+        public void AMissingOrNonObjectBlockIsNoPlan()
+        {
             Assert.That(CalibrationPlan.Parse(null), Is.Null);
             Assert.That(CalibrationPlan.Parse(new JValue("none")), Is.Null);
         }
@@ -76,7 +84,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
         // Bias, then dark, then flat is the physics. The calibrator walks this list, so the order must hold and
         // missing roles must be skipped.
         [Test]
-        public void RolesComeInApplicationOrderAndSkipMissingMasters() {
+        public void RolesComeInApplicationOrderAndSkipMissingMasters()
+        {
             CalibrationPlan? plan = CalibrationPlan.Parse(
                 JObject.Parse("""{"masters": {"flat": {"id": 7}, "dark": {"id": 12}}}"""));
 
@@ -85,7 +94,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
 
         // Warnings go straight into the log, so a stray null or empty string must not become a blank line.
         [Test]
-        public void WarningsSkipEmptyAndNullEntries() {
+        public void WarningsSkipEmptyAndNullEntries()
+        {
             CalibrationPlan? plan = CalibrationPlan.Parse(
                 JObject.Parse("""{"warnings": ["old dark", "", null], "masters": {"flat": {"id": 7}}}"""));
 
@@ -94,7 +104,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
 
         // A warnings value of the wrong shape is treated as no warnings rather than failing the plan.
         [Test]
-        public void WarningsThatAreNotAnArrayAreIgnored() {
+        public void WarningsThatAreNotAnArrayAreIgnored()
+        {
             CalibrationPlan? plan = CalibrationPlan.Parse(
                 JObject.Parse("""{"warnings": "old dark", "masters": {"flat": {"id": 7}}}"""));
 
@@ -103,7 +114,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
 
         // Pins the log line's shape with scaling and calibrated-only, so the night's log keeps reading the same.
         [Test]
-        public void DescribeNamesTheStrategyScalingMastersAndRawHandling() {
+        public void DescribeNamesTheStrategyScalingMastersAndRawHandling()
+        {
             CalibrationPlan? plan = CalibrationPlan.Parse(JObject.Parse(FullBlock));
 
             Assert.That(plan!.Describe(), Is.EqualTo("scaled_dark x2.5 (bias #4, dark #12, flat #7), calibrated only"));
@@ -111,7 +123,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Calibration {
 
         // Without a scaling ratio the line drops the x factor rather than printing a placeholder.
         [Test]
-        public void DescribeLeavesOutScalingWhenThereIsNone() {
+        public void DescribeLeavesOutScalingWhenThereIsNone()
+        {
             CalibrationPlan? plan = CalibrationPlan.Parse(JObject.Parse("""{"masters": {"flat": {"id": 7}}}"""));
             Assert.That(plan!.Describe(), Is.EqualTo("none (flat #7), keep raw"));
         }

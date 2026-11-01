@@ -7,14 +7,16 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
+namespace CosmicVaults.NINA.Astraeus.Engine.Imaging
+{
     /// <summary>
     /// Uploads captured frames one at a time on a background worker, so the mount doesn't wait on target
     /// with the roof open while a frame goes up. It's bounded because a slow uplink would grow a backlog
     /// that never catches up. Refused frames stay on this PC and the server re-offers the exposure.
     /// </summary>
     internal sealed class CaptureUploadQueue(Observatory observatory, IWebSocketBus webSocketBus)
-        : ServiceComponent(observatory, webSocketBus) {
+        : ServiceComponent(observatory, webSocketBus)
+    {
 
         private const int Capacity = 8;
         private const int MaxAttempts = 3;
@@ -43,14 +45,16 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
         // a background upload is no reason to speed up the dashboard.
         public override bool IsBusy => false;
 
-        public override async Task Start() {
+        public override async Task Start()
+        {
             await base.Start();
             _loopCancellationSource = new CancellationTokenSource();
             CancellationToken token = _loopCancellationSource.Token;
             _loop = Task.Run(() => RunAsync(token), token);
         }
 
-        public override async Task Destroy() {
+        public override async Task Destroy()
+        {
             await StopAsync();
             await base.Destroy();
         }
@@ -59,9 +63,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
         /// Runs during the plugin's Teardown, so a transfer in flight is cancelled on the spot. N.I.N.A. is
         /// waiting, and the frame is still on disk anyway.
         /// </summary>
-        public async Task StopAsync() {
+        public async Task StopAsync()
+        {
             _loopCancellationSource?.Cancel();
-            if (_loop != null) {
+            if (_loop != null)
+            {
                 try { await _loop; } catch (OperationCanceledException) { /* expected on shutdown */ }
             }
             _loop = null;
@@ -74,20 +80,26 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
         /// caller builds the key because PollForTarget may have cleared the target name by this frame's turn.
         /// Never throws.
         /// </summary>
-        public bool TryEnqueue(PendingUpload upload, string r2Key, string logDevice, LogCategory logCategory) {
+        public bool TryEnqueue(PendingUpload upload, string r2Key, string logDevice, LogCategory logCategory)
+        {
             bool isAccepted;
             bool isFirstRefusal = false;
-            lock (_gate) {
+            lock (_gate)
+            {
                 isAccepted = _queue.Count < Capacity;
-                if (isAccepted) {
+                if (isAccepted)
+                {
                     _queue.Enqueue(new QueuedUpload(upload, r2Key, logDevice, logCategory));
-                } else {
+                }
+                else
+                {
                     isFirstRefusal = !_isBackedUp;
                     _isBackedUp = true;
                 }
             }
 
-            if (isAccepted) {
+            if (isAccepted)
+            {
                 _work.Release();
                 return true;
             }
@@ -98,27 +110,38 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
             return false;
         }
 
-        private async Task RunAsync(CancellationToken cancellationToken) {
-            while (!cancellationToken.IsCancellationRequested) {
-                try {
+        private async Task RunAsync(CancellationToken cancellationToken)
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
                     await _work.WaitAsync(cancellationToken);
-                } catch (OperationCanceledException) {
+                }
+                catch (OperationCanceledException)
+                {
                     return;
                 }
 
                 QueuedUpload item;
-                lock (_gate) {
+                lock (_gate)
+                {
                     // The semaphore counts the queue, so there's always something here. The guard is
                     // just for the shutdown race.
                     if (_queue.Count == 0) continue;
                     item = _queue.Dequeue();
                 }
 
-                try {
+                try
+                {
                     await UploadWithRetriesAsync(item, cancellationToken);
-                } catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
                     return;
-                } catch (Exception ex) {
+                }
+                catch (Exception ex)
+                {
                     // CaptureUploader only throws on cancellation, so this is unexpected. Log it and
                     // move on, since one bad frame mustn't take the worker down and strand the
                     // frames queued behind it.
@@ -135,11 +158,13 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
         /// in place, since requeueing would break the semaphore count and frame order. Once the bytes are in
         /// R2 only the confirm is retried.
         /// </summary>
-        private async Task UploadWithRetriesAsync(QueuedUpload item, CancellationToken cancellationToken) {
+        private async Task UploadWithRetriesAsync(QueuedUpload item, CancellationToken cancellationToken)
+        {
             CaptureUploader uploader = new CaptureUploader(Observatory, item.LogDevice, item.LogCategory);
             string frameName = Path.GetFileName(item.Upload.FilePath);
             UploadOutcome outcome = UploadOutcome.Failed;
-            for (int attempt = 1; attempt <= MaxAttempts; attempt++) {
+            for (int attempt = 1; attempt <= MaxAttempts; attempt++)
+            {
                 if (outcome == UploadOutcome.ConfirmFailed)
                     outcome = await uploader.RetryConfirmAsync(cancellationToken);
                 else
@@ -158,7 +183,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
                 await Task.Delay(RetryBackoffStep * attempt, cancellationToken);
             }
 
-            if (outcome == UploadOutcome.ConfirmFailed) {
+            if (outcome == UploadOutcome.ConfirmFailed)
+            {
                 LogError($"{frameName} is in cloud storage, but the server never confirmed it: the server " +
                          "will fail this capture once its upload timeout passes.",
                     item.LogDevice, item.LogCategory);
@@ -168,9 +194,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
                        "stays on this machine.", item.LogDevice, item.LogCategory);
         }
 
-        private void ReportCaughtUp(QueuedUpload item) {
+        private void ReportCaughtUp(QueuedUpload item)
+        {
             bool isRecovered;
-            lock (_gate) {
+            lock (_gate)
+            {
                 isRecovered = _isBackedUp && _queue.Count == 0;
                 if (isRecovered) _isBackedUp = false;
             }

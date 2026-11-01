@@ -4,9 +4,11 @@ using CosmicVaults.NINA.Astraeus.Tests.Helpers;
 using NINA.Astrometry;
 using NUnit.Framework;
 
-namespace CosmicVaults.NINA.Astraeus.Tests.Components {
+namespace CosmicVaults.NINA.Astraeus.Tests.Components
+{
     [TestFixture]
-    public partial class MountTests {
+    public partial class MountTests
+    {
         private static Coordinates Pointing(double raDegrees, double decDegrees) =>
             new Coordinates(raDegrees, decDegrees, Epoch.JNOW, Coordinates.RAType.Degrees);
 
@@ -14,7 +16,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
 
         // With limits off there is nothing to judge, so no position is ever unknown, even on a disconnected mount.
         [Test]
-        public void WithLimitsOffNoPositionIsUnknown() {
+        public void WithLimitsOffNoPositionIsUnknown()
+        {
             FakeNina nina = new FakeNina();
             nina.Settings.SetIsMountLimitEnabled(false);
             nina.SetMount(isConnected: false);
@@ -25,7 +28,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         // A mount never connected since N.I.N.A. started has not been seen moving, so it isn't counted as lost. Reading
         // it as lost gave a critical alert 30 s after every start where the mount wasn't connected yet.
         [Test]
-        public void AMountNeverSeenConnectedIsNotCountedAsLost() {
+        public void AMountNeverSeenConnectedIsNotCountedAsLost()
+        {
             FakeNina nina = new FakeNina();
             nina.Settings.SetIsMountLimitEnabled(true);
             nina.SetMount(isConnected: false);
@@ -36,7 +40,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         // A mount that dropped off while parked or still can't drive into a limit, so it isn't counted as lost.
         [TestCase(true, false)]
         [TestCase(false, false)]
-        public void AMountThatDroppedOffWhileRestingIsNotUnknown(bool isParked, bool isTracking) {
+        public void AMountThatDroppedOffWhileRestingIsNotUnknown(bool isParked, bool isTracking)
+        {
             FakeNina nina = new FakeNina();
             nina.Settings.SetIsMountLimitEnabled(true);
             nina.SetMount(isConnected: true, isParked: isParked, isTracking: isTracking);
@@ -49,7 +54,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
 
         // A mount that dropped off while tracking may still be moving toward a limit, so it is reported as not connected.
         [Test]
-        public void AMountThatDroppedOffWhileTrackingIsUnknownAsNotConnected() {
+        public void AMountThatDroppedOffWhileTrackingIsUnknownAsNotConnected()
+        {
             FakeNina nina = new FakeNina();
             nina.Settings.SetIsMountLimitEnabled(true);
             nina.SetMount(isConnected: true, isTracking: true);
@@ -64,7 +70,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         // A parked or still mount isn't going anywhere, so it is never unknown even with no coordinates at all.
         [TestCase(true, false)]
         [TestCase(false, false)]
-        public void ARestingMountIsNeverUnknown(bool isParked, bool isTracking) {
+        public void ARestingMountIsNeverUnknown(bool isParked, bool isTracking)
+        {
             FakeNina nina = new FakeNina();
             nina.Settings.SetIsMountLimitEnabled(true);
             nina.SetMount(isConnected: true, isParked: isParked, isTracking: isTracking);
@@ -76,11 +83,13 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         [TestCase("no coordinates")]
         [TestCase("NaN RA")]
         [TestCase("NaN Dec")]
-        public void ATrackingMountWithoutAReadablePositionIsUnknown(string position) {
+        public void ATrackingMountWithoutAReadablePositionIsUnknown(string position)
+        {
             FakeNina nina = new FakeNina();
             nina.Settings.SetIsMountLimitEnabled(true);
             nina.SetMount(isConnected: true, isTracking: true);
-            nina.TelescopeInfo.Coordinates = position switch {
+            nina.TelescopeInfo.Coordinates = position switch
+            {
                 "NaN RA" => Pointing(double.NaN, 20),
                 "NaN Dec" => Pointing(10, double.NaN),
                 _ => null!,
@@ -91,7 +100,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
 
         // A tracking mount with a finite RA and Dec can be judged, so it isn't unknown.
         [Test]
-        public void ATrackingMountWithAReadablePositionIsNotUnknown() {
+        public void ATrackingMountWithAReadablePositionIsNotUnknown()
+        {
             FakeNina nina = new FakeNina();
             nina.Settings.SetIsMountLimitEnabled(true);
             nina.SetMount(isConnected: true, isTracking: true);
@@ -103,7 +113,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         // Missing altitude and azimuth don't make a position unreadable. Only the RA and Dec are needed, since the
         // meridian check uses those.
         [Test]
-        public void NaNAltitudeAndAzimuthDoNotMakeAPositionUnreadable() {
+        public void NaNAltitudeAndAzimuthDoNotMakeAPositionUnreadable()
+        {
             FakeNina nina = new FakeNina();
             nina.Settings.SetIsMountLimitEnabled(true);
             nina.SetMount(isConnected: true, isTracking: true);
@@ -118,7 +129,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
 
         // A disconnected mount can't be told anything, and the caller must know the park wasn't stopped.
         [Test]
-        public async Task StopParkOnADisconnectedMountIsFalseAndSendsNothing() {
+        public async Task StopParkOnADisconnectedMountIsFalseAndSendsNothing()
+        {
             FakeNina nina = new FakeNina();
             nina.SetMount(isConnected: false);
 
@@ -130,7 +142,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
 
         // A mount already at park needs no stop, and sending one could wake a driver that has just settled.
         [Test]
-        public async Task StopParkOnAParkedMountIsTrueWithNoStopSent() {
+        public async Task StopParkOnAParkedMountIsTrueWithNoStopSent()
+        {
             FakeNina nina = new FakeNina();
             nina.SetMount(isConnected: true, isParked: true);
 
@@ -142,7 +155,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
 
         // Not every driver reports Slewing while it parks, so StopSlew is sent regardless, and tracking is turned off after it.
         [Test]
-        public async Task StopParkSendsStopSlewEvenWhenTheDriverSaysItIsNotSlewing() {
+        public async Task StopParkSendsStopSlewEvenWhenTheDriverSaysItIsNotSlewing()
+        {
             FakeNina nina = new FakeNina();
             nina.SetMount(isConnected: true, isTracking: true, isSlewing: false);
 
@@ -154,7 +168,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
 
         // A mount that does report the park as a slew gets the same stop, and the result says it stopped.
         [Test]
-        public async Task StopParkOnASlewingMountStopsItAndReportsTrue() {
+        public async Task StopParkOnASlewingMountStopsItAndReportsTrue()
+        {
             FakeNina nina = new FakeNina();
             nina.SetMount(isConnected: true, isTracking: true, isSlewing: true);
 
@@ -167,7 +182,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         // A StopSlew the driver refuses must not stop the tracking stop that follows, since tracking is what carries a
         // mount into a limit.
         [Test]
-        public async Task AStopSlewThatThrowsStillStopsTracking() {
+        public async Task AStopSlewThatThrowsStillStopsTracking()
+        {
             FakeNina nina = new FakeNina();
             nina.SetMount(isConnected: true, isTracking: true);
             nina.TelescopeMediator.Setup(mediator => mediator.StopSlew()).Throws(new InvalidOperationException("driver refused"));
@@ -181,7 +197,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Components {
         // A driver that keeps tracking after two stop requests is reported as not stopped, so a secure never closes the
         // roof over a mount it only thinks is still. Ten clock seconds, no real ones.
         [Test]
-        public async Task ADriverThatIgnoresTwoStopsIsReportedAsNotStopped() {
+        public async Task ADriverThatIgnoresTwoStopsIsReportedAsNotStopped()
+        {
             FakeNina nina = new FakeNina();
             nina.SetMount(isConnected: true, isTracking: true);
             nina.MountIgnoresTrackingStops();

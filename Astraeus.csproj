@@ -14,7 +14,7 @@
     </PropertyGroup>
 
     <PropertyGroup>
-        <AstraeusReleaseVersion>1.0.2</AstraeusReleaseVersion>
+        <AstraeusReleaseVersion>1.0.3</AstraeusReleaseVersion>
         <AstraeusVersionEpoch>2026-01-01</AstraeusVersionEpoch>
     </PropertyGroup>
 

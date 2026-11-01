@@ -2,17 +2,20 @@
 using NINA.PlateSolving;
 using System;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
+namespace CosmicVaults.NINA.Astraeus.Engine.Imaging
+{
     public readonly record struct FrameWcs(
         double CrVal1, double CrVal2,
         double CrPix1, double CrPix2,
-        double Cd11, double Cd12, double Cd21, double Cd22) {
+        double Cd11, double Cd12, double Cd21, double Cd22)
+    {
 
         /// <summary>
         /// Uses the full CD matrix, since the CDELT/CROTA2 form assumes an unmirrored frame and gives wrong
         /// position angles on flipped images.
         /// </summary>
-        public static FrameWcs FromPlateSolve(PlateSolveResult result, double imageWidth, double imageHeight) {
+        public static FrameWcs FromPlateSolve(PlateSolveResult result, double imageWidth, double imageHeight)
+        {
             double degreesPerPixel = result.Pixscale / 3600.0; // arcsec/px -> deg/px (square pixels)
 
             // Invert NINA's mapping: result.Orientation == wcs.Rotation - 180 (so wcs.Rotation ==

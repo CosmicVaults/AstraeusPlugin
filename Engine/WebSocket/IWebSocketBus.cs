@@ -2,12 +2,14 @@ using CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages;
 using System;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket {
+namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket
+{
     /// <summary>
     /// The WebSocket message bus. It handles serialization, signing, timestamps and dispatch, so
     /// callers only deal in typed messages.
     /// </summary>
-    public interface IWebSocketBus {
+    public interface IWebSocketBus
+    {
         public event Action<WsCommand>? CommandReceived;
 
         /// <summary>The socket is open and the server has been told so.</summary>

@@ -8,11 +8,14 @@ using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine {
-    public partial class Settings {
+namespace CosmicVaults.NINA.Astraeus.Engine
+{
+    public partial class Settings
+    {
         private DebouncedPush? _astrometrySettingsPush;
 
-        private async Task HandleAstrometryUpdateAsync(WsCommand command) {
+        private async Task HandleAstrometryUpdateAsync(WsCommand command)
+        {
             if (!command.Payload.TryGetProperty("data", out JsonElement data)) return;
 
             IProfileService profileService = Observatory.Settings.ProfileService;
@@ -28,10 +31,12 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 device: "system");
         }
 
-        internal Task PushAstrometrySettingsAsync() {
+        internal Task PushAstrometrySettingsAsync()
+        {
             IAstrometrySettings astrometrySettings = Profile!.AstrometrySettings;
             CustomHorizon? horizon = astrometrySettings.Horizon;
-            AstrometryPayload payload = new AstrometryPayload {
+            AstrometryPayload payload = new AstrometryPayload
+            {
                 Latitude = astrometrySettings.Latitude,
                 Longitude = astrometrySettings.Longitude,
                 Elevation = astrometrySettings.Elevation,
@@ -42,7 +47,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         // The custom horizon at each integer azimuth, so the server applies the same floor the mount does.
-        private static double[] SampleHorizon(Func<double, double>? altitudeAtAzimuth) {
+        private static double[] SampleHorizon(Func<double, double>? altitudeAtAzimuth)
+        {
             if (altitudeAtAzimuth == null) return Array.Empty<double>();
             double[] altitudeByAzimuth = new double[360];
             for (int azimuthDegrees = 0; azimuthDegrees < 360; azimuthDegrees++)
@@ -50,7 +56,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return altitudeByAzimuth;
         }
 
-        private void OnAstrometrySettingsChanged(object? sender, PropertyChangedEventArgs eventArgs) {
+        private void OnAstrometrySettingsChanged(object? sender, PropertyChangedEventArgs eventArgs)
+        {
             _astrometrySettingsPush ??= CreatePush(PushAstrometrySettingsAsync, "astrometry");
             _astrometrySettingsPush.Schedule();
         }

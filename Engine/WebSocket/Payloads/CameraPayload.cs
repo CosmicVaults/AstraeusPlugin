@@ -2,18 +2,22 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Payloads {
-    public sealed record CameraUpdate : WsMessage {
+namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Payloads
+{
+    public sealed record CameraUpdate : WsMessage
+    {
         public CameraUpdate(CameraPayload camera, string? context = null)
             : base(
                 type: "update",
                 device: "camera",
                 context: context,
                 payload: ToJsonElement(new DataPayload<CameraPayload>(camera))
-            ) { }
+            )
+        { }
     }
 
-    public record CameraPayload : DevicePayload {
+    public record CameraPayload : DevicePayload
+    {
         [JsonPropertyName("can_set_temperature")]
         public bool? CanSetTemperature { get; init; }
 

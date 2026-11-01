@@ -2,8 +2,10 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
-    internal sealed class WaitForSafe(string name, Context context) : WaitForConditionState(name) {
+namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States
+{
+    internal sealed class WaitForSafe(string name, Context context) : WaitForConditionState(name)
+    {
         protected override Context RunContext => context;
 
         protected override AutopilotStatus Status => AutopilotStatus.WaitingSafety;
@@ -14,7 +16,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
 
         // When the monitor first read Safe in the current unbroken run of Safe readings, or null while
         // unsafe. It lives on the context because the dashboard payload carries it.
-        private DateTime? SafeSinceUtc {
+        private DateTime? SafeSinceUtc
+        {
             get => context.SafeSinceUtc;
             set => context.SafeSinceUtc = value;
         }
@@ -23,10 +26,10 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
         /// Reaching here means every required device connected, so the run is under way and equipment
         /// alerts can fire. Before this, a disconnected device is just someone powering up late.
         /// </summary>
-        public override Task OnEntryAsync(CancellationToken cancellationToken) {
-            context.IsStartupComplete = true;
-            context.IsRoofUnderAutopilotControl = context.RoofMode == RoofMode.Operate;
-            context.IsRoofExpectedOpen = false;
+        public override Task OnEntryAsync(CancellationToken cancellationToken)
+        {
+            context.Night.IsStartupComplete = true;
+            context.Roof.TakeControl(context.RoofMode);
             _lastRecloseAttemptUtc = DateTime.MinValue;
             SafeSinceUtc = null;
             return base.OnEntryAsync(cancellationToken);
@@ -34,21 +37,25 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
 
         // However the wait ends, the payload must stop saying a settle is running, or the card would
         // keep counting under the next state.
-        public override Task OnExitAsync() {
+        public override Task OnExitAsync()
+        {
             SafeSinceUtc = null;
             return base.OnExitAsync();
         }
 
         // Faster while the settle is running, so the resume lands close to the end of it.
         protected override int PollIntervalSeconds =>
-            SafeSinceUtc is null ? Context.SafetyPollIntervalSeconds : Context.SafetySettlePollIntervalSeconds;
+            SafeSinceUtc is null ? AutopilotConstants.SafetyPollIntervalSeconds : AutopilotConstants.SafetySettlePollIntervalSeconds;
 
-        protected override async Task<bool> IsSatisfiedAsync(CancellationToken cancellationToken) {
+        protected override async Task<bool> IsSatisfiedAsync(CancellationToken cancellationToken)
+        {
             // A dropped safety monitor reads unsafe and would hold the night here, so it gets a
             // reconnect (at most once per ReconnectCooldown).
-            await context.EnsureConnectedAsync(context.SafetyMonitor, cancellationToken);
-            if (!context.IsSafe()) {
-                if (SafeSinceUtc is not null) {
+            await context.Devices.EnsureConnectedAsync(context.SafetyMonitor, cancellationToken);
+            if (!context.IsSafe())
+            {
+                if (SafeSinceUtc is not null)
+                {
                     context.Log("Conditions turned unsafe again during the settle, so the wait starts over.");
                     SafeSinceUtc = null;
                 }
@@ -60,7 +67,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
             // and park and close on the next. Nothing moves until it has read Safe for the whole settle.
             int settleSeconds = context.SafeSettleSeconds;
             if (settleSeconds <= 0) return true;
-            if (SafeSinceUtc is not DateTime safeSince) {
+            if (SafeSinceUtc is not DateTime safeSince)
+            {
                 SafeSinceUtc = context.UtcNow;
                 context.Log($"Conditions safe, so settling for {settleSeconds} s before resuming.");
                 return false;
@@ -71,26 +79,32 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
         // A roof the secure couldn't close gets another go every few minutes while it's unsafe, but only
         // over a parked mount and only in Operate mode. The secure already sent the alarm, so these are
         // log lines only.
-        private async Task RecloseRoofIfDueAsync(CancellationToken cancellationToken) {
+        private async Task RecloseRoofIfDueAsync(CancellationToken cancellationToken)
+        {
             if (context.RoofMode != RoofMode.Operate) return;
             if (context.Dome is not { IsConnected: true } dome || dome.IsShutterClosed()) return;
-            if (context.UtcNow - _lastRecloseAttemptUtc < Context.RoofRecloseCooldown) return;
+            if (context.UtcNow - _lastRecloseAttemptUtc < AutopilotConstants.RoofRecloseCooldown) return;
             _lastRecloseAttemptUtc = context.UtcNow;
 
             context.LogWarning("Roof is open while conditions are unsafe, so trying to close it.");
-            if (await dome.TryCloseWhenParkedAsync("conditions unsafe", cancellationToken)) {
+            if (await dome.TryCloseWhenParkedAsync("conditions unsafe", cancellationToken))
+            {
                 context.Log("Roof closed.");
-            } else {
+            }
+            else
+            {
                 context.LogWarning(
                     $"Roof is still not closed (shutter {dome.ShutterStatusName}). Trying again in " +
-                    $"{Context.RoofRecloseCooldown.TotalMinutes:F0} minutes.");
+                    $"{AutopilotConstants.RoofRecloseCooldown.TotalMinutes:F0} minutes.");
             }
         }
 
         // The log heartbeat only. The card's own count comes from the payload's safe_since, so it
         // does not wait on this line.
-        protected override string WaitingMessage() {
-            if (SafeSinceUtc is DateTime safeSince) {
+        protected override string WaitingMessage()
+        {
+            if (SafeSinceUtc is DateTime safeSince)
+            {
                 int elapsedSeconds = (int)(context.UtcNow - safeSince).TotalSeconds;
                 return $"Conditions safe for {elapsedSeconds} s of the {context.SafeSettleSeconds} s settle";
             }

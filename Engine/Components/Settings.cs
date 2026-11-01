@@ -6,9 +6,11 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine {
+namespace CosmicVaults.NINA.Astraeus.Engine
+{
     public partial class Settings(Observatory observatory, IWebSocketBus webSocketBus)
-        : ServiceComponent(observatory, webSocketBus) {
+        : ServiceComponent(observatory, webSocketBus)
+    {
         public override string DeviceType => "settings";
         public override LogCategory DefaultLogCategory => LogCategory.System;
         public override WsMessage? GetUpdateMessage() => null;
@@ -18,17 +20,22 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Collapses a burst of setting changes into one push. Each call replaces any push still waiting,
         /// so one options-page change or one server update touching a dozen properties sends one message.
         /// </summary>
-        private sealed class DebouncedPush(Func<Task> push, Action<string> onError) {
+        private sealed class DebouncedPush(Func<Task> push, Action<string> onError)
+        {
             private static readonly TimeSpan DebounceWindow = TimeSpan.FromMilliseconds(400);
             private int _generation;
 
-            public async void Schedule() {
+            public async void Schedule()
+            {
                 int generation = Interlocked.Increment(ref _generation);
-                try {
+                try
+                {
                     await Task.Delay(DebounceWindow);
                     if (Volatile.Read(ref _generation) != generation) return;
                     await push();
-                } catch (Exception ex) {
+                }
+                catch (Exception ex)
+                {
                     onError(ex.Message);
                 }
             }
@@ -43,7 +50,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// the dashboard shows what N.I.N.A. holds.
         /// </summary>
         private async Task<bool> TryApplyServerUpdateAsync(SettingsUpdateBatch update, string settingsName,
-            Func<Task> pushCurrentSettings) {
+            Func<Task> pushCurrentSettings)
+        {
             if (update.TryApply()) return true;
             LogWarning($"Ignored a {settingsName} settings update from the server: wrong type for " +
                        $"{update.InvalidFieldNames}.", device: "system");
@@ -51,19 +59,22 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return false;
         }
 
-        public override async Task Awake() {
+        public override async Task Awake()
+        {
             await base.Awake();
             WebSocketBus.Connected += OnConnected;
             Profile = Observatory.Settings.ProfileService.ActiveProfile;
         }
 
-        public override async Task Start() {
+        public override async Task Start()
+        {
             await base.Start();
             SubscribeProfileSettings();
             SubscribeAutopilotSettings();
         }
 
-        public override Task Destroy() {
+        public override Task Destroy()
+        {
             WebSocketBus.Connected -= OnConnected;
             UnsubscribeAutopilotSettings();
             UnsubscribeProfileSettings();
@@ -71,7 +82,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         /// <summary>Moves the settings sync to the newly active N.I.N.A. profile.</summary>
-        public async Task RebindProfileAsync() {
+        public async Task RebindProfileAsync()
+        {
             if (Profile == null) return;
             UnsubscribeProfileSettings();
             Profile = Observatory.Settings.ProfileService.ActiveProfile;
@@ -79,7 +91,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             if (Observatory.IsSocketOpen) await PushSettingsAsync();
         }
 
-        private void SubscribeProfileSettings() {
+        private void SubscribeProfileSettings()
+        {
             Profile!.AstrometrySettings.PropertyChanged += OnAstrometrySettingsChanged;
             Profile.TelescopeSettings.PropertyChanged += OnTelescopeSettingsChanged;
             Profile.CameraSettings.PropertyChanged += OnCameraSettingsChanged;
@@ -92,7 +105,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             SubscribeFilterItems();
         }
 
-        private void UnsubscribeProfileSettings() {
+        private void UnsubscribeProfileSettings()
+        {
             if (Profile == null) return;
             UnsubscribeMeridianFlipSettings();
             Profile.AstrometrySettings.PropertyChanged -= OnAstrometrySettingsChanged;
@@ -106,8 +120,10 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             UnsubscribeFilterItems();
         }
 
-        protected override Task HandleCommandAsync(WsCommand command) {
-            switch (command.Action) {
+        protected override Task HandleCommandAsync(WsCommand command)
+        {
+            switch (command.Action)
+            {
                 case "settingsChanged" when command.Context == "astrometry":
                     return HandleAstrometryUpdateAsync(command);
                 case "settingsChanged" when command.Context == "telescope":
@@ -132,16 +148,21 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return Task.CompletedTask;
         }
 
-        private async void OnConnected() {
-            try {
+        private async void OnConnected()
+        {
+            try
+            {
                 await Task.Delay(PushOnConnectDelay);
                 await PushSettingsAsync();
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 LogError($"Failed to push settings on connect: {ex.Message}", device: "system");
             }
         }
 
-        private async Task PushSettingsAsync() {
+        private async Task PushSettingsAsync()
+        {
             await PushAstrometrySettingsAsync();
             await PushTelescopeSettingsAsync();
             await PushCameraSettingsAsync();

@@ -7,14 +7,16 @@ using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
+namespace CosmicVaults.NINA.Astraeus.Engine.Feed
+{
     /// <summary>
     /// Pulls frames over HTTP, either from a URL that returns one JPEG per request or from an MJPEG
     /// stream we take one frame from. Nothing is decoded here because the camera already sends JPEG.
     /// That's why this is the default kind. It covers most ONVIF and consumer cameras, loads no
     /// native libraries and can't take N.I.N.A. down with it.
     /// </summary>
-    internal sealed class HttpSnapshotSource : IFeedSource {
+    internal sealed class HttpSnapshotSource : IFeedSource
+    {
         private const int ReadChunkBytes = 64 * 1024;
         private const int NoPreviousByte = -1;
         private const byte JpegMarkerPrefix = 0xFF;
@@ -29,7 +31,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
         private readonly TimeSpan _timeout;
 
         public HttpSnapshotSource(string url, string? username, string? password, bool isMjpeg,
-            TimeSpan timeout) {
+            TimeSpan timeout)
+        {
             _url = url;
             _isMjpeg = isMjpeg;
             _timeout = timeout;
@@ -37,11 +40,13 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
             HttpClientHandler handler = new HttpClientHandler { AllowAutoRedirect = true };
             (string? resolvedUsername, string? resolvedPassword) =
                 FeedUrl.ResolveCredentials(url, username, password);
-            if (!string.IsNullOrEmpty(resolvedUsername)) {
+            if (!string.IsNullOrEmpty(resolvedUsername))
+            {
                 // A CredentialCache lets the handler answer a Digest challenge, which many cameras
                 // use. A preset Basic header only works on cameras that accept Basic.
                 CredentialCache cache = new CredentialCache();
-                if (Uri.TryCreate(url, UriKind.Absolute, out Uri? uri)) {
+                if (Uri.TryCreate(url, UriKind.Absolute, out Uri? uri))
+                {
                     NetworkCredential credential =
                         new NetworkCredential(resolvedUsername, resolvedPassword ?? string.Empty);
                     cache.Add(uri, "Digest", credential);
@@ -51,7 +56,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
                 handler.PreAuthenticate = true;
             }
 
-            _client = new HttpClient(handler) {
+            _client = new HttpClient(handler)
+            {
                 Timeout = timeout,
                 // A still is buffered whole, so a URL that turns out to be a stream gets cut off at the
                 // frame limit instead of filling memory until the timeout.
@@ -64,7 +70,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
         /// The client buffers a still itself, since only then do the buffer limit and timeout cover the
         /// body. An MJPEG stream never ends, so we read just its first part.
         /// </summary>
-        public async Task<SourceFrame?> CaptureAsync(CancellationToken cancellationToken) {
+        public async Task<SourceFrame?> CaptureAsync(CancellationToken cancellationToken)
+        {
             HttpCompletionOption completionOption = _isMjpeg
                 ? HttpCompletionOption.ResponseHeadersRead
                 : HttpCompletionOption.ResponseContentRead;
@@ -75,7 +82,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
                 ? await ReadFirstMjpegPartWithinTimeoutAsync(response, cancellationToken)
                 : await response.Content.ReadAsByteArrayAsync(cancellationToken);
 
-            if (jpeg.Length > FeedFrameEncoder.MaxSourceBytes) {
+            if (jpeg.Length > FeedFrameEncoder.MaxSourceBytes)
+            {
                 int frameMegabytes = jpeg.Length / 1024 / 1024;
                 int limitMegabytes = FeedFrameEncoder.MaxSourceBytes / 1024 / 1024;
                 throw new InvalidOperationException(
@@ -93,13 +101,17 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
         /// hang the feed.
         /// </summary>
         private async Task<byte[]> ReadFirstMjpegPartWithinTimeoutAsync(HttpResponseMessage response,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken)
+        {
             using CancellationTokenSource timeoutSource =
                 CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutSource.CancelAfter(_timeout);
-            try {
+            try
+            {
                 return await ReadFirstMjpegPartAsync(response, timeoutSource.Token);
-            } catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) {
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
                 throw new TimeoutException(
                     $"the MJPEG stream sent no complete frame within {(int)_timeout.TotalSeconds} seconds");
             }
@@ -111,15 +123,18 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
         /// 0xFF 0xD9 can't appear inside a frame.
         /// </summary>
         private static async Task<byte[]> ReadFirstMjpegPartAsync(HttpResponseMessage response,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken)
+        {
             await using Stream stream = await response.Content.ReadAsStreamAsync(cancellationToken);
             byte[] rentedChunk = ArrayPool<byte>.Shared.Rent(ReadChunkBytes);
-            try {
+            try
+            {
                 using MemoryStream frame = new MemoryStream();
                 bool hasStarted = false;
                 int previous = NoPreviousByte;
                 int bytesRead;
-                while ((bytesRead = await stream.ReadAsync(rentedChunk, cancellationToken)) > 0) {
+                while ((bytesRead = await stream.ReadAsync(rentedChunk, cancellationToken)) > 0)
+                {
                     if (ScanChunk(rentedChunk, bytesRead, frame, ref hasStarted, ref previous))
                         return frame.ToArray();
 
@@ -127,23 +142,31 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
                         throw new InvalidOperationException("MJPEG part exceeded the size limit before ending");
                 }
                 throw new InvalidOperationException("MJPEG stream ended before a complete frame arrived");
-            } finally {
+            }
+            finally
+            {
                 ArrayPool<byte>.Shared.Return(rentedChunk);
             }
         }
 
         private static bool ScanChunk(byte[] chunk, int count, MemoryStream frame, ref bool hasStarted,
-            ref int previous) {
-            for (int i = 0; i < count; i++) {
+            ref int previous)
+        {
+            for (int i = 0; i < count; i++)
+            {
                 byte current = chunk[i];
-                if (!hasStarted) {
+                if (!hasStarted)
+                {
                     // Skip the part headers and resync on SOI (FF D8).
-                    if (previous == JpegMarkerPrefix && current == StartOfImageMarker) {
+                    if (previous == JpegMarkerPrefix && current == StartOfImageMarker)
+                    {
                         frame.WriteByte(JpegMarkerPrefix);
                         frame.WriteByte(StartOfImageMarker);
                         hasStarted = true;
                     }
-                } else {
+                }
+                else
+                {
                     frame.WriteByte(current);
                     if (previous == JpegMarkerPrefix && current == EndOfImageMarker) return true;
                 }
@@ -152,7 +175,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
             return false;
         }
 
-        public ValueTask DisposeAsync() {
+        public ValueTask DisposeAsync()
+        {
             _client.Dispose();
             return ValueTask.CompletedTask;
         }

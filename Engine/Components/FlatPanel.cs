@@ -14,21 +14,26 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine {
+namespace CosmicVaults.NINA.Astraeus.Engine
+{
     public class FlatPanel(
         Observatory observatory,
         IWebSocketBus webSocketBus,
         IFlatDeviceMediator flatMediator) :
-        DeviceComponent<IFlatDeviceVM, IFlatDeviceConsumer, FlatDeviceInfo>(flatMediator, observatory, webSocketBus) {
+        DeviceComponent<IFlatDeviceVM, IFlatDeviceConsumer, FlatDeviceInfo>(flatMediator, observatory, webSocketBus)
+    {
         public override string DeviceType { get; } = "flat";
         public override string DisplayName { get; } = "Flat Panel";
-        
-        public override WsMessage? GetUpdateMessage() {
-            if (LastInfo is null) {
+
+        public override WsMessage? GetUpdateMessage()
+        {
+            if (LastInfo is null)
+            {
                 return null;
             }
 
-            FlatPayload payload = new FlatPayload {
+            FlatPayload payload = new FlatPayload
+            {
                 DeviceId = DeviceId,
                 IsLightOn = LastInfo.LightOn,
                 Brightness = LastInfo.Brightness,
@@ -38,9 +43,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return new FlatUpdate(payload);
         }
 
-        public override WsMessage? GetDeviceStaticInfo() {
+        public override WsMessage? GetDeviceStaticInfo()
+        {
             FlatDeviceInfo info = flatMediator.GetInfo();
-            FlatPayload payload = new FlatPayload {
+            FlatPayload payload = new FlatPayload
+            {
                 DeviceId = info.DeviceId,
                 Name = info.Name,
                 IsConnected = info.Connected,
@@ -54,10 +61,13 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return new FlatUpdate(payload);
         }
 
-        protected override Task HandleCommandAsync(WsCommand command) {
-            switch (command.Action) {
+        protected override Task HandleCommandAsync(WsCommand command)
+        {
+            switch (command.Action)
+            {
                 case "toggleLight":
-                    if (JsonFields.ReadBool(command.Payload, "isOn", out bool isLightOn) != JsonFieldState.Valid) {
+                    if (JsonFields.ReadBool(command.Payload, "isOn", out bool isLightOn) != JsonFieldState.Valid)
+                    {
                         RejectMalformedCommandAsync(command, "isOn").ObserveFaults(LogCommandFault);
                         break;
                     }
@@ -69,7 +79,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                     int minBrightness = panelInfo.Connected ? panelInfo.MinBrightness : 0;
                     int maxBrightness = panelInfo.Connected ? panelInfo.MaxBrightness : int.MaxValue;
                     if (JsonFields.ReadInt(command.Payload, "brightness", out int brightness,
-                            min: minBrightness, max: maxBrightness) != JsonFieldState.Valid) {
+                            min: minBrightness, max: maxBrightness) != JsonFieldState.Valid)
+                    {
                         RejectMalformedCommandAsync(command, "brightness").ObserveFaults(LogCommandFault);
                         break;
                     }
@@ -87,37 +98,47 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
         private CancellationTokenSource? _coverCancellationSource;
 
-        private async Task ToggleLightCommandAsync(string id, bool isLightOn) {
+        private async Task ToggleLightCommandAsync(string id, bool isLightOn)
+        {
             await BroadcastMessageReceivedAsync(id, true);
             await flatMediator.ToggleLight(isLightOn, NoProgress, ComponentToken);
             string state = isLightOn ? "on" : "off";
             Log($"Flat switched {state}");
         }
 
-        private async Task SetBrightnessCommandAsync(string id, int brightness) {
+        private async Task SetBrightnessCommandAsync(string id, int brightness)
+        {
             await BroadcastMessageReceivedAsync(id, true);
             await flatMediator.SetBrightness(brightness, NoProgress, ComponentToken);
             Log($"Brightness set to: {brightness}");
         }
 
-        private async Task OpenCoverCommandAsync(string id) {
+        private async Task OpenCoverCommandAsync(string id)
+        {
             await BroadcastMessageReceivedAsync(id, true);
             Log("Opening Flat Panel...");
-            try {
+            try
+            {
                 await flatMediator.OpenCover(NoProgress, BeginOperation(ref _coverCancellationSource));
                 Log("Flat panel cover open.");
-            } catch (OperationCanceledException) {
+            }
+            catch (OperationCanceledException)
+            {
                 Log("Flat panel open aborted.");
             }
         }
 
-        private async Task CloseCoverCommandAsync(string id) {
+        private async Task CloseCoverCommandAsync(string id)
+        {
             await BroadcastMessageReceivedAsync(id, true);
             Log("Closing Flat Panel...");
-            try {
+            try
+            {
                 await flatMediator.CloseCover(NoProgress, BeginOperation(ref _coverCancellationSource));
                 Log("Flat panel cover closed.");
-            } catch (OperationCanceledException) {
+            }
+            catch (OperationCanceledException)
+            {
                 Log("Flat panel close aborted.");
             }
         }
@@ -153,7 +174,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// True only if the cover reads open afterwards. Like the dome shutter, we go by the cover's state
         /// and not N.I.N.A.'s answer.
         /// </summary>
-        public async Task<bool> OpenCoverAsync(CancellationToken cancellationToken) {
+        public async Task<bool> OpenCoverAsync(CancellationToken cancellationToken)
+        {
             if (!IsConnected) return false;
             if (IsCoverOpen()) return true;
             bool isFinished = await RunTimedAsync(token => flatMediator.OpenCover(NoProgress, token),
@@ -162,7 +184,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         /// <summary>True only if it reads closed afterwards.</summary>
-        public async Task<bool> CloseCoverAsync(CancellationToken cancellationToken) {
+        public async Task<bool> CloseCoverAsync(CancellationToken cancellationToken)
+        {
             if (!IsConnected) return false;
             if (IsCoverClosed()) return true;
             bool isFinished = await RunTimedAsync(token => flatMediator.CloseCover(NoProgress, token),
@@ -171,7 +194,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         /// <summary>True if it reads off afterwards, or the panel has no switchable light.</summary>
-        public async Task<bool> TurnLightOffAsync(CancellationToken cancellationToken) {
+        public async Task<bool> TurnLightOffAsync(CancellationToken cancellationToken)
+        {
             if (!IsConnected) return false;
             if (!IsLightOn) return true;
             bool isFinished = await RunTimedAsync(token => flatMediator.ToggleLight(false, NoProgress, token),
@@ -181,27 +205,37 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
         // A caller's cancel still throws. Our own timeout or a driver exception returns false.
         private async Task<bool> RunTimedAsync(Func<CancellationToken, Task> action, string what,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken)
+        {
             using CancellationTokenSource timeoutSource = new CancellationTokenSource(CoverMoveTimeout, Observatory.Clock);
             using CancellationTokenSource moveCancellationSource =
                 CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutSource.Token);
-            try {
+            try
+            {
                 await action(moveCancellationSource.Token);
                 return true;
-            } catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
                 throw;
-            } catch (OperationCanceledException) {
+            }
+            catch (OperationCanceledException)
+            {
                 LogWarning($"Flat panel {what} did not finish within {CoverMoveTimeout.TotalMinutes:F0} minutes.");
                 return false;
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 LogWarning($"Flat panel {what} failed: {ex.Message}");
                 return false;
             }
         }
 
-        private async Task<bool> ReadBackAsync(Func<bool> isThere, CancellationToken cancellationToken) {
+        private async Task<bool> ReadBackAsync(Func<bool> isThere, CancellationToken cancellationToken)
+        {
             DateTime deadline = Observatory.UtcNow + ReadBackGrace;
-            while (!isThere()) {
+            while (!isThere())
+            {
                 if (Observatory.UtcNow >= deadline) return false;
                 await Task.Delay(ReadBackPollInterval, Observatory.Clock, cancellationToken);
             }

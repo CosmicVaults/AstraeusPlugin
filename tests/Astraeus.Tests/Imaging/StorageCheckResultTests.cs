@@ -1,9 +1,11 @@
 using CosmicVaults.NINA.Astraeus.Engine.Imaging;
 using NUnit.Framework;
 
-namespace CosmicVaults.NINA.Astraeus.Tests.Imaging {
+namespace CosmicVaults.NINA.Astraeus.Tests.Imaging
+{
     [TestFixture]
-    public class StorageCheckResultTests {
+    public class StorageCheckResultTests
+    {
         // Decimal units, as the site quotes quotas, so 50 GB reads as 50 GB in the log and not 46.6 GB, which looks
         // like a bug.
         [TestCase(0, "0 bytes")]
@@ -14,13 +16,15 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Imaging {
         [TestCase(1_000_000_000, "1.0 GB")]
         [TestCase(1_500_000_000, "1.5 GB")]
         [TestCase(50_000_000_000, "50.0 GB")]
-        public void BytesAreFormattedInDecimalUnits(long bytes, string expected) {
+        public void BytesAreFormattedInDecimalUnits(long bytes, string expected)
+        {
             Assert.That(StorageCheckResult.FormatBytes(bytes), Is.EqualTo(expected));
         }
 
         // Pins the storage log line's shape so the night's log keeps reading the same.
         [Test]
-        public void DescribeReadsAsUsedOfQuotaAndFree() {
+        public void DescribeReadsAsUsedOfQuotaAndFree()
+        {
             StorageCheckResult result = Result(usedBytes: 1_500_000_000, quotaBytes: 50_000_000_000, remainingBytes: 48_500_000_000);
 
             Assert.That(result.Describe(), Is.EqualTo("1.5 GB of 50.0 GB used, 48.5 GB free"));
@@ -32,7 +36,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Imaging {
         [TestCase(null, "your storage policy")]
         [TestCase("", "your storage policy")]
         [TestCase("pause_when_full", "pause when full")]
-        public void ThePolicyIsNamedInTheSitesWords(string? policy, string expected) {
+        public void ThePolicyIsNamedInTheSitesWords(string? policy, string expected)
+        {
             Assert.That(Result(policy: policy).DescribePolicy(), Is.EqualTo(expected));
         }
 

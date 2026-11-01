@@ -1,12 +1,15 @@
+using System.Linq;
 using System.Threading.Tasks;
 using CosmicVaults.NINA.Astraeus.Engine.Autopilot;
 using CosmicVaults.NINA.Astraeus.Engine.Autopilot.States;
 using CosmicVaults.NINA.Astraeus.Tests.Helpers;
 using NUnit.Framework;
 
-namespace CosmicVaults.NINA.Astraeus.Tests.Autopilot.States {
+namespace CosmicVaults.NINA.Astraeus.Tests.Autopilot.States
+{
     [TestFixture]
-    public class PollForTargetTests {
+    public class PollForTargetTests
+    {
         // The server's no-work slugs are logged in plain words, and an unknown slug is shown raw, so a newer server still says why.
         [TestCase("no_visible_targets", "No visible targets. Waiting...")]
         [TestCase("wrong_pier_side", "No targets reachable on this side of the pier. Waiting...")]
@@ -17,7 +20,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Autopilot.States {
         [TestCase("setup_incomplete", "Autopilot setup is not finished. Waiting...")]
         [TestCase("location_not_configured", "Observatory location is not set. Waiting...")]
         [TestCase("mercury_in_retrograde", "No image ready (mercury_in_retrograde). Waiting...")]
-        public void ANoWorkReasonIsSaidInPlainWords(string reason, string expected) {
+        public void ANoWorkReasonIsSaidInPlainWords(string reason, string expected)
+        {
             Assert.That(PollForTarget.DescribeNoWork(reason), Is.EqualTo(expected));
         }
 
@@ -27,7 +31,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Autopilot.States {
         [TestCase(120, "2 min")]
         [TestCase(900, "15 min")]
         [TestCase(3600, "60 min")]
-        public void TheWaitIsSaidInSecondsOrMinutes(int seconds, string expected) {
+        public void TheWaitIsSaidInSecondsOrMinutes(int seconds, string expected)
+        {
             Assert.That(PollForTarget.DescribeWait(seconds), Is.EqualTo(expected));
         }
 
@@ -35,7 +40,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Autopilot.States {
         // dashboard shows how long a resubmitted target waits rather than leaving it to guess.
         [TestCase("""{"reason": "no_visible_targets", "retry_after": 900}""", 900, "No visible targets. Waiting... Next poll in 15 min.")]
         [TestCase("""{"reason": "no_visible_targets"}""", 60, "No visible targets. Waiting... Next poll in 60 s.")]
-        public async Task ANoWorkAnswerSaysWhenTheNextPollIs(string reply, int delaySeconds, string line) {
+        public async Task ANoWorkAnswerSaysWhenTheNextPollIs(string reply, int delaySeconds, string line)
+        {
             FakeNina nina = new FakeNina();
             nina.Server.Reply("GET", "/api/autopilot/next/", reply);
             Context context = nina.CreateContext();
@@ -45,6 +51,20 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Autopilot.States {
             Assert.That(result, Is.EqualTo(AutopilotStateResult.Failed));
             Assert.That(context.NextPollDelaySeconds, Is.EqualTo(delaySeconds));
             Assert.That(nina.LogMessages("INFO"), Does.Contain(line));
+        }
+
+        // The server matches the profile as plain text, so it goes up in the same lower-case form as the profile list.
+        [Test]
+        public async Task ThePollNamesTheLoadedProfile()
+        {
+            FakeNina nina = new FakeNina();
+            nina.Server.Reply("GET", "/api/autopilot/next/", """{"retry_after": 60}""");
+            Context context = nina.CreateContext();
+
+            await StateRunner.RunAsync(new PollForTarget("Poll for Target", context));
+
+            FakeServerHandler.Request request = nina.Server.Requests.Single(sent => sent.Path == "/api/autopilot/next/");
+            Assert.That(request.Query, Does.Contain("profile_id=6f0c2b9e-4d71-4a3e-b8f5-1c9e7d2a5b40"));
         }
     }
 }

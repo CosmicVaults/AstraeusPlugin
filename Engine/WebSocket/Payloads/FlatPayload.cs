@@ -1,19 +1,23 @@
 ﻿using CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages;
 using System.Text.Json.Serialization;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Payloads {
+namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Payloads
+{
 
-    public sealed record FlatUpdate : WsMessage {
+    public sealed record FlatUpdate : WsMessage
+    {
         public FlatUpdate(FlatPayload payload, string? context = null)
             : base(
                 type: "update",
                 device: "flat",
                 context: context,
                 payload: ToJsonElement(new DataPayload<FlatPayload>(payload))
-            ) { }
+            )
+        { }
     }
 
-    public record FlatPayload : DevicePayload {
+    public record FlatPayload : DevicePayload
+    {
         [JsonPropertyName("light_on")]
         public bool? IsLightOn { get; init; }
 

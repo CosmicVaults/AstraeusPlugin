@@ -13,28 +13,34 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine {
+namespace CosmicVaults.NINA.Astraeus.Engine
+{
     public class Guider(
         Observatory observatory,
         IWebSocketBus webSocketBus,
         IGuiderMediator guiderMediator)
-        : DeviceComponent<IGuiderVM, IGuiderConsumer, GuiderInfo>(guiderMediator, observatory, webSocketBus) {
+        : DeviceComponent<IGuiderVM, IGuiderConsumer, GuiderInfo>(guiderMediator, observatory, webSocketBus)
+    {
         public override string DeviceType { get; } = "guider";
         public override string DisplayName { get; } = "Guider";
-        public override WsMessage? GetUpdateMessage() {
+        public override WsMessage? GetUpdateMessage()
+        {
             if (!IsConnected || LastInfo == null)
                 return null;
-            
-            GuiderPayload payload = new GuiderPayload() {
+
+            GuiderPayload payload = new GuiderPayload()
+            {
                 DeviceId = DeviceId,
                 IsConnected = IsConnected
             };
             return new GuiderUpdate(payload, "dashboard");
         }
 
-        public override WsMessage? GetDeviceStaticInfo() {
+        public override WsMessage? GetDeviceStaticInfo()
+        {
             GuiderInfo info = guiderMediator.GetInfo();
-            GuiderPayload payload = new GuiderPayload() {
+            GuiderPayload payload = new GuiderPayload()
+            {
                 DeviceId = info.DeviceId,
                 Name = info.Name,
                 DisplayName = info.DisplayName,
@@ -48,7 +54,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return new GuiderUpdate(payload);
         }
 
-        protected override Task HandleCommandAsync(WsCommand command) {
+        protected override Task HandleCommandAsync(WsCommand command)
+        {
             return Task.CompletedTask;
         }
 
@@ -60,34 +67,40 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// the autopilot's thread.
         /// </summary>
         private volatile bool _isGuiding;
-        public bool IsGuiding {
+        public bool IsGuiding
+        {
             get => _isGuiding;
             private set => _isGuiding = value;
         }
 
-        public override async Task Start() {
+        public override async Task Start()
+        {
             await base.Start();
             guiderMediator.GuidingStarted += OnGuidingStarted;
             guiderMediator.GuidingStopped += OnGuidingStopped;
         }
 
-        public override async Task Destroy() {
+        public override async Task Destroy()
+        {
             guiderMediator.GuidingStarted -= OnGuidingStarted;
             guiderMediator.GuidingStopped -= OnGuidingStopped;
             await base.Destroy();
         }
 
-        private Task OnGuidingStarted(object sender, EventArgs eventArgs) {
+        private Task OnGuidingStarted(object sender, EventArgs eventArgs)
+        {
             IsGuiding = true;
             return Task.CompletedTask;
         }
 
-        private Task OnGuidingStopped(object sender, EventArgs eventArgs) {
+        private Task OnGuidingStopped(object sender, EventArgs eventArgs)
+        {
             IsGuiding = false;
             return Task.CompletedTask;
         }
 
-        protected override Task OnMediatorDisconnected(object sender, EventArgs eventArgs) {
+        protected override Task OnMediatorDisconnected(object sender, EventArgs eventArgs)
+        {
             IsGuiding = false;
             return base.OnMediatorDisconnected(sender, eventArgs);
         }
@@ -107,19 +120,26 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Asks even when we think guiding is running. A running guider answers at once, and one that has
         /// stopped or lost its star gets started again. Callers image unguided on false.
         /// </summary>
-        public async Task<bool> StartGuidingAsync(CancellationToken cancellationToken) {
+        public async Task<bool> StartGuidingAsync(CancellationToken cancellationToken)
+        {
             if (!IsConnected) return false;
             bool wasGuiding = IsGuiding;
-            if (wasGuiding) {
+            if (wasGuiding)
+            {
                 LogDebug("Checking guiding is still running...");
-            } else {
+            }
+            else
+            {
                 Log("Starting guiding...");
             }
             bool hasStarted = await guiderMediator.StartGuiding(forceCalibration: false, NoProgress, cancellationToken);
             IsGuiding = hasStarted;
-            if (hasStarted && wasGuiding) {
+            if (hasStarted && wasGuiding)
+            {
                 LogDebug("Guiding is running.");
-            } else {
+            }
+            else
+            {
                 Log(hasStarted ? "Guiding started." : "Guiding failed to start.");
             }
             return hasStarted;
@@ -130,7 +150,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// when nothing was running, so false is reported as unconfirmed only if we knew guiding was on.
         /// Never throws except on the caller's cancellation.
         /// </summary>
-        public async Task<GuidingStopOutcome> StopGuidingAsync(CancellationToken cancellationToken) {
+        public async Task<GuidingStopOutcome> StopGuidingAsync(CancellationToken cancellationToken)
+        {
             if (!IsConnected) return GuidingStopOutcome.NotRunning;
             bool wasGuiding = IsGuiding;
             if (wasGuiding) Log("Stopping guiding...");
@@ -140,10 +161,13 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             Task<bool>? stop = null;
             bool hasStopped;
-            try {
+            try
+            {
                 stop = guiderMediator.StopGuiding(stopCancellation.Token);
                 hasStopped = await stop.WaitAsync(StopTimeout, cancellationToken);
-            } catch (TimeoutException) {
+            }
+            catch (TimeoutException)
+            {
                 stopCancellation.Cancel();
                 stop?.ObserveFaults(exception =>
                     LogDebug($"The abandoned guiding stop ended with: {exception.Message}"));
@@ -151,18 +175,23 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 LogWarning($"The guider did not confirm the stop within {StopTimeout.TotalSeconds:F0} s, " +
                            "so carrying on without it.");
                 return GuidingStopOutcome.NotConfirmed;
-            } catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
                 stop?.ObserveFaults(exception =>
                     LogDebug($"The cancelled guiding stop ended with: {exception.Message}"));
                 throw;
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 // Not an answer, so the flag is left as it was and the next stop asks again.
                 LogWarning($"Stopping guiding failed: {ex.Message}");
                 return GuidingStopOutcome.NotConfirmed;
             }
 
             IsGuiding = false;
-            if (hasStopped) {
+            if (hasStopped)
+            {
                 Log("Guiding stopped.");
                 return GuidingStopOutcome.Stopped;
             }
@@ -175,7 +204,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// Dithers and waits for the guider to settle. Returns true without dithering when not guiding,
         /// so callers needn't check first.
         /// </summary>
-        public async Task<bool> DitherAsync(CancellationToken cancellationToken) {
+        public async Task<bool> DitherAsync(CancellationToken cancellationToken)
+        {
             if (!IsConnected || !IsGuiding) return true;
             Log("Dithering...");
             bool hasDithered = await guiderMediator.Dither(cancellationToken);
@@ -185,7 +215,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
     }
 
-    public enum GuidingStopOutcome {
+    public enum GuidingStopOutcome
+    {
         Stopped,
         /// <summary>Nothing was running to stop, or no guider is connected.</summary>
         NotRunning,

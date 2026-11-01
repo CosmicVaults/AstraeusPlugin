@@ -1,18 +1,22 @@
 ﻿using CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages;
 using System.Text.Json.Serialization;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Payloads {
-    public sealed record AutopilotUpdate : WsMessage {
+namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Payloads
+{
+    public sealed record AutopilotUpdate : WsMessage
+    {
         public AutopilotUpdate(AutopilotPayload payload, string? context = null)
             : base(
                 type: "update",
                 device: "autopilot",
                 context: context,
                 payload: ToJsonElement(new DataPayload<AutopilotPayload>(payload))
-            ) { }
+            )
+        { }
     }
 
-    public record AutopilotPayload {
+    public record AutopilotPayload
+    {
         [JsonPropertyName("state")]
         public string State { get; init; } = "idle";
 

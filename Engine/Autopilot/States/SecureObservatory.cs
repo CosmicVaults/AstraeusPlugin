@@ -2,61 +2,74 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
-    /// <param name="isFault">
-    /// Whether the session is ending badly. Faults record their reason so the teardown can report the
-    /// cause. The routine unsafe and window-closed secures don't, since the run comes back.
-    /// </param>
-    /// <param name="isEmergency">
-    /// Whether the night may resume after this secure: unsafe conditions, or a roof that isn't ours
-    /// closing. It leaves the flat panel alone, since the night comes back once conditions clear.
-    /// </param>
-    internal sealed class SecureObservatory(string name, Context context, Func<string>? reasonProvider = null,
-        bool isFault = false, bool isEmergency = false)
-        : StateBase(name) {
-        public SecureObservatory(string name, Context context, string reason, bool isFault = false)
-            : this(name, context, () => reason, isFault) { }
+namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States
+{
+    /// <summary>
+    /// Parks the mount and closes the roof, with what happens around that decided by the kind. An
+    /// emergency leaves the flat panel alone and records no reason, since the night may resume. The end of
+    /// the night closes the panel. A fault closes the panel and records the reason for the session-end email.
+    /// </summary>
+    internal sealed class SecureObservatory(string name, Context context, SecureKind kind,
+        Func<string>? reasonProvider = null)
+        : StateBase(name)
+    {
+        public SecureObservatory(string name, Context context, SecureKind kind, string reason)
+            : this(name, context, kind, () => reason) { }
 
         private string Reason => reasonProvider?.Invoke() ?? "conditions unsafe";
-        protected internal override bool ShouldWatchSafety => false;  // It's already responding to unsafe, so the safety watcher mustn't re-abort it.
-        protected internal override bool ShouldWatchObservingWindow => false;
-        // It watches the roof around its own park, and closes the roof itself.
-        protected internal override bool ShouldWatchRoof => false;
+        private bool IsEmergency => kind == SecureKind.Emergency;
+        // It's already responding to unsafe, so the safety watcher mustn't re-abort it. It watches the roof
+        // around its own park and closes the roof itself, and it finishes whatever the clock says.
+        protected internal override Aborts AbortsOn => Aborts.None;
 
-        public override async Task<AutopilotStateResult> ExecuteAsync(CancellationToken cancellationToken) {
+        public override async Task<AutopilotStateResult> ExecuteAsync(CancellationToken cancellationToken)
+        {
             string reason = Reason;
-            if (isFault) {
-                context.SessionEndReason ??= reason;
+            if (kind == SecureKind.Fault)
+            {
+                context.Night.RecordEndReason(reason);
             }
 
             // Its own clock, not the machine's, because a started secure must finish. Cancelling it (the
             // autopilot switched off mid-park, say) would leave the mount stopped wherever it got to under
             // an open roof.
             using CancellationTokenSource secureCancellation =
-                new CancellationTokenSource(Context.SecureTimeout, context.Observatory.Clock);
-            RoofAwarePark parking = new RoofAwarePark(context, isEmergency);
+                new CancellationTokenSource(AutopilotConstants.SecureTimeout, context.Observatory.Clock);
+            RoofAwarePark parking = new RoofAwarePark(context, isEmergency: IsEmergency);
             RoofAwarePark.Outcome park = RoofAwarePark.Outcome.NotParked;
-            try {
-                await StopGuidingAsync(secureCancellation.Token);
+            try
+            {
+                // Before the park, since the mount is about to move a long way. A guider that won't stop is
+                // logged and swallowed so the park still happens. The guider bounds its own stop, so one that
+                // never answers costs seconds of the secure's clock.
+                if ((await ImagingStop.GuidingAsync(context, secureCancellation.Token)).Error is Exception guidingError)
+                {
+                    context.LogWarning($"Could not stop guiding while securing: {guidingError.Message}");
+                }
                 park = await parking.RunAsync(reason, secureCancellation.Token);
                 // The flat panel closes only when the night ends, before the roof if the cover can't move
                 // under a closed roof and after it otherwise.
-                bool hasTriedFlatPanel = !isEmergency &&
+                bool hasTriedFlatPanel = !IsEmergency &&
                     await FlatPanelControl.CloseBeforeRoofAsync(context, reason, secureCancellation.Token);
-                if (context.RoofMode == RoofMode.Operate || context.HasOpenedRoofTonight) {
+                if (context.RoofMode == RoofMode.Operate || context.Roof.HasOpenedTonight)
+                {
                     await SecureRoofAsync(park, reason, secureCancellation.Token);
                 }
-                if (!isEmergency) {
+                if (!IsEmergency)
+                {
                     await FlatPanelControl.CloseAfterRoofAsync(context, reason, hasAlreadyTried: hasTriedFlatPanel,
                         secureCancellation.Token);
                 }
-            } catch (OperationCanceledException) when (secureCancellation.IsCancellationRequested) {
+            }
+            catch (OperationCanceledException) when (secureCancellation.IsCancellationRequested)
+            {
                 // Fixed first line, since the server keys its alert cooldown on it.
                 context.ReportCritical(
                     "Securing the observatory did not finish in time. Check the mount and roof manually.",
-                    new {
+                    new
+                    {
                         reason,
-                        timeout = $"{Context.SecureTimeout.TotalMinutes:F0} minutes",
+                        timeout = $"{AutopilotConstants.SecureTimeout.TotalMinutes:F0} minutes",
                         mount = context.Mount?.IsParked == true ? "parked" : "not parked",
                         roof = context.Dome?.ShutterStatusName ?? "no dome",
                         flat_panel = context.FlatPanel?.CoverStateName ?? "none",
@@ -68,48 +81,38 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
             // unless the secure ran out of time.
             bool isParked = park == RoofAwarePark.Outcome.Parked;
             bool isOutOfTime = secureCancellation.IsCancellationRequested;
-            if (!isParked && (park == RoofAwarePark.Outcome.NotParked || isOutOfTime)) {
+            if (!isParked && (park == RoofAwarePark.Outcome.NotParked || isOutOfTime))
+            {
                 await parking.StopUnparkedMountAsync(isOutOfTime);
             }
 
             // What the session-end email reports as `secured`. Only true when parked, and the roof reads
             // closed if this autopilot works it.
-            context.IsSessionSecured = isParked && context.IsRoofClosedOrNotOurs();
-            if (context.IsSessionSecured) context.SessionSecuredAtUtc = context.UtcNow;
-            context.IsRoofUnderAutopilotControl = false;
-            context.IsRoofExpectedOpen = false;
+            context.Night.IsSecured = isParked && context.IsRoofClosedOrNotOurs();
+            if (context.Night.IsSecured) context.Night.SecuredAtUtc = context.UtcNow;
+            context.Roof.Released();
 
             await context.ReportStartedImageFailedAsync($"cycle aborted: {reason}");
 
             return AutopilotStateResult.Completed; // -> waitForSafety (via the specific edge)
         }
 
-        // Before the park, since the mount is about to move a long way. A guider that won't stop is
-        // logged and swallowed so the park still happens. The guider bounds its own stop, so one that
-        // never answers costs seconds of the secure's clock.
-        private async Task StopGuidingAsync(CancellationToken cancellationToken) {
-            if (context.Guider is not { IsConnected: true } guider) return;
-            try {
-                await guider.StopGuidingAsync(cancellationToken);
-            } catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
-                throw;
-            } catch (Exception ex) {
-                context.LogWarning($"Could not stop guiding while securing: {ex.Message}");
-            }
-        }
-
         private async Task SecureRoofAsync(RoofAwarePark.Outcome park, string reason,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken)
+        {
             bool isParked = park == RoofAwarePark.Outcome.Parked;
             // A dropped dome gets one reconnect, since nothing else can close the roof.
-            await context.EnsureConnectedAsync(context.Dome, cancellationToken);
-            if (context.Dome is not { IsConnected: true } dome) {
+            await context.Devices.EnsureConnectedAsync(context.Dome, cancellationToken);
+            if (context.Dome is not { IsConnected: true } dome)
+            {
                 // The refused park has already alerted.
-                if (park == RoofAwarePark.Outcome.RoofNotOpen) {
+                if (park == RoofAwarePark.Outcome.RoofNotOpen)
+                {
                     context.LogWarning("Dome is not connected, so the roof cannot be closed.");
                     return;
                 }
-                if (context.HasOpenedRoofTonight) {
+                if (context.Roof.HasOpenedTonight)
+                {
                     //Roof was connected and opened earlier, but connection lost now.
                     context.ReportCritical(
                         "Roof NOT closed because the dome is not connected. Secure the observatory manually.",
@@ -120,16 +123,19 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
                     "Dome is not connected: the roof cannot be closed, and its state cannot be confirmed.");
                 return;
             }
-            if (dome.IsShutterClosed()) {
+            if (dome.IsShutterClosed())
+            {
                 context.Log($"Roof is already closed ({reason}).");
                 return;
             }
-            if (isParked) {
+            if (isParked)
+            {
                 context.AutopilotStatus = AutopilotStatus.ClosingRoof;
                 await CloseRoofAsync(dome, reason, cancellationToken);
                 return;
             }
-            if (park == RoofAwarePark.Outcome.RoofNotOpen) {
+            if (park == RoofAwarePark.Outcome.RoofNotOpen)
+            {
                 context.LogWarning(
                     $"Roof left {dome.ShutterStatusName}, since closing it over the unparked mount risks a collision.");
                 return;
@@ -147,19 +153,23 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
         /// "done" whatever happened. Each attempt is bounded by the Dome's move timeout, so a driver stuck on
         /// "closing" gets retried.
         /// </summary>
-        private async Task CloseRoofAsync(Dome dome, string reason, CancellationToken cancellationToken) {
+        private async Task CloseRoofAsync(Dome dome, string reason, CancellationToken cancellationToken)
+        {
             context.Log($"Closing roof ({reason}).");
             DateTime started = context.UtcNow;
-            for (int attempt = 1; attempt <= Context.RoofCloseAttempts; attempt++) {
-                if (await dome.CloseShutterAsync(cancellationToken)) {
+            for (int attempt = 1; attempt <= AutopilotConstants.RoofCloseAttempts; attempt++)
+            {
+                if (await dome.CloseShutterAsync(cancellationToken))
+                {
                     context.Log($"Roof closed in {context.ElapsedSince(started)} ({reason}).");
                     return;
                 }
-                if (attempt < Context.RoofCloseAttempts) {
+                if (attempt < AutopilotConstants.RoofCloseAttempts)
+                {
                     context.LogWarning(
-                        $"Roof did not close (attempt {attempt} of {Context.RoofCloseAttempts}, shutter " +
-                        $"{dome.ShutterStatusName}). Trying again in {Context.RoofCloseRetrySeconds}s.");
-                    await Task.Delay(TimeSpan.FromSeconds(Context.RoofCloseRetrySeconds), context.Observatory.Clock,
+                        $"Roof did not close (attempt {attempt} of {AutopilotConstants.RoofCloseAttempts}, shutter " +
+                        $"{dome.ShutterStatusName}). Trying again in {AutopilotConstants.RoofCloseRetrySeconds}s.");
+                    await Task.Delay(TimeSpan.FromSeconds(AutopilotConstants.RoofCloseRetrySeconds), context.Observatory.Clock,
                         cancellationToken);
                 }
             }
@@ -167,10 +177,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States {
             // over a parked mount needs somebody to go and look.
             context.ReportCritical(
                 "Roof NOT closed after parking. Check the roof manually.",
-                new {
+                new
+                {
                     reason,
                     shutter = dome.ShutterStatusName,
-                    attempts = Context.RoofCloseAttempts,
+                    attempts = AutopilotConstants.RoofCloseAttempts,
                     elapsed = context.ElapsedSince(started),
                 });
         }

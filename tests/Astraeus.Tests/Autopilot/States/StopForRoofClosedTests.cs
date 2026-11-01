@@ -8,13 +8,16 @@ using CosmicVaults.NINA.Astraeus.Tests.Helpers;
 using NINA.Equipment.Interfaces;
 using NUnit.Framework;
 
-namespace CosmicVaults.NINA.Astraeus.Tests.Autopilot.States {
+namespace CosmicVaults.NINA.Astraeus.Tests.Autopilot.States
+{
     [TestFixture]
-    public class StopForRoofClosedTests {
+    public class StopForRoofClosedTests
+    {
         private const string Headline = "Roof closed while the autopilot was imaging. The mount was stopped, not parked.";
 
         // Mid-exposure under an operated roof that has just started closing: camera, guider and mount all busy.
-        private static FakeNina ImagingAsTheRoofCloses(ShutterState? shutter = ShutterState.ShutterClosing) {
+        private static FakeNina ImagingAsTheRoofCloses(ShutterState? shutter = ShutterState.ShutterClosing)
+        {
             FakeNina nina = new FakeNina();
             nina.Settings.SetAutopilotRoofMode(RoofMode.Operate);
             nina.SetRoof(shutter);
@@ -24,10 +27,11 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Autopilot.States {
             return nina;
         }
 
-        private static Context ImagingContext(FakeNina nina) {
+        private static Context ImagingContext(FakeNina nina)
+        {
             Context context = nina.CreateContext();
-            context.IsRoofExpectedOpen = true;
-            context.IsRoofUnderAutopilotControl = true;
+            context.Roof.IsExpectedOpen = true;
+            context.Roof.IsUnderAutopilotControl = true;
             return context;
         }
 
@@ -38,7 +42,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Autopilot.States {
         // guider and the mount, in that order, and disables with an alert. The mount is stopped, never parked under a
         // moving roof.
         [Test]
-        public async Task UnderOperateARoofClosingOnItsOwnStopsEverythingAndDisablesWithAnAlert() {
+        public async Task UnderOperateARoofClosingOnItsOwnStopsEverythingAndDisablesWithAnAlert()
+        {
             FakeNina nina = ImagingAsTheRoofCloses();
             Context context = ImagingContext(nina);
 
@@ -47,23 +52,25 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Autopilot.States {
             Assert.That(result, Is.EqualTo(AutopilotStateResult.Failed));
             Assert.That(nina.Commands, Is.EqualTo(new[] { "camera: AbortExposure", "guider: StopGuiding", "mount: SetTrackingEnabled(false)" }));
             Observatory.ReportedEvent alert = nina.Alerts.Single();
-            Assert.Multiple(() => {
+            Assert.Multiple(() =>
+            {
                 Assert.That(alert.Message, Is.EqualTo(Headline));
                 Assert.That(alert.Detail("shutter"), Is.EqualTo("ShutterClosing"));
                 Assert.That(alert.Detail("roof_mode"), Is.EqualTo("Operate"));
                 Assert.That(alert.Detail("mount"), Is.EqualTo("stopped where it was, not parked"));
                 Assert.That(alert.Detail("action"), Is.EqualTo("autopilot disabled (check the roof and the mount before imaging again)"));
-                Assert.That(context.SessionEndReason, Is.EqualTo(
+                Assert.That(context.Night.EndReason, Is.EqualTo(
                     "The roof closed on its own while imaging (shutter ShutterClosing). The mount was stopped where it was, not parked."));
-                Assert.That(context.IsRoofUnderAutopilotControl, Is.False, "the dome's watchdog takes the roof back");
-                Assert.That(context.IsRoofExpectedOpen, Is.False);
+                Assert.That(context.Roof.IsUnderAutopilotControl, Is.False, "the dome's watchdog takes the roof back");
+                Assert.That(context.Roof.IsExpectedOpen, Is.False);
             });
         }
 
         // A roof that isn't ours closing is treated like unsafe conditions: nothing is stopped here, and the emergency
         // secure that follows parks and waits for the roof to open again.
         [Test]
-        public async Task UnderWaitForOpenTheRoofClosingHandsOverToTheEmergencySecure() {
+        public async Task UnderWaitForOpenTheRoofClosingHandsOverToTheEmergencySecure()
+        {
             FakeNina nina = ImagingAsTheRoofCloses();
             nina.Settings.SetAutopilotRoofMode(RoofMode.WaitForOpen);
             Context context = ImagingContext(nina);
@@ -73,48 +80,30 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Autopilot.States {
             Assert.That(result, Is.EqualTo(AutopilotStateResult.Completed));
             Assert.That(nina.Commands, Is.Empty);
             Assert.That(nina.Alerts, Is.Empty);
-            Assert.That(context.SessionEndReason, Is.Null);
+            Assert.That(context.Night.EndReason, Is.Null);
         }
 
-        // A dome that dropped off reads as "not open", so it gets one reconnect first. If the roof still reads open it was
-        // never closed, and the night carries on from the next poll with nothing stopped.
+        // A dome that is gone leaves the roof unknown, and unknown is not open, so under Operate it is the roof-closed stop
+        // with the shutter reported as disconnected. The reconnect was IsRoofStillOpen's job before this state, so none
+        // happens here.
         [Test]
-        public async Task ADomeThatDroppedAndReconnectsWithTheRoofOpenResumesImaging() {
+        public async Task ADisconnectedDomeUnderOperateIsTreatedAsAClosedRoof()
+        {
             FakeNina nina = ImagingAsTheRoofCloses(shutter: null);
             Context context = ImagingContext(nina);
-            nina.LetDomeReconnect(context, () => {
-                nina.SetRoof(ShutterState.ShutterOpen);
-                return true;
-            });
-
-            AutopilotStateResult result = await RunAsync(context);
-
-            Assert.That(result, Is.EqualTo(AutopilotStateResult.Resumed));
-            Assert.That(nina.Commands, Is.Empty);
-            Assert.That(nina.Alerts, Is.Empty);
-            Assert.That(nina.LogMessages("WARNING"),
-                Does.Contain("The dome dropped off and has reconnected with the roof still open, so carrying on imaging."));
-        }
-
-        // A dome that stays gone leaves the roof unknown, and unknown is not open, so under Operate it is the roof-closed stop
-        // with the shutter reported as disconnected.
-        [Test]
-        public async Task ADomeThatStaysGoneUnderOperateIsTreatedAsAClosedRoof() {
-            FakeNina nina = ImagingAsTheRoofCloses(shutter: null);
-            Context context = ImagingContext(nina);
-            nina.LetDomeReconnect(context, () => false);
 
             AutopilotStateResult result = await RunAsync(context);
 
             Assert.That(result, Is.EqualTo(AutopilotStateResult.Failed));
             Assert.That(nina.Commands, Is.EqualTo(new[] { "camera: AbortExposure", "guider: StopGuiding", "mount: SetTrackingEnabled(false)" }));
-            Assert.That(nina.Alerts.Select(alert => alert.Message), Is.EqualTo(new[] { "Autopilot: Dome is not connected.", Headline }));
-            Assert.That(nina.Alerts.Last().Detail("shutter"), Is.EqualTo("disconnected"));
+            Assert.That(nina.Alerts.Select(alert => alert.Message), Is.EqualTo(new[] { Headline }));
+            Assert.That(nina.Alerts.Single().Detail("shutter"), Is.EqualTo("disconnected"));
         }
 
         // A mount already parked is left parked and reported so, since there is nothing to stop.
         [Test]
-        public async Task AParkedMountIsLeftParked() {
+        public async Task AParkedMountIsLeftParked()
+        {
             FakeNina nina = ImagingAsTheRoofCloses();
             nina.SetMount(isConnected: true, isParked: true);
 
@@ -126,7 +115,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Autopilot.States {
 
         // The night ends here, so a cover that may move under the closed roof gets its end-of-night close.
         [Test]
-        public async Task ACoverThatMayMoveUnderTheClosedRoofIsClosed() {
+        public async Task ACoverThatMayMoveUnderTheClosedRoofIsClosed()
+        {
             FakeNina nina = ImagingAsTheRoofCloses();
             nina.Settings.SetAutopilotFlatPanelMode(FlatPanelMode.OpenAndClose);
             nina.Settings.SetShouldOperateFlatPanelWithRoofClosed(true);
@@ -139,12 +129,11 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Autopilot.States {
 
         // A frame the server already has as CAPTURING is reported failed, with why, so it doesn't sit there until a timeout.
         [Test]
-        public async Task AStartedFrameIsReportedFailedToTheServer() {
+        public async Task AStartedFrameIsReportedFailedToTheServer()
+        {
             FakeNina nina = ImagingAsTheRoofCloses();
             Context context = ImagingContext(nina);
-            context.CurrentTarget = new AutopilotNextResponse { ImageId = 8812 };
-            context.IsCurrentTargetStarted = true;
-            context.CurrentClientRef = "ref-1";
+            context.Frame = new Frame(context, new AutopilotNextResponse { ImageId = 8812 }) { IsStarted = true, ClientRef = "ref-1" };
             nina.Server.Reply("POST", "/api/autopilot/images/8812/complete/", "{}");
 
             await RunAsync(context);
@@ -153,7 +142,7 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Autopilot.States {
             Assert.That(body.GetProperty("success").GetBoolean(), Is.False);
             Assert.That(body.GetProperty("reason").GetString(), Is.EqualTo("cycle aborted: the roof closed"));
             Assert.That(body.GetProperty("client_ref").GetString(), Is.EqualTo("ref-1"));
-            Assert.That(context.IsCurrentTargetStarted, Is.False);
+            Assert.That(context.Frame.IsStarted, Is.False);
         }
     }
 }

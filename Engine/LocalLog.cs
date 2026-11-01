@@ -2,13 +2,15 @@ using NINA.Core.Utility;
 using System;
 using System.Runtime.CompilerServices;
 
-namespace CosmicVaults.NINA.Astraeus.Engine {
+namespace CosmicVaults.NINA.Astraeus.Engine
+{
     /// <summary>
     /// Writes to NINA's log file only, so AstraeusLogSink doesn't mirror it to the dashboard. For lines
     /// about the socket itself, or already sent as a typed notification. Serilog calls sinks synchronously,
     /// so a thread-static flag is enough.
     /// </summary>
-    internal static class LocalLog {
+    internal static class LocalLog
+    {
         [ThreadStatic] private static bool _isWriting;
 
         public static bool IsSuppressed => _isWriting;
@@ -29,12 +31,16 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             [CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
             => Write(() => Logger.Error(message, member, file, line));
 
-        private static void Write(Action write) {
+        private static void Write(Action write)
+        {
             bool wasWriting = _isWriting;
             _isWriting = true;
-            try {
+            try
+            {
                 write();
-            } finally {
+            }
+            finally
+            {
                 _isWriting = wasWriting;
             }
         }

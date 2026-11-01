@@ -1,19 +1,23 @@
 ﻿using CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages;
 using System.Text.Json.Serialization;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Payloads {
+namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Payloads
+{
 
-    public sealed record DomeUpdate : WsMessage {
+    public sealed record DomeUpdate : WsMessage
+    {
         public DomeUpdate(DomePayload dome, string? context = null)
             : base(
                 type: "update",
                 device: "dome",
                 context: context,
                 payload: ToJsonElement(new DataPayload<DomePayload>(dome))
-            ) { }
+            )
+        { }
     }
 
-    public record DomePayload : DevicePayload {
+    public record DomePayload : DevicePayload
+    {
         [JsonPropertyName("shutter_status")]
         public string? ShutterStatus { get; init; }
 

@@ -6,11 +6,14 @@ using System.ComponentModel;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine {
-    public partial class Settings {
+namespace CosmicVaults.NINA.Astraeus.Engine
+{
+    public partial class Settings
+    {
         private DebouncedPush? _telescopeSettingsPush;
 
-        private async Task HandleTelescopeUpdateAsync(WsCommand command) {
+        private async Task HandleTelescopeUpdateAsync(WsCommand command)
+        {
             if (!command.Payload.TryGetProperty("data", out JsonElement data)) return;
 
             ITelescopeSettings telescopeSettings = Profile!.TelescopeSettings;
@@ -33,9 +36,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 device: "mount");
         }
 
-        internal Task PushTelescopeSettingsAsync() {
+        internal Task PushTelescopeSettingsAsync()
+        {
             ITelescopeSettings telescopeSettings = Profile!.TelescopeSettings;
-            TelescopeSettingsPayload payload = new TelescopeSettingsPayload {
+            TelescopeSettingsPayload payload = new TelescopeSettingsPayload
+            {
                 Name = telescopeSettings.Name,
                 MountName = telescopeSettings.MountName,
                 FocalLength = telescopeSettings.FocalLength,
@@ -50,7 +55,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return WebSocketBus.SendAsync(SettingsUpdate.Create(payload, "telescope"));
         }
 
-        private void OnTelescopeSettingsChanged(object? sender, PropertyChangedEventArgs eventArgs) {
+        private void OnTelescopeSettingsChanged(object? sender, PropertyChangedEventArgs eventArgs)
+        {
             _telescopeSettingsPush ??= CreatePush(PushTelescopeSettingsAsync, "telescope");
             _telescopeSettingsPush.Schedule();
         }

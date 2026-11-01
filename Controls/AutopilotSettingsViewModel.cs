@@ -9,7 +9,8 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 
-namespace CosmicVaults.NINA.Astraeus.Controls {
+namespace CosmicVaults.NINA.Astraeus.Controls
+{
 
     public record DeviceOption(string Id, string DisplayName);
 
@@ -25,7 +26,8 @@ namespace CosmicVaults.NINA.Astraeus.Controls {
     /// One label, dropdown and refresh row for a single IDeviceComponent, so the XAML declares the
     /// controls once.
     /// </summary>
-    public sealed class DeviceSelectorRow : BaseViewModel {
+    public sealed class DeviceSelectorRow : BaseViewModel
+    {
         private const string NinaNoDeviceId = "No_Device";
 
         private readonly IDeviceComponent? _component;
@@ -34,7 +36,8 @@ namespace CosmicVaults.NINA.Astraeus.Controls {
         public ObservableCollection<DeviceOption> Options { get; } = new();
         public RelayCommand RefreshCommand { get; }
 
-        public DeviceSelectorRow(string label, IDeviceComponent? component) {
+        public DeviceSelectorRow(string label, IDeviceComponent? component)
+        {
             Label = label;
             _component = component;
             RefreshCommand = new RelayCommand(Refresh);
@@ -43,9 +46,11 @@ namespace CosmicVaults.NINA.Astraeus.Controls {
             Refresh();
         }
 
-        public string? SelectedId {
+        public string? SelectedId
+        {
             get => _component?.DefaultDevice ?? BaseComponent.NoDevice;
-            set {
+            set
+            {
                 // WPF writes null whenever the selected item leaves Options. Picking "None" arrives as its
                 // own id, so a null is never a real choice and mustn't clear the saved default.
                 if (value is null) return;
@@ -54,14 +59,16 @@ namespace CosmicVaults.NINA.Astraeus.Controls {
             }
         }
 
-        public void Refresh() {
+        public void Refresh()
+        {
             // Always include "None" and the saved selection so the ComboBox has an item matching its
             // bound value. Without a match, a two-way SelectedValue writes null back and wipes the setting.
             List<DeviceOption> desiredOptions = new List<DeviceOption> {
                 new DeviceOption(BaseComponent.NoDevice, "None")
             };
             IList<IDevice>? devices = _component?.GetAvailableDevices();
-            if (devices != null) {
+            if (devices != null)
+            {
                 IEnumerable<IDevice> realDevices = devices
                     .Where(candidate => candidate.Id != NinaNoDeviceId && !string.IsNullOrEmpty(candidate.Id));
                 foreach (IDevice device in realDevices)
@@ -75,12 +82,14 @@ namespace CosmicVaults.NINA.Astraeus.Controls {
             // Sync in place by id, adding new ids before dropping old ones, so the selected id is always
             // present. A rename like "Mount (OFFLINE)" to "Mount" after a rescan replaces the entry, except
             // for the selected one, since replacing that drops the selection too.
-            foreach (DeviceOption option in desiredOptions) {
+            foreach (DeviceOption option in desiredOptions)
+            {
                 int index = IndexOfId(option.Id);
                 if (index < 0) Options.Add(option);
                 else if (Options[index] != option && option.Id != savedId) Options[index] = option;
             }
-            for (int index = Options.Count - 1; index >= 0; index--) {
+            for (int index = Options.Count - 1; index >= 0; index--)
+            {
                 string offeredId = Options[index].Id;
                 if (!desiredOptions.Any(option => option.Id == offeredId)) Options.RemoveAt(index);
             }
@@ -88,36 +97,41 @@ namespace CosmicVaults.NINA.Astraeus.Controls {
             OnPropertyChanged(nameof(SelectedId));
         }
 
-        private int IndexOfId(string id) {
+        private int IndexOfId(string id)
+        {
             for (int index = 0; index < Options.Count; index++)
                 if (Options[index].Id == id) return index;
             return -1;
         }
     }
 
-    public class AutopilotSettingsViewModel : BaseViewModel {
+    public class AutopilotSettingsViewModel : BaseViewModel
+    {
 
         private readonly Autopilot _autopilot;
 
-        public AutopilotSettingsViewModel(Observatory observatory) {
+        public AutopilotSettingsViewModel(Observatory observatory)
+        {
             _autopilot = observatory.GetComponent<Autopilot>();
 
             // Every setting raises this one event with the property name. The VM's property names match
             // the Autopilot's, so the notification passes straight through.
-            _autopilot.SettingsChanged += (_, eventArgs) => {
+            _autopilot.SettingsChanged += (_, eventArgs) =>
+            {
                 OnPropertyChanged(eventArgs.PropertyName);
-                switch (eventArgs.PropertyName) {
+                switch (eventArgs.PropertyName)
+                {
                     case nameof(IsSmartAutofocusEnabled): OnPropertyChanged(nameof(IsCadenceTriggersEnabled)); break;
-                    case nameof(RotatorFallbackMode):     OnPropertyChanged(nameof(IsRotatorAngleEnabled)); break;
-                    case nameof(FlatPanelMode):           OnPropertyChanged(nameof(IsFlatPanelRoofOptionEnabled)); break;
-                    case nameof(SafeSettleSeconds):       OnPropertyChanged(nameof(SafeSettleLabel)); break;
+                    case nameof(RotatorFallbackMode): OnPropertyChanged(nameof(IsRotatorAngleEnabled)); break;
+                    case nameof(FlatPanelMode): OnPropertyChanged(nameof(IsFlatPanelRoofOptionEnabled)); break;
+                    case nameof(SafeSettleSeconds): OnPropertyChanged(nameof(SafeSettleLabel)); break;
                 }
             };
 
-            BrowseStartupSequenceCommand  = new RelayCommand(BrowseStartupSequence);
-            ClearStartupSequenceCommand   = new RelayCommand(() => StartupSequencePath = null);
+            BrowseStartupSequenceCommand = new RelayCommand(BrowseStartupSequence);
+            ClearStartupSequenceCommand = new RelayCommand(() => StartupSequencePath = null);
             BrowseShutdownSequenceCommand = new RelayCommand(BrowseShutdownSequence);
-            ClearShutdownSequenceCommand  = new RelayCommand(() => ShutdownSequencePath = null);
+            ClearShutdownSequenceCommand = new RelayCommand(() => ShutdownSequencePath = null);
 
             DefaultDevices = new List<DeviceSelectorRow> {
                 CreateDeviceRow<Mount>("Mount"),
@@ -133,36 +147,43 @@ namespace CosmicVaults.NINA.Astraeus.Controls {
                 CreateDeviceRow<Dome>("Roof (dome)"),
             };
 
-            DeviceSelectorRow CreateDeviceRow<T>(string label) where T : class, IDeviceComponent {
+            DeviceSelectorRow CreateDeviceRow<T>(string label) where T : class, IDeviceComponent
+            {
                 observatory.TryGetComponent(out T? component);
                 return new DeviceSelectorRow(label, component);
             }
         }
-        
-        
-      
+
+
+
 
         ///////////// Autopilot settings /////////////
 
-        public bool IsEnabled {
+        public bool IsEnabled
+        {
             get => _autopilot.IsEnabled;
-            set {
+            set
+            {
                 _autopilot.IsEnabled = value;
                 OnPropertyChanged();
             }
         }
 
-        public RoofMode RoofMode {
+        public RoofMode RoofMode
+        {
             get => _autopilot.RoofMode;
-            set {
+            set
+            {
                 _autopilot.RoofMode = value;
                 OnPropertyChanged();
             }
         }
 
-        public bool CanMountMoveUnderClosedRoof {
+        public bool CanMountMoveUnderClosedRoof
+        {
             get => _autopilot.CanMountMoveUnderClosedRoof;
-            set {
+            set
+            {
                 _autopilot.CanMountMoveUnderClosedRoof = value;
                 OnPropertyChanged();
             }
@@ -173,9 +194,11 @@ namespace CosmicVaults.NINA.Astraeus.Controls {
         /// roof and unparks after an unsafe spell. 0 to MaxSafeSettleSeconds, where 0 resumes on the
         /// first Safe reading.
         /// </summary>
-        public int SafeSettleSeconds {
+        public int SafeSettleSeconds
+        {
             get => _autopilot.SafeSettleSeconds;
-            set {
+            set
+            {
                 _autopilot.SafeSettleSeconds = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(SafeSettleLabel));
@@ -184,7 +207,8 @@ namespace CosmicVaults.NINA.Astraeus.Controls {
 
         public int MaxSafeSettleSeconds => AstraeusSettings.MaxSafeSettleSeconds;
 
-        public string SafeSettleLabel => SafeSettleSeconds switch {
+        public string SafeSettleLabel => SafeSettleSeconds switch
+        {
             <= 0 => "Safe Settle Timer: off (resume on the first Safe reading)",
             < 60 and int seconds => $"Safe Settle Timer: {seconds} s",
             int seconds when seconds % 60 == 0 => $"Safe Settle Timer: {seconds / 60} min",
@@ -198,17 +222,21 @@ namespace CosmicVaults.NINA.Astraeus.Controls {
             new RoofModeOption(RoofMode.Operate,     "Operate roof automatically")
         };
 
-        public bool ShouldAutoConnectEquipment {
+        public bool ShouldAutoConnectEquipment
+        {
             get => _autopilot.ShouldAutoConnectEquipment;
-            set {
+            set
+            {
                 _autopilot.ShouldAutoConnectEquipment = value;
                 OnPropertyChanged();
             }
         }
 
-        public OperatingWindow OperatingWindow {
+        public OperatingWindow OperatingWindow
+        {
             get => _autopilot.OperatingWindow;
-            set {
+            set
+            {
                 _autopilot.OperatingWindow = value;
                 OnPropertyChanged();
             }
@@ -220,18 +248,22 @@ namespace CosmicVaults.NINA.Astraeus.Controls {
             new OperatingWindowOption(OperatingWindow.Astronomical, "Astronomical twilight (-18°)")
         };
 
-        public bool IsCameraCoolingEnabled {
+        public bool IsCameraCoolingEnabled
+        {
             get => _autopilot.IsCameraCoolingEnabled;
-            set {
+            set
+            {
                 _autopilot.IsCameraCoolingEnabled = value;
                 OnPropertyChanged();
             }
         }
 
         /// <summary>The temperature (°C) the autopilot cools the camera to. The box shows the clamped value.</summary>
-        public double CameraCoolingTemperature {
+        public double CameraCoolingTemperature
+        {
             get => _autopilot.CameraCoolingTemperature;
-            set {
+            set
+            {
                 _autopilot.CameraCoolingTemperature = value;
                 OnPropertyChanged();
             }
@@ -239,18 +271,22 @@ namespace CosmicVaults.NINA.Astraeus.Controls {
 
         ///////////// Flat panel /////////////
 
-        public FlatPanelMode FlatPanelMode {
+        public FlatPanelMode FlatPanelMode
+        {
             get => _autopilot.FlatPanelMode;
-            set {
+            set
+            {
                 _autopilot.FlatPanelMode = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(IsFlatPanelRoofOptionEnabled));
             }
         }
 
-        public bool ShouldOperateFlatPanelWithRoofClosed {
+        public bool ShouldOperateFlatPanelWithRoofClosed
+        {
             get => _autopilot.ShouldOperateFlatPanelWithRoofClosed;
-            set {
+            set
+            {
                 _autopilot.ShouldOperateFlatPanelWithRoofClosed = value;
                 OnPropertyChanged();
             }
@@ -267,68 +303,84 @@ namespace CosmicVaults.NINA.Astraeus.Controls {
 
         ///////////// Mount limits /////////////
 
-        public bool IsMountLimitEnabled {
+        public bool IsMountLimitEnabled
+        {
             get => _autopilot.IsMountLimitEnabled;
-            set {
+            set
+            {
                 _autopilot.IsMountLimitEnabled = value;
                 OnPropertyChanged();
             }
         }
 
-        public bool IsAltitudeLimitEnabled {
+        public bool IsAltitudeLimitEnabled
+        {
             get => _autopilot.IsAltitudeLimitEnabled;
-            set {
+            set
+            {
                 _autopilot.IsAltitudeLimitEnabled = value;
                 OnPropertyChanged();
             }
         }
 
-        public double MinAltitudeDegrees {
+        public double MinAltitudeDegrees
+        {
             get => _autopilot.MinAltitudeDegrees;
-            set {
+            set
+            {
                 _autopilot.MinAltitudeDegrees = value;
                 OnPropertyChanged();
             }
         }
 
-        public bool IsCustomHorizonLimitEnabled {
+        public bool IsCustomHorizonLimitEnabled
+        {
             get => _autopilot.IsCustomHorizonLimitEnabled;
-            set {
+            set
+            {
                 _autopilot.IsCustomHorizonLimitEnabled = value;
                 OnPropertyChanged();
             }
         }
 
-        public bool IsMeridianFlipEnabled {
+        public bool IsMeridianFlipEnabled
+        {
             get => _autopilot.IsMeridianFlipEnabled;
-            set {
+            set
+            {
                 _autopilot.IsMeridianFlipEnabled = value;
                 OnPropertyChanged();
             }
         }
 
-        public double RecenterToleranceArcmin {
+        public double RecenterToleranceArcmin
+        {
             get => _autopilot.RecenterToleranceArcmin;
-            set {
+            set
+            {
                 _autopilot.RecenterToleranceArcmin = value;
                 OnPropertyChanged();
             }
         }
-        
+
         ///////////// Rotator /////////////
 
-        public RotatorFallbackMode RotatorFallbackMode {
+        public RotatorFallbackMode RotatorFallbackMode
+        {
             get => _autopilot.RotatorFallbackMode;
-            set {
+            set
+            {
                 _autopilot.RotatorFallbackMode = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(IsRotatorAngleEnabled));
             }
         }
 
-        public double RotatorFallbackAngle {
+        public double RotatorFallbackAngle
+        {
             get => _autopilot.RotatorFallbackAngle;
-            set {
+            set
+            {
                 _autopilot.RotatorFallbackAngle = value;
                 OnPropertyChanged();
             }
@@ -344,57 +396,71 @@ namespace CosmicVaults.NINA.Astraeus.Controls {
 
         ///////////// Autofocus /////////////
 
-        public bool IsAutofocusEnabled {
+        public bool IsAutofocusEnabled
+        {
             get => _autopilot.IsAutofocusEnabled;
-            set {
+            set
+            {
                 _autopilot.IsAutofocusEnabled = value;
                 OnPropertyChanged();
             }
         }
 
-        public bool ShouldAutofocusOnTemperatureChange {
+        public bool ShouldAutofocusOnTemperatureChange
+        {
             get => _autopilot.ShouldAutofocusOnTemperatureChange;
-            set {
+            set
+            {
                 _autopilot.ShouldAutofocusOnTemperatureChange = value;
                 OnPropertyChanged();
             }
         }
 
-        public double AutofocusTemperatureThreshold {
+        public double AutofocusTemperatureThreshold
+        {
             get => _autopilot.AutofocusTemperatureThreshold;
-            set {
+            set
+            {
                 _autopilot.AutofocusTemperatureThreshold = value;
                 OnPropertyChanged();
             }
         }
 
-        public bool ShouldAutofocusOnFilterChange {
+        public bool ShouldAutofocusOnFilterChange
+        {
             get => _autopilot.ShouldAutofocusOnFilterChange;
-            set {
+            set
+            {
                 _autopilot.ShouldAutofocusOnFilterChange = value;
                 OnPropertyChanged();
             }
         }
 
-        public bool ShouldAutofocusOnTimeInterval {
+        public bool ShouldAutofocusOnTimeInterval
+        {
             get => _autopilot.ShouldAutofocusOnTimeInterval;
-            set {
+            set
+            {
                 _autopilot.ShouldAutofocusOnTimeInterval = value;
                 OnPropertyChanged();
             }
         }
 
-        public int AutofocusIntervalMinutes {
+        public int AutofocusIntervalMinutes
+        {
             get => _autopilot.AutofocusIntervalMinutes;
-            set {
+            set
+            {
                 _autopilot.AutofocusIntervalMinutes = value;
                 OnPropertyChanged();
             }
         }
 
-        public bool IsSmartAutofocusEnabled {
+        public bool IsSmartAutofocusEnabled
+        {
             get => _autopilot.IsSmartAutofocusEnabled;
-            set {
+            set
+            {
                 _autopilot.IsSmartAutofocusEnabled = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(IsCadenceTriggersEnabled));
@@ -406,9 +472,11 @@ namespace CosmicVaults.NINA.Astraeus.Controls {
 
         ///////////// Cloud upload /////////////
 
-        public bool IsCloudUploadEnabled {
+        public bool IsCloudUploadEnabled
+        {
             get => _autopilot.IsCloudUploadEnabled;
-            set {
+            set
+            {
                 _autopilot.IsCloudUploadEnabled = value;
                 OnPropertyChanged();
             }
@@ -422,30 +490,37 @@ namespace CosmicVaults.NINA.Astraeus.Controls {
         /// Call once the equipment components have started, since the rows first fill before any devices
         /// exist. Hops to the UI thread, because the plugin loop calls this from the thread pool.
         /// </summary>
-        public void RefreshDevices() {
+        public void RefreshDevices()
+        {
             System.Windows.Threading.Dispatcher? dispatcher = System.Windows.Application.Current?.Dispatcher;
-            if (dispatcher != null && !dispatcher.CheckAccess()) {
+            if (dispatcher != null && !dispatcher.CheckAccess())
+            {
                 dispatcher.Invoke(RefreshDevices);
                 return;
             }
-            foreach (DeviceSelectorRow row in DefaultDevices) {
+            foreach (DeviceSelectorRow row in DefaultDevices)
+            {
                 row.Refresh();
             }
         }
 
         ///////////// Startup / shutdown sequences /////////////
 
-        public string? StartupSequencePath {
+        public string? StartupSequencePath
+        {
             get => _autopilot.StartupSequencePath;
-            set {
+            set
+            {
                 _autopilot.StartupSequencePath = value;
                 OnPropertyChanged();
             }
         }
 
-        public string? ShutdownSequencePath {
+        public string? ShutdownSequencePath
+        {
             get => _autopilot.ShutdownSequencePath;
-            set {
+            set
+            {
                 _autopilot.ShutdownSequencePath = value;
                 OnPropertyChanged();
             }
@@ -456,30 +531,37 @@ namespace CosmicVaults.NINA.Astraeus.Controls {
         public RelayCommand BrowseShutdownSequenceCommand { get; }
         public RelayCommand ClearShutdownSequenceCommand { get; }
 
-        private void BrowseStartupSequence() {
+        private void BrowseStartupSequence()
+        {
             string? picked = PickSequenceFile(StartupSequencePath);
             if (picked != null) StartupSequencePath = picked;
         }
 
-        private void BrowseShutdownSequence() {
+        private void BrowseShutdownSequence()
+        {
             string? picked = PickSequenceFile(ShutdownSequencePath);
             if (picked != null) ShutdownSequencePath = picked;
         }
 
-        private static string? PickSequenceFile(string? currentPath) {
-            OpenFileDialog dialog = new OpenFileDialog {
+        private static string? PickSequenceFile(string? currentPath)
+        {
+            OpenFileDialog dialog = new OpenFileDialog
+            {
                 Title = "Select N.I.N.A. sequence (.json)",
                 Filter = "N.I.N.A. sequence (*.json)|*.json|All files (*.*)|*.*",
                 CheckFileExists = true,
                 Multiselect = false
             };
-            if (!string.IsNullOrEmpty(currentPath)) {
-                try {
+            if (!string.IsNullOrEmpty(currentPath))
+            {
+                try
+                {
                     string? directory = Path.GetDirectoryName(currentPath);
                     if (!string.IsNullOrEmpty(directory) && Directory.Exists(directory))
                         dialog.InitialDirectory = directory;
                     dialog.FileName = Path.GetFileName(currentPath);
-                } catch { /* best-effort seed only */ }
+                }
+                catch { /* best-effort seed only */ }
             }
             return dialog.ShowDialog() == true ? dialog.FileName : null;
         }

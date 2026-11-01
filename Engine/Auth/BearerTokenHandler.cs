@@ -6,13 +6,15 @@ using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.Auth {
+namespace CosmicVaults.NINA.Astraeus.Engine.Auth
+{
 
     /// <summary>
     /// Adds the access token to each request and retries once with a fresh one on a 401. A handler because
     /// GetAsync and PostAsync would skip a SendAsync override on AstraeusWebClient.
     /// </summary>
-    public class BearerTokenHandler : DelegatingHandler {
+    public class BearerTokenHandler : DelegatingHandler
+    {
 
         private static readonly Uri AstraeusServer = new Uri(ServerEndpoints.BaseUrl);
 
@@ -27,37 +29,44 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Auth {
         public BearerTokenHandler(HttpMessageHandler innerHandler) : base(innerHandler) { }
 
         protected override async Task<HttpResponseMessage> SendAsync(
-                HttpRequestMessage request, CancellationToken cancellationToken) {
+                HttpRequestMessage request, CancellationToken cancellationToken)
+        {
             HttpResponseMessage response = await SendWithBearerAsync(request, cancellationToken);
             // Checked on every path, the OAuth endpoints included, so a refused version is noticed
             // whether or not anybody is signed in.
-            if (response.StatusCode == HttpStatusCode.UpgradeRequired && IsAstraeusServer(request)) {
+            if (response.StatusCode == HttpStatusCode.UpgradeRequired && IsAstraeusServer(request))
+            {
                 UpdateRequired?.Invoke();
             }
             return response;
         }
 
         private async Task<HttpResponseMessage> SendWithBearerAsync(
-                HttpRequestMessage request, CancellationToken cancellationToken) {
+                HttpRequestMessage request, CancellationToken cancellationToken)
+        {
 
             // The OAuth endpoints never get a bearer header, since getting one would recurse back
             // through GetAccessTokenAsync while refreshing. Nor does any host other than the Astraeus server.
-            if (Authenticator == null || IsOAuthEndpoint(request) || !IsAstraeusServer(request)) {
+            if (Authenticator == null || IsOAuthEndpoint(request) || !IsAstraeusServer(request))
+            {
                 return await base.SendAsync(request, cancellationToken);
             }
 
             string? token = await Authenticator.GetAccessTokenAsync();
-            if (token != null) {
+            if (token != null)
+            {
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             }
 
             // Buffer before the first send so the request can be replayed on 401.
-            if (request.Content != null) {
+            if (request.Content != null)
+            {
                 await request.Content.LoadIntoBufferAsync();
             }
 
             HttpResponseMessage response = await base.SendAsync(request, cancellationToken);
-            if (response.StatusCode != HttpStatusCode.Unauthorized) {
+            if (response.StatusCode != HttpStatusCode.Unauthorized)
+            {
                 return response;
             }
 
@@ -69,7 +78,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Auth {
             string? refreshed = await Authenticator.GetAccessTokenAsync();
 
             HttpRequestMessage retry = await CloneAsync(request);
-            if (refreshed != null) {
+            if (refreshed != null)
+            {
                 retry.Headers.Authorization = new AuthenticationHeaderValue("Bearer", refreshed);
             }
             return await base.SendAsync(retry, cancellationToken);
@@ -84,20 +94,25 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Auth {
                 StringComparison.OrdinalIgnoreCase) == 0;
 
         /// <summary>An HttpRequestMessage can't be sent twice, so the retry needs a copy.</summary>
-        private static async Task<HttpRequestMessage> CloneAsync(HttpRequestMessage request) {
-            HttpRequestMessage clone = new HttpRequestMessage(request.Method, request.RequestUri) {
+        private static async Task<HttpRequestMessage> CloneAsync(HttpRequestMessage request)
+        {
+            HttpRequestMessage clone = new HttpRequestMessage(request.Method, request.RequestUri)
+            {
                 Version = request.Version,
             };
 
-            if (request.Content != null) {
+            if (request.Content != null)
+            {
                 byte[] bytes = await request.Content.ReadAsByteArrayAsync();
                 clone.Content = new ByteArrayContent(bytes);
-                foreach (KeyValuePair<string, IEnumerable<string>> header in request.Content.Headers) {
+                foreach (KeyValuePair<string, IEnumerable<string>> header in request.Content.Headers)
+                {
                     clone.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
                 }
             }
 
-            foreach (KeyValuePair<string, IEnumerable<string>> header in request.Headers) {
+            foreach (KeyValuePair<string, IEnumerable<string>> header in request.Headers)
+            {
                 clone.Headers.TryAddWithoutValidation(header.Key, header.Value);
             }
 

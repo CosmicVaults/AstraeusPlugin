@@ -6,11 +6,14 @@ using System.ComponentModel;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine {
-    public partial class Settings {
+namespace CosmicVaults.NINA.Astraeus.Engine
+{
+    public partial class Settings
+    {
         private DebouncedPush? _cameraSettingsPush;
 
-        private async Task HandleCameraUpdateAsync(WsCommand command) {
+        private async Task HandleCameraUpdateAsync(WsCommand command)
+        {
             if (!command.Payload.TryGetProperty("data", out JsonElement data)) return;
 
             ICameraSettings cameraSettings = Profile!.CameraSettings;
@@ -24,9 +27,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 $"bitDepth={cameraSettings.BitDepth}, bayerPattern={cameraSettings.BayerPattern}", device: "camera");
         }
 
-        internal Task PushCameraSettingsAsync() {
+        internal Task PushCameraSettingsAsync()
+        {
             ICameraSettings cameraSettings = Profile!.CameraSettings;
-            CameraSettingsPayload payload = new CameraSettingsPayload {
+            CameraSettingsPayload payload = new CameraSettingsPayload
+            {
                 PixelSize = cameraSettings.PixelSize,
                 BitDepth = cameraSettings.BitDepth,
                 BayerPattern = cameraSettings.BayerPattern
@@ -34,7 +39,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return WebSocketBus.SendAsync(SettingsUpdate.Create(payload, "camera"));
         }
 
-        private void OnCameraSettingsChanged(object? sender, PropertyChangedEventArgs eventArgs) {
+        private void OnCameraSettingsChanged(object? sender, PropertyChangedEventArgs eventArgs)
+        {
             _cameraSettingsPush ??= CreatePush(PushCameraSettingsAsync, "camera");
             _cameraSettingsPush.Schedule();
         }

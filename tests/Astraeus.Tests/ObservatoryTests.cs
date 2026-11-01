@@ -5,11 +5,14 @@ using CosmicVaults.NINA.Astraeus.Engine.Autopilot;
 using CosmicVaults.NINA.Astraeus.Tests.Helpers;
 using NUnit.Framework;
 
-namespace CosmicVaults.NINA.Astraeus.Tests {
+namespace CosmicVaults.NINA.Astraeus.Tests
+{
     [TestFixture]
-    public class ObservatoryTests {
+    public class ObservatoryTests
+    {
         // 1 March: sunset 18:00, nautical dusk 19:00, astronomical dusk 20:00, and the dawns 04:00, 05:00 and 06:00 the next day.
-        private static FakeNina NightWith(DateTime localNow) {
+        private static FakeNina NightWith(DateTime localNow)
+        {
             FakeNina nina = new FakeNina();
             nina.Clock.SetUtcNow(new DateTimeOffset(localNow, TimeSpan.Zero));
             nina.SetTwilight(
@@ -26,7 +29,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
         [TestCase(1, 22, false)]
         [TestCase(2, 3, false)]
         [TestCase(2, 6, true)]
-        public void TheNightRunsFromTheChosenDuskToTheChosenDawn(int day, int hour, bool isOutside) {
+        public void TheNightRunsFromTheChosenDuskToTheChosenDawn(int day, int hour, bool isOutside)
+        {
             FakeNina nina = NightWith(At(day, hour));
             nina.Settings.SetAutopilotOperatingWindow(OperatingWindow.Nautical);
 
@@ -38,7 +42,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
         [TestCase(OperatingWindow.Sunset, false)]
         [TestCase(OperatingWindow.Nautical, false)]
         [TestCase(OperatingWindow.Astronomical, true)]
-        public void TheWindowSettingPicksWhichTwilightCounts(OperatingWindow window, bool isOutside) {
+        public void TheWindowSettingPicksWhichTwilightCounts(OperatingWindow window, bool isOutside)
+        {
             FakeNina nina = NightWith(new DateTime(2026, 3, 1, 19, 30, 0));
             nina.Settings.SetAutopilotOperatingWindow(window);
 
@@ -48,7 +53,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
         // After dawn is the same twilight's rise, which the dome's roof watchdog and the secure both read.
         [TestCase(1, 22, false)]
         [TestCase(2, 6, true)]
-        public void AfterDawnFollowsTheChosenTwilight(int day, int hour, bool isAfterDawn) {
+        public void AfterDawnFollowsTheChosenTwilight(int day, int hour, bool isAfterDawn)
+        {
             FakeNina nina = NightWith(At(day, hour));
             nina.Settings.SetAutopilotOperatingWindow(OperatingWindow.Nautical);
 
@@ -57,7 +63,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
 
         // A day with no dawn, as in a polar summer, is not "after dawn". Guessing yes would close the roof at noon.
         [Test]
-        public void ADayWithNoDawnIsNotAfterDawn() {
+        public void ADayWithNoDawnIsNotAfterDawn()
+        {
             FakeNina nina = new FakeNina();
             nina.SetTwilight(
                 sun: new FixedRiseAndSet(set: null, rise: null),
@@ -73,7 +80,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
         // Tests run signed out, where an alert is dropped before it reaches the server. The hook sees it first, so what
         // the night would have emailed can still be checked, and the same alert is logged as CRITICAL under the autopilot.
         [Test]
-        public void AnAlertIsSeenByTheHookBeforeTheSignInCheckDropsIt() {
+        public void AnAlertIsSeenByTheHookBeforeTheSignInCheckDropsIt()
+        {
             FakeNina nina = new FakeNina();
 
             nina.CreateContext().ReportCritical("Roof NOT closed after parking. Check the roof manually.", new { reason = "dawn" });
@@ -88,7 +96,8 @@ namespace CosmicVaults.NINA.Astraeus.Tests {
         // Every line above DEBUG is recorded with its severity and device whether or not the socket is up, so a test reads
         // the night's log without a dashboard. DEBUG stays in N.I.N.A.'s file only.
         [Test]
-        public void LogLinesAreRecordedWithTheirSeverityAndDeviceAndDebugIsNot() {
+        public void LogLinesAreRecordedWithTheirSeverityAndDeviceAndDebugIsNot()
+        {
             FakeNina nina = new FakeNina();
 
             nina.Observatory.Log("Parking scope.", "mount");

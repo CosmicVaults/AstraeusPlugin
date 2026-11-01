@@ -1,19 +1,23 @@
 ﻿using CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages;
 using System.Text.Json.Serialization;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Payloads {
+namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Payloads
+{
 
-    public sealed record FocuserUpdate : WsMessage {
+    public sealed record FocuserUpdate : WsMessage
+    {
         public FocuserUpdate(FocuserPayload payload, string? context = null)
             : base(
                 type: "update",
                 device: "focuser",
                 context: context,
                 payload: ToJsonElement(new DataPayload<FocuserPayload>(payload))
-            ) { }
+            )
+        { }
     }
 
-    public record FocuserPayload : DevicePayload {
+    public record FocuserPayload : DevicePayload
+    {
         public double? Position { get; init; }
         [JsonPropertyName("step_size")]
         public double? StepSize { get; init; }

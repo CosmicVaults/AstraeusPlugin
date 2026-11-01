@@ -6,7 +6,8 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
+namespace CosmicVaults.NINA.Astraeus.Engine.Feed
+{
     /// <summary>
     /// Sends webcam frames to the dashboard.
     ///
@@ -24,7 +25,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
     /// After the linger the source is torn down, freeing the camera's connection slot and decode thread.
     /// </summary>
     public sealed class WebcamFeed(Observatory observatory, IWebSocketBus webSocketBus)
-        : ServiceComponent(observatory, webSocketBus) {
+        : ServiceComponent(observatory, webSocketBus)
+    {
 
         private static readonly TimeSpan InitialBackoff = TimeSpan.FromSeconds(2);
         private static readonly TimeSpan MaxBackoff = TimeSpan.FromSeconds(60);
@@ -73,21 +75,25 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
         // rate, and a webcam shouldn't drag the whole dashboard to the fast cadence.
         public override bool IsBusy => false;
 
-        public override async Task Start() {
+        public override async Task Start()
+        {
             await base.Start();
             _loopCancellationSource = new CancellationTokenSource();
             CancellationToken token = _loopCancellationSource.Token;
             _loop = Task.Run(() => RunAsync(token), token);
         }
 
-        public override async Task Destroy() {
+        public override async Task Destroy()
+        {
             await StopAsync();
             await base.Destroy();
         }
 
-        public async Task StopAsync() {
+        public async Task StopAsync()
+        {
             _loopCancellationSource?.Cancel();
-            if (_loop != null) {
+            if (_loop != null)
+            {
                 try { await _loop; } catch (OperationCanceledException) { /* expected on shutdown */ }
             }
             _loop = null;
@@ -107,17 +113,21 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
             Observatory.IsSocketOpen &&
             Observatory.Cadence.HasFeedSubscribers;
 
-        protected override async Task HandleCommandAsync(WsCommand command) {
-            switch (command.Action) {
+        protected override async Task HandleCommandAsync(WsCommand command)
+        {
+            switch (command.Action)
+            {
                 case "snapshotNow":
                     // The dashboard asks on tab focus and on connect, so this stays cheap. We set a flag
                     // for the loop and reply. Capturing here would let a burst open several
                     // connections to the camera at once.
-                    if (!Observatory.Settings.IsFeedEnabled()) {
+                    if (!Observatory.Settings.IsFeedEnabled())
+                    {
                         await BroadcastMessageReceivedAsync(command.Id, false, "The feed is not enabled.");
                         break;
                     }
-                    if (!Observatory.Cadence.HasFeedSubscribers) {
+                    if (!Observatory.Cadence.HasFeedSubscribers)
+                    {
                         await BroadcastMessageReceivedAsync(command.Id, false, "Nobody is watching the webcam.");
                         break;
                     }
@@ -129,13 +139,20 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
             }
         }
 
-        private async Task RunAsync(CancellationToken cancellationToken) {
-            while (!cancellationToken.IsCancellationRequested) {
-                try {
+        private async Task RunAsync(CancellationToken cancellationToken)
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
                     await TickAsync(cancellationToken);
-                } catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
                     return;
-                } catch (Exception ex) {
+                }
+                catch (Exception ex)
+                {
                     // The loop survives any single failure. An unreachable camera must never stop the
                     // feed for good or disturb an imaging session.
                     LogError($"Feed loop error: {ex.Message}");
@@ -144,8 +161,10 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
             }
         }
 
-        private async Task TickAsync(CancellationToken cancellationToken) {
-            if (!CanCapture) {
+        private async Task TickAsync(CancellationToken cancellationToken)
+        {
+            if (!CanCapture)
+            {
                 // Drop any outstanding request, or a viewer arriving later would be served a snapshot
                 // asked for long ago.
                 Interlocked.Exchange(ref _snapshotRequested, 0);
@@ -165,7 +184,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
                 return;
             }
 
-            if (!_isCapturing) {
+            if (!_isCapturing)
+            {
                 // A viewer has arrived. Earlier failures don't carry over, so the first frame is tried
                 // at once without an inherited backoff.
                 _isCapturing = true;
@@ -180,7 +200,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
 
             AstraeusSettings settings = Observatory.Settings;
             FeedFrame? frame = await CaptureAsync(settings, cancellationToken);
-            if (frame is { } captured) {
+            if (frame is { } captured)
+            {
                 await WebSocketBus.SendAsync(new FeedFrameMessage(
                     FeedFramePayload.FromFrame(captured.Jpeg, captured.Width, captured.Height, captured.CapturedUtc)));
                 _backoff = InitialBackoff;
@@ -200,16 +221,20 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
             Observatory.Cadence.WaitUntilAsync(
                 () => !CanCapture || Volatile.Read(ref _snapshotRequested) == 1, total, cancellationToken);
 
-        private async Task<FeedFrame?> CaptureAsync(AstraeusSettings settings, CancellationToken cancellationToken) {
+        private async Task<FeedFrame?> CaptureAsync(AstraeusSettings settings, CancellationToken cancellationToken)
+        {
             IFeedSource? source = await EnsureSourceAsync(settings);
-            if (source == null) {
+            if (source == null)
+            {
                 _lastError = _unavailableReason ?? "The feed is not configured.";
                 return null;
             }
 
-            try {
+            try
+            {
                 SourceFrame? raw = await source.CaptureAsync(cancellationToken);
-                if (raw is not { } frame) {
+                if (raw is not { } frame)
+                {
                     _lastError = "The camera returned no frame.";
                     await CountFailureAsync();
                     return null;
@@ -222,9 +247,13 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
                 _lastError = null;
                 _consecutiveFailures = 0;
                 return prepared;
-            } catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
                 throw;
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 // Just the reason, with the host scrubbed out. It reaches the dashboard, and there's
                 // only one feed, so naming the camera would only add its address.
                 _lastError = FeedUrl.RedactCameraDetails(ex.Message, settings.GetFeedUrl());
@@ -238,14 +267,16 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
         /// Rebuilds the source only after several failures in a row. An RTSP source rebuilds its own player
         /// when the stream stops, so tearing it down on one timeout would only force a slow reconnect.
         /// </summary>
-        private async Task CountFailureAsync() {
+        private async Task CountFailureAsync()
+        {
             if (++_consecutiveFailures < MaxConsecutiveFailures) return;
             LogWarning($"Feed has failed {_consecutiveFailures} times in a row, so rebuilding the source.");
             _consecutiveFailures = 0;
             await DisposeSourceAsync();
         }
 
-        private async Task<IFeedSource?> EnsureSourceAsync(AstraeusSettings settings) {
+        private async Task<IFeedSource?> EnsureSourceAsync(AstraeusSettings settings)
+        {
             string signature = BuildSourceSignature(settings);
             if (_source != null && signature == _sourceSignature) return _source;
 
@@ -268,17 +299,22 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Feed {
                 PasswordFingerprint(settings.GetFeedPassword()),
                 settings.GetFeedMaxWidth().ToString());
 
-        private static string PasswordFingerprint(string? password) {
+        private static string PasswordFingerprint(string? password)
+        {
             if (string.IsNullOrEmpty(password)) return NoPasswordFingerprint;
             byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(password));
             return Convert.ToHexString(hash);
         }
 
-        private async Task DisposeSourceAsync() {
+        private async Task DisposeSourceAsync()
+        {
             if (_source == null) return;
-            try {
+            try
+            {
                 await _source.DisposeAsync();
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 LogWarning($"Feed source did not shut down cleanly: {ex.Message}");
             }
             _source = null;

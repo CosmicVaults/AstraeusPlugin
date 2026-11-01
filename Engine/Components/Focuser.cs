@@ -22,31 +22,37 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 
-namespace CosmicVaults.NINA.Astraeus.Engine {
+namespace CosmicVaults.NINA.Astraeus.Engine
+{
     public class Focuser(
         Observatory observatory,
         IWebSocketBus webSocketBus,
         IFocuserMediator focuserMediator,
         IAutoFocusVMFactory? autoFocusFactory,
         IImageHistoryVM? imageHistory)
-        : DeviceComponent<IFocuserVM, IFocuserConsumer, FocuserInfo>(focuserMediator, observatory, webSocketBus) {
+        : DeviceComponent<IFocuserVM, IFocuserConsumer, FocuserInfo>(focuserMediator, observatory, webSocketBus)
+    {
         public override string DeviceType { get; } = "focuser";
         public override string DisplayName { get; } = "Focuser";
         public override bool IsBusy => LastInfo?.IsMoving == true || LastInfo?.IsSettling == true;
 
         private FilterWheel? _filterWheel;
 
-        public override async Task Start() {
+        public override async Task Start()
+        {
             await base.Start();
             _filterWheel = Observatory.GetComponent<FilterWheel>();
         }
 
-        public override WsMessage? GetUpdateMessage() {
-            if (LastInfo == null) {
+        public override WsMessage? GetUpdateMessage()
+        {
+            if (LastInfo == null)
+            {
                 return null;
             }
 
-            FocuserPayload payload = new FocuserPayload {
+            FocuserPayload payload = new FocuserPayload
+            {
                 DeviceId = DeviceId,
                 Name = LastInfo.DisplayName,
                 Temperature = DevicePayload.CleanValue(LastInfo.Temperature),
@@ -60,9 +66,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return new FocuserUpdate(payload);
         }
 
-        public override WsMessage? GetDeviceStaticInfo() {
+        public override WsMessage? GetDeviceStaticInfo()
+        {
             FocuserInfo info = focuserMediator.GetInfo();
-            FocuserPayload payload = new FocuserPayload {
+            FocuserPayload payload = new FocuserPayload
+            {
                 DeviceId = DeviceId,
                 Name = info.Name,
                 IsConnected = info.Connected,
@@ -77,11 +85,14 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             return new FocuserUpdate(payload);
         }
 
-        protected override Task HandleCommandAsync(WsCommand command) {
-            switch (command.Action) {
+        protected override Task HandleCommandAsync(WsCommand command)
+        {
+            switch (command.Action)
+            {
                 case "move":
                     // FocuserInfo carries no MaxStep, so only the floor is checked here. The driver refuses the rest.
-                    if (JsonFields.ReadInt(command.Payload, "position", out int position, min: 0) != JsonFieldState.Valid) {
+                    if (JsonFields.ReadInt(command.Payload, "position", out int position, min: 0) != JsonFieldState.Valid)
+                    {
                         RejectMalformedCommandAsync(command, "position").ObserveFaults(LogCommandFault);
                         break;
                     }
@@ -89,7 +100,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                     break;
                 case "toggleTemp":
                     if (JsonFields.ReadBool(command.Payload, "toggle", out bool isTemperatureCompensationOn)
-                        != JsonFieldState.Valid) {
+                        != JsonFieldState.Valid)
+                    {
                         RejectMalformedCommandAsync(command, "toggle").ObserveFaults(LogCommandFault);
                         break;
                     }
@@ -98,7 +110,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                     break;
                 case "nudge":
                     if (JsonFields.ReadString(command.Payload, "direction", out string direction)
-                        != JsonFieldState.Valid) {
+                        != JsonFieldState.Valid)
+                    {
                         RejectMalformedCommandAsync(command, "direction").ObserveFaults(LogCommandFault);
                         break;
                     }
@@ -111,11 +124,15 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
         private CancellationTokenSource? _moveCancellationSource;
 
-        private async Task MoveCommandAsync(string id, int position) {
+        private async Task MoveCommandAsync(string id, int position)
+        {
             await BroadcastMessageReceivedAsync(id, true);
-            try {
+            try
+            {
                 await MoveToPositionAsync(position, BeginOperation(ref _moveCancellationSource));
-            } catch (OperationCanceledException) {
+            }
+            catch (OperationCanceledException)
+            {
                 Log("Focuser move aborted.");
             }
         }
@@ -123,26 +140,31 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         public int? Position => focuserMediator.GetInfo() is { Connected: true } info ? info.Position : null;
 
         /// <summary>Moves the focuser to an absolute position.</summary>
-        public async Task MoveToPositionAsync(int position, CancellationToken cancellationToken) {
+        public async Task MoveToPositionAsync(int position, CancellationToken cancellationToken)
+        {
             Log($"Moving Focuser to {position}...");
             await focuserMediator.MoveFocuser(position, cancellationToken);
             Log("Focuser moved.");
         }
 
-        private async Task NudgeCommandAsync(string id, string direction) {
-            if (!TryGetDeviceViewModel<FocuserVM>(out FocuserVM? focuserViewModel)) {
+        private async Task NudgeCommandAsync(string id, string direction)
+        {
+            if (!TryGetDeviceViewModel<FocuserVM>(out FocuserVM? focuserViewModel))
+            {
                 LogWarning("Unable to move the focuser: N.I.N.A.'s focuser controls are not available.");
                 await BroadcastMessageReceivedAsync(id, false, "N.I.N.A.'s focuser controls are not available");
                 return;
             }
-            ICommand? nudgeCommand = direction switch {
+            ICommand? nudgeCommand = direction switch
+            {
                 "small_in" => focuserViewModel.MoveFocuserInSmallCommand,
                 "small_out" => focuserViewModel.MoveFocuserOutSmallCommand,
                 "large_in" => focuserViewModel.MoveFocuserInLargeCommand,
                 "large_out" => focuserViewModel.MoveFocuserOutLargeCommand,
                 _ => null
             };
-            if (nudgeCommand == null) {
+            if (nudgeCommand == null)
+            {
                 await BroadcastMessageReceivedAsync(id, false, $"Unknown nudge direction '{direction}'");
                 return;
             }
@@ -150,7 +172,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
             InvokeOnUiThread(() => nudgeCommand.Execute(null));
         }
 
-        private async Task SetTemperatureCompensationCommandAsync(string id, bool isTemperatureCompensationOn) {
+        private async Task SetTemperatureCompensationCommandAsync(string id, bool isTemperatureCompensationOn)
+        {
             await BroadcastMessageReceivedAsync(id, true);
             focuserMediator.ToggleTempComp(isTemperatureCompensationOn);
             string onString = isTemperatureCompensationOn ? "On" : "Off";
@@ -158,7 +181,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         }
 
         /// <summary>Current focuser temperature in °C, or null when the focuser reports no temperature.</summary>
-        public double? GetTemperature() {
+        public double? GetTemperature()
+        {
             double temperature = focuserMediator.GetInfo()?.Temperature ?? double.NaN;
             return double.IsNaN(temperature) ? null : temperature;
         }
@@ -172,8 +196,10 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// needs false, because the server keys its model on the current filter.
         /// </param>
         public async Task<AutoFocusReport?> RunAutofocusAsync(bool shouldUseDesignatedAutofocusFilter,
-            CancellationToken cancellationToken) {
-            if (autoFocusFactory == null) {
+            CancellationToken cancellationToken)
+        {
+            if (autoFocusFactory == null)
+            {
                 Observatory.LogWarning("Autofocus unavailable (N.I.N.A. autofocus factory not present).", DeviceType,
                     LogCategory.Equipment);
                 return null;
@@ -181,7 +207,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
 
             FilterInfo? filter = ResolveAutofocusFilter(shouldUseDesignatedAutofocusFilter);
             IProgress<ApplicationStatus> progress = new Progress<ApplicationStatus>(_ => { });
-            try {
+            try
+            {
                 IAutoFocusVM autoFocus = autoFocusFactory.Create();
                 AutoFocusReport? report;
                 // So each exposure of the run reaches the dashboard's latest-frame card, labelled.
@@ -198,14 +225,19 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
                 // With Smart Autofocus on, the new run may have changed the offset table, so pull it
                 // into NINA's own filter offsets.
                 if (wasPosted && Observatory.Settings.IsSmartAutofocusEnabled()
-                    && Observatory.TryGetComponent<Settings>(out Settings? settings)) {
+                    && Observatory.TryGetComponent<Settings>(out Settings? settings))
+                {
                     await settings.PullAutofocusOffsetsAsync();
                 }
 
                 return report;
-            } catch (OperationCanceledException) {
+            }
+            catch (OperationCanceledException)
+            {
                 throw;
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Observatory.LogError($"Autofocus failed: {ex.Message}", DeviceType, LogCategory.Equipment);
                 return null;
             }
@@ -215,16 +247,19 @@ namespace CosmicVaults.NINA.Astraeus.Engine {
         /// The current filter is looked up in the profile so it carries its AF exposure time and offset.
         /// Null is fine, and autofocus then uses the global focuser settings.
         /// </summary>
-        private FilterInfo? ResolveAutofocusFilter(bool shouldUseDesignatedAutofocusFilter) {
+        private FilterInfo? ResolveAutofocusFilter(bool shouldUseDesignatedAutofocusFilter)
+        {
             IProfile profile = Observatory.Settings.ProfileService.ActiveProfile;
 
-            if (shouldUseDesignatedAutofocusFilter && profile.FocuserSettings.UseFilterWheelOffsets) {
+            if (shouldUseDesignatedAutofocusFilter && profile.FocuserSettings.UseFilterWheelOffsets)
+            {
                 FilterInfo? designatedFilter = profile.FilterWheelSettings.FilterWheelFilters
                     .FirstOrDefault(candidate => candidate.AutoFocusFilter);
                 if (designatedFilter != null) return designatedFilter;
             }
 
-            if (_filterWheel?.GetCurrentFilter() is { } selectedFilter) {
+            if (_filterWheel?.GetCurrentFilter() is { } selectedFilter)
+            {
                 return profile.FilterWheelSettings.FilterWheelFilters
                     .FirstOrDefault(candidate => candidate.Position == selectedFilter.Position) ?? selectedFilter;
             }

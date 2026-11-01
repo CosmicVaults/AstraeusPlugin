@@ -96,6 +96,9 @@ While the plugin is enabled and signed in, it keeps a connection to the Astraeus
   together with the name of the N.I.N.A. profile they were made with. Masters are never downloaded.
   A frame is calibrated on this PC only with masters generated here, and otherwise stays
   uncalibrated.
+- **Your N.I.N.A. profiles:** their names, descriptions and IDs, so the dashboard can offer a
+  profile switch and the autopilot only takes projects meant for the loaded profile. Where the
+  profile files live is never sent.
 - **Webcam frames,** only while the feed is switched on and someone is watching it on the dashboard.
   The camera's address, username and password never leave this PC.
 - **The plugin's version,** on every request, so the server can tell you when an update is needed.

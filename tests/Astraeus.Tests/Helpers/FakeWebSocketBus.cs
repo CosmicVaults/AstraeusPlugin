@@ -1,16 +1,19 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using CosmicVaults.NINA.Astraeus.Engine.WebSocket;
 using CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages;
 
-namespace CosmicVaults.NINA.Astraeus.Tests.Helpers {
+namespace CosmicVaults.NINA.Astraeus.Tests.Helpers
+{
     /// <summary>
     /// The bus with no socket behind it. Everything sent is kept for the test to read, and the test raises
     /// inbound commands and connection events itself.
     /// </summary>
-    internal sealed class FakeWebSocketBus : IWebSocketBus {
+    internal sealed class FakeWebSocketBus : IWebSocketBus
+    {
         public event Action<WsCommand>? CommandReceived;
         public event Action? Connected;
         public event Action? Disconnected;
@@ -19,17 +22,20 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Helpers {
         public List<(string Device, string DeviceId, bool IsConnected, string DeviceName)> ConnectionNotices { get; } = new();
         public int FlushCount { get; private set; }
 
-        public Task SendAsync(WsMessage wsMessage) {
+        public Task SendAsync(WsMessage wsMessage)
+        {
             Sent.Add(wsMessage);
             return Task.CompletedTask;
         }
 
-        public Task FlushPendingAsync() {
+        public Task FlushPendingAsync()
+        {
             FlushCount++;
             return Task.CompletedTask;
         }
 
-        public Task NotifyConnectionAsync(string device, string deviceId, bool isConnected, string deviceName) {
+        public Task NotifyConnectionAsync(string device, string deviceId, bool isConnected, string deviceName)
+        {
             ConnectionNotices.Add((device, deviceId, isConnected, deviceName));
             return Task.CompletedTask;
         }
@@ -48,5 +54,14 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Helpers {
         /// The most recent message of that type, or null when none was sent.
         /// </summary>
         public T? LastSent<T>() where T : WsMessage => Sent.OfType<T>().LastOrDefault();
+
+        /// <summary>The status and message of the last command answer, or null when none was sent.</summary>
+        public (string Status, string? Message)? LastResponse()
+        {
+            JsonElement? payload = LastSent<WsResponse>()?.Payload;
+            if (payload == null) return null;
+            string? message = payload.Value.TryGetProperty("message", out JsonElement text) ? text.GetString() : null;
+            return (payload.Value.GetProperty("status").GetString()!, message);
+        }
     }
 }

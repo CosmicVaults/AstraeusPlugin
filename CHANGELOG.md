@@ -1,8 +1,77 @@
 # Astraeus
 
+## 1.0.3
+
+### New Features
+
+
+- **The dashboard can switch N.I.N.A.'s profile.** Every connected device is disconnected first, and is left disconnected. A switch is refused while the
+  autopilot or a N.I.N.A. sequence is running, while a connect prompt is waiting in N.I.N.A., or while
+  another switch is under way. If Astraeus is switched off in the new profile, it is switched back on
+  so the dashboard keeps control.  The sign-in follows a profile change. Changing profile, from the dashboard or in N.I.N.A.'s
+  options, used to sign the plugin out whenever the new profile had no stored sign-in. The session is
+  now carried into the new profile and the connection stays up. A profile signed in to a different
+  account keeps that sign-in. The profile left behind asks for a browser sign-in the next time
+  N.I.N.A. starts on it.
+- **The autopilot only takes projects meant for the loaded profile.** Each request for a target now
+  carries the loaded N.I.N.A. profile's ID, and the server only offers projects saved against that
+  profile. When every waiting project belongs to another profile, the autopilot logs "No project is
+  set for the loaded N.I.N.A. profile" and asks again an hour later.
+
+### Autopilot Refactored
+
+- **Switching off is a state like any other.** The deliberate stop (exposure, guiding and tracking
+  stopped, the roof and mount left as found) now runs as a state the machine leaves through, beside
+  the other stops, instead of as code inside the machine. The wiring names in one place where every
+  watcher's result goes when conditions turn unsafe, the roof closes, a mount limit is reached or the
+  observing window closes. Nothing an observer sees changes, apart from one new debug line per state
+  transition in N.I.N.A.'s log.
+- **One poll for the watchers, in a fixed order.** Each state now declares which of the four watchers
+  (unsafe conditions, the roof closing, a mount limit, the observing window) may abort it, and one poll
+  every five seconds asks them in that order, so when two trip in the same poll unsafe always wins.
+  Before, four separate watchers raced and whichever woke first decided. The log lines are unchanged.
+- **One way to stop the hardware.** The switch-off, the roof-closed stop, the tracking stop after an empty
+  poll or a refused target, the secure's guider stop and the failed-flip stop all shared the same three
+  steps written five ways. They now call one helper, so a mount that is already still is left alone
+  everywhere. The roof-closed alert says "already still" for that case where it used to say the mount was
+  stopped where it was.
+- **The run's state is split by what it belongs to.** The frame in hand, the night, the roof and the
+  device reconnects are each their own object, replaced whole at the boundary that already marked them:
+  a new frame at every poll, a new night and roof at dusk. The reason a night ended is now recorded
+  with "first cause wins" at every fault path. Before, five of them overwrote an earlier reason, so the
+  session-end email could name the last failure in a chain rather than the one that started it.
+- **Four states that did two jobs now do one each.** The question of whether a dome merely dropped off
+  and came back with the roof open is its own step ahead of the roof-closed stop. The frame's pointing
+  check and the no-stars check follow the capture as steps of their own, so they show in the transition
+  log. The park N.I.N.A. needs before it will move the shutter runs ahead of the roof open. Two things
+  change for the observer: a failed meridian flip now stops tracking before the next poll, as a refused
+  target already did, since the mount may be sitting at the limit it was flipping away from; and the
+  three failed roof opens that earn the "cannot open the roof" alert are counted per night rather than
+  per run, with a park that could not be had counting as a failed open.
+
+### Bug Fixes
+
+- **A false "not secured" email at dawn.** With auto-connect on, the Autopilot disconnects the parked
+  mount at the end of the night just before the session-end email, and the email read that as a mount
+  that could not be parked. A mount the Autopilot parked and then disconnected now counts as secured.
+  One that drops off on its own, or is unparked by hand, still does not. The dawn email also gives
+  "the observing window has closed" as its reason instead of "switched off".
+- **Re-centring after a meridian flip.** When N.I.N.A.'s own re-centre after a flip could not plate
+    solve, N.I.N.A. carried on regardless, and the Autopilot took the mount as centred and reported the
+    next frames as centred without checking. The Autopilot now plate solves for itself after every flip.
+    If that fails too, the frame is taken on the mount's own coordinates and reported as not centred,
+    as after any failed centring.
+
+### Tests
+
+- **A test that could fail on a slow machine.** The test that proves a stuck fault secure is reported
+  after its backstop moved the fake clock before the backstop was armed, and gave the alert no real
+  time to land after it fired. The clock now waits for the secure to start, and every clock-driven
+  wait gives the code under test a moment to finish after the last step.
+
 ## 1.0.2
 
-### Safety Improvements
+### Safety Improvements/setup-matt-pocock-skills
 
 - **Stopping the mount.** A stop now waits for the mount to confirm that tracking is off as well as
   the slew, and asks again if it hasn't. A mount that keeps tracking after two requests is logged

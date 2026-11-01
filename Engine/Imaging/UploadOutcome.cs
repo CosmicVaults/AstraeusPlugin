@@ -1,5 +1,7 @@
-namespace CosmicVaults.NINA.Astraeus.Engine.Imaging {
-    internal enum UploadOutcome {
+namespace CosmicVaults.NINA.Astraeus.Engine.Imaging
+{
+    internal enum UploadOutcome
+    {
         Confirmed,
 
         /// <summary>
