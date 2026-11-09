@@ -27,7 +27,7 @@ using System.Runtime.Versioning;
 [assembly: AssemblyMetadata("Repository", "https://github.com/CosmicVaults/AstraeusPlugin")]
 [assembly: AssemblyMetadata("Homepage", "https://cosmicvaults.com")]
 [assembly: AssemblyMetadata("ChangelogURL", "https://github.com/CosmicVaults/AstraeusPlugin/blob/main/CHANGELOG.md")]
-[assembly: AssemblyMetadata("Tags", "Observatory,Automation,Autopilot,Remote control,Dome,Roof,Calibration,Cloud,Beta")]
+[assembly: AssemblyMetadata("Tags", "Observatory,Automation,Autopilot,Remote control,Dome,Roof,Calibration,Cloud")]
 [assembly: AssemblyMetadata("FeaturedImageURL", "https://raw.githubusercontent.com/CosmicVaults/AstraeusPlugin/main/installer/cosmic-vaults-mark-512.png")]
 [assembly: AssemblyMetadata("ScreenshotURL", "https://raw.githubusercontent.com/CosmicVaults/AstraeusPlugin/main/assets/screenshot.png")]
 [assembly: AssemblyMetadata("AltScreenshotURL", "https://raw.githubusercontent.com/CosmicVaults/AstraeusPlugin/main/assets/screenshot-alt.png")]
@@ -56,7 +56,7 @@ using System.Runtime.Versioning;
     "- See it for yourself: an optional all-sky or observatory webcam, live on the dashboard.\n\n" +
     "A Cosmic Vaults account is required. You sign in from the plugin's options page through your own " +
     "browser.\n\n" +
-    "This is a beta. Please report problems, with your N.I.N.A. log, at " +
+    "Please report problems, with your N.I.N.A. log, at " +
     "https://github.com/CosmicVaults/AstraeusPlugin/issues")]
 
 [assembly: ComVisible(false)]

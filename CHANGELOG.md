@@ -1,5 +1,21 @@
 # Astraeus
 
+## 1.1.0
+
+Astraeus leaves the beta and is listed in N.I.N.A.'s main plugin channel.
+
+### Out of beta
+
+- **Listed for every N.I.N.A. user.** Astraeus now appears under Plugins > Available in N.I.N.A. 3.2
+  and later, with no extra plugin repository to add. If you installed it through N.I.N.A.'s beta feed,
+  this arrives as an ordinary update.
+
+### Improvements
+
+- **The "no stars" critical alert names focus and says the night carries on.** After three frames in a row
+  with almost no stars and no plate solve, the alert only pointed at a closed cover, dust cap or
+  cloud, and read as if the night had stopped. It will now report if an autofocus failed and will explicitly state that the autopilot will continue regardless.  
+
 ## 1.0.3
 
 ### New Features

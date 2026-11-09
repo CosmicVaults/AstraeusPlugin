@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -48,16 +49,36 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States
             string roof = context.Dome is { IsConnected: true } dome
                 ? (dome.IsShutterOpen() ? "open" : "not open")
                 : "not connected";
-            context.ReportCritical("Autopilot: frames show no stars. The light path may be blocked.", new
-            {
-                target = target.TargetName,
-                frames = night.DarkFrameStarCounts.Count,
-                stars = string.Join(", ", night.DarkFrameStarCounts),
-                median_adu = result.Median,
-                flat_panel = flatPanel,
-                roof,
-                check = "the flat panel cover, dust cap and mirror covers; cloud gives the same numbers"
-            });
+            string focuser = context.Focuser?.Position is int position
+                ? position.ToString(CultureInfo.InvariantCulture)
+                : "not connected";
+            string check = night.LastAutofocus is { IsSuccess: false }
+                ? "the focus first, since tonight's last autofocus failed; then the flat panel cover, dust cap " +
+                  "and mirror covers; cloud gives the same numbers"
+                : "the flat panel cover, dust cap and mirror covers, and the focus; cloud gives the same numbers";
+            context.ReportCritical(
+                "Autopilot: frames show no stars. The night has not stopped and imaging continues.", new
+                {
+                    target = target.TargetName,
+                    frames = night.DarkFrameStarCounts.Count,
+                    stars = string.Join(", ", night.DarkFrameStarCounts),
+                    median_adu = result.Median,
+                    flat_panel = flatPanel,
+                    roof,
+                    focuser,
+                    last_autofocus = DescribeLastAutofocus(night.LastAutofocus),
+                    check
+                });
+        }
+
+        private static string DescribeLastAutofocus(AutofocusOutcome? outcome)
+        {
+            if (outcome == null) return "none tonight";
+            string at = outcome.AtUtc.ToString("HH:mm", CultureInfo.InvariantCulture) + " UTC";
+            string position = outcome.Position?.ToString(CultureInfo.InvariantCulture) ?? "unknown";
+            return outcome.IsSuccess
+                ? $"succeeded at {at}, position {position}"
+                : $"failed at {at}, focuser left at position {position}";
         }
     }
 }

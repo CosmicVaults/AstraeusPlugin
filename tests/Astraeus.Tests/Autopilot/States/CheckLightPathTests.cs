@@ -46,7 +46,7 @@ namespace CosmicVaults.NINA.Astraeus.Tests.Autopilot.States
             }
 
             Observatory.ReportedEvent alert = nina.Alerts[0];
-            Assert.That(alert.Message, Is.EqualTo("Autopilot: frames show no stars. The light path may be blocked."));
+            Assert.That(alert.Message, Is.EqualTo("Autopilot: frames show no stars. The night has not stopped and imaging continues."));
             Assert.That(alert.Detail("target"), Is.EqualTo("M1"));
             Assert.That(alert.Detail("frames"), Is.EqualTo(3));
             Assert.That(alert.Detail("stars"), Is.EqualTo("10, 10, 10"));

@@ -11,13 +11,9 @@ Requirements: N.I.N.A. 3.2 or later, 64-bit, on Windows 10 or later.
 
 ## Installing from N.I.N.A.'s plugin manager
 
-Astraeus is in public beta, so it is listed in N.I.N.A.'s beta plugin channel:
-
-1. In N.I.N.A., open **Options > General**, find **Plugin Repositories** and add
-   `https://nighttime-imaging.eu/wp-json/nina/v1/beta`.
-2. Open **Plugins > Available**, select **Astraeus** and click **Install**.
-3. Restart N.I.N.A.
-4. Open **Plugins > Installed > Astraeus**. In the **Account** section click **Sign in with
+1. In N.I.N.A., open **Plugins > Available**, select **Astraeus** and click **Install**.
+2. Restart N.I.N.A.
+3. Open **Plugins > Installed > Astraeus**. In the **Account** section click **Sign in with
    browser** and sign in to your Cosmic Vaults account in the browser window that opens.
 
 Sign-in hands the browser back to the plugin through a port on this PC between 47821 and 47830
@@ -43,7 +39,7 @@ Updates appear in **Plugins > Installed** like any other plugin's.
 
 3. If N.I.N.A. is open, Setup asks you to close it and waits. Finish or stop whatever it is doing
    first. Setup never closes N.I.N.A. for you.
-4. Start N.I.N.A. and sign in as in step 4 above.
+4. Start N.I.N.A. and sign in as in step 3 above.
 
 The files go to `%LOCALAPPDATA%\NINA\Plugins\3.0.0\Astraeus\`, the same folder N.I.N.A.'s plugin
 manager uses, so the two ways of installing replace each other rather than adding a second copy.
@@ -63,9 +59,9 @@ Download `CosmicVaults.NINA.Astraeus.<version>.zip` from the
 `CosmicVaults.NINA.Astraeus.dll` sits directly in `%LOCALAPPDATA%\NINA\Plugins\3.0.0\Astraeus\`,
 with `libvlc\win-x64\` beside it. Then start N.I.N.A.
 
-## Beta
+## Reporting problems
 
-This is a beta. It runs real equipment, so watch the first nights before leaving it unattended,
+Astraeus runs real equipment, so watch the first nights before leaving it unattended,
 and keep N.I.N.A.'s own safety settings in place. Please report problems on the
 [issues page](https://github.com/CosmicVaults/AstraeusPlugin/issues) with the plugin version,
 the N.I.N.A. version and your N.I.N.A. log from `%LOCALAPPDATA%\NINA\Logs`.

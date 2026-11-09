@@ -73,11 +73,14 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot.States
             {
                 context.RecordAutofocus();
                 FocusPoint focusPoint = report.CalculatedFocusPoint;
+                context.Night.LastAutofocus =
+                    new AutofocusOutcome(context.UtcNow, true, (int)Math.Round(focusPoint.Position));
                 context.Log($"Autofocus completed in {Context.FormatElapsed(stopwatch)}: " +
                             $"position {focusPoint.Position:F0}, HFR {focusPoint.Value:F2}.");
                 return AutopilotStateResult.Completed;
             }
 
+            context.Night.LastAutofocus = new AutofocusOutcome(context.UtcNow, false, context.Focuser.Position);
             context.LogWarning("Autofocus did not complete. Continuing without a refocus.");
             // Reported so the server waits out its cooldown and doesn't ask again next frame.
             await context.Observatory.AstraeusWebClient.PostAutofocusFailureAsync(

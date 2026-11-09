@@ -69,6 +69,8 @@ namespace CosmicVaults.NINA.Astraeus.Engine.Autopilot
 
         public bool HasReportedDarkFrames { get; set; }
 
+        public AutofocusOutcome? LastAutofocus { get; set; }
+
         /// <summary>How centring has gone on the target in hand. A new night starts it clean.</summary>
         public CentringTracker Centring { get; } = new CentringTracker(context);
 
