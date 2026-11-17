@@ -1,5 +1,25 @@
 # Astraeus
 
+## 1.1.1
+
+### Bug Fixes
+
+- **Frames captured from outside the plugin now reach the dashboard.** The latest-image
+    card only showed frames Astraeus took itself, so anyone imaging with Target Scheduler or a N.I.N.A.
+    sequence saw "No captures yet" all night. Every frame N.I.N.A. saves now sends its preview and
+    statistics to the dashboard while it is open. With Upload to Cloud on, all light frames and saved Imaging-tab snapshots are also uploaded to your Image Library like Astraeus' own,
+    filed under the frame's target. Flats, darks and bias that N.I.N.A. saves stay on this machine.
+
+### Improvements
+
+- **Frame previews only go out while the dashboard is open.** Autopilot frames sent a live preview
+  even with nobody watching, using upload bandwidth for nothing. Frames uploaded with Upload to Cloud
+  on still get their thumbnail in your Image Library.
+
+### Misc
+
+- New server endpoint added for complex feature development. Stripped from public builds. Does not impact users.
+
 ## 1.1.0
 
 Astraeus leaves the beta and is listed in N.I.N.A.'s main plugin channel.

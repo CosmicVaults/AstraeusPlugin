@@ -85,9 +85,11 @@ While the plugin is enabled and signed in, it keeps a connection to the Astraeus
 - **Settings shown on the dashboard:** the site's location (latitude, longitude and elevation),
   and autopilot, equipment, image file and meridian flip options. Folder locations are never sent
   in either direction. N.I.N.A.'s file name patterns are synced.
-- **Frames:** a small preview and the statistics of each frame you capture. Full frames, and
-  calibrated copies, are uploaded only when Upload to Cloud is on (upload is on by default, but reviewed in the web setup wizard). Captures are identified to the
-  server by file name only, not by folder.
+- **Frames:** the statistics of each frame you capture, and a small preview while the dashboard
+  is open. Full frames, calibrated copies and their previews are uploaded only when Upload to Cloud is on (upload is on by default, but reviewed in the web setup wizard). Captures are identified to the
+  server by file name only, not by folder. This includes frames N.I.N.A. saves itself, for example
+  from Target Scheduler: their preview and statistics are sent while the dashboard is open, and with
+  Upload to Cloud on their lights and saved snapshots are uploaded as well.
 - **Calibration masters** you generate with the "Generate & Upload Calibration Masters" instruction,
   together with the name of the N.I.N.A. profile they were made with. Masters are never downloaded.
   A frame is calibrated on this PC only with masters generated here, and otherwise stays

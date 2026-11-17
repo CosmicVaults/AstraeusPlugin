@@ -155,5 +155,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine.WebSocket.Messages
         /// an autofocus after the flip if the profile asks for one.
         /// </summary>
         public const string MeridianFlip = "meridian_flip";
+        /// <summary>A frame N.I.N.A. saved itself.</summary>
+        public const string Nina = "nina";
     }
 }

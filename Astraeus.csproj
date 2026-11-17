@@ -14,7 +14,7 @@
     </PropertyGroup>
 
     <PropertyGroup>
-        <AstraeusReleaseVersion>1.1.0</AstraeusReleaseVersion>
+        <AstraeusReleaseVersion>1.1.1</AstraeusReleaseVersion>
         <AstraeusVersionEpoch>2026-01-01</AstraeusVersionEpoch>
     </PropertyGroup>
 
@@ -46,8 +46,8 @@
     <!--
         Which Astraeus server the build talks to (Engine\ServerEndpoints.cs). Debug defaults to dev,
         the local web stack, and Release to production, so every Release build and installer is one
-        users can run. -p:AstraeusBackend=staging builds against a staging server, which only the
-        maintainer's copy of ServerEndpoints.cs names.
+        users can run. -p:AstraeusBackend=staging or preview builds against a staging or preview
+        server, which only the maintainer's copy of ServerEndpoints.cs names.
     -->
     <PropertyGroup>
         <AstraeusBackend Condition="'$(AstraeusBackend)' == '' And '$(Configuration)' == 'Debug'">dev</AstraeusBackend>
@@ -59,6 +59,9 @@
     <PropertyGroup Condition="'$(AstraeusBackend)' == 'staging'">
         <DefineConstants>$(DefineConstants);STAGING</DefineConstants>
     </PropertyGroup>
+    <PropertyGroup Condition="'$(AstraeusBackend)' == 'preview'">
+        <DefineConstants>$(DefineConstants);PREVIEW</DefineConstants>
+    </PropertyGroup>
     <PropertyGroup Condition="'$(AstraeusBackend)' == 'production'">
         <DefineConstants>$(DefineConstants);PRODUCTION</DefineConstants>
     </PropertyGroup>
@@ -68,7 +71,7 @@
     </PropertyGroup>
 
     <Target Name="CheckAstraeusBackend" BeforeTargets="BeforeBuild">
-        <Error Condition="'$(AstraeusBackend)' != 'dev' And '$(AstraeusBackend)' != 'staging' And '$(AstraeusBackend)' != 'production'" Text="AstraeusBackend must be dev, production or staging, not '$(AstraeusBackend)'." />
+        <Error Condition="'$(AstraeusBackend)' != 'dev' And '$(AstraeusBackend)' != 'staging' And '$(AstraeusBackend)' != 'preview' And '$(AstraeusBackend)' != 'production'" Text="AstraeusBackend must be dev, production, staging or preview, not '$(AstraeusBackend)'." />
     </Target>
 
     <!-- NuGet Packages -->

@@ -27,8 +27,15 @@ namespace CosmicVaults.NINA.Astraeus.Engine
         // public const string BaseUrl = "https://<staging host>";
         // public const string WebSocketBaseUri = "wss://<staging host>/ws/observatory/";
 #error The staging server's address is not published. Fill it in above to build against staging.
+#elif PREVIEW
+        // A preview server, for the maintainer's own testing. Its address is not published, so no
+        // public build can point users at it. Fill in both lines to build against one with
+        // -p:AstraeusBackend=preview.
+        // public const string BaseUrl = "https://<preview host>";
+        // public const string WebSocketBaseUri = "wss://<preview host>/ws/observatory/";
+#error The preview server's address is not published. Fill it in above to build against preview.
 #else
-#error No Astraeus server selected: define DEV, PRODUCTION or STAGING (AstraeusBackend in Astraeus.csproj).
+#error No Astraeus server selected: define DEV, PRODUCTION, STAGING or PREVIEW (AstraeusBackend in Astraeus.csproj).
 #endif
 
         /// <summary>The server's host name, shown on the options page and in the log so a screenshot says which server a build uses.</summary>

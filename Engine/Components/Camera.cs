@@ -369,7 +369,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine
         private async Task HandleImageSavedAsync(ImageSavedEventArgs eventArgs)
         {
             FrameCaptureOperationData? capture = _currentCapture;
-            if (capture == null) return; // a save we didn't start, e.g. from NINA's own UI
+            if (capture == null)
+            {
+                await HandleNinaFrameSavedAsync(eventArgs);
+                return;
+            }
 
             try
             {
@@ -387,14 +391,58 @@ namespace CosmicVaults.NINA.Astraeus.Engine
         }
 
         /// <summary>
+        /// A frame N.I.N.A. saved itself. Its preview is sent while someone is watching, and lights and
+        /// snapshots are uploaded while Upload to Cloud is on. Never throws.
+        /// </summary>
+        private async Task HandleNinaFrameSavedAsync(ImageSavedEventArgs eventArgs)
+        {
+            try
+            {
+                CaptureResult result = BuildCaptureResult(eventArgs, null, eventArgs.MetaData, null);
+                if (eventArgs.Image is { } image)
+                    result.PreviewJpeg = await EncodePreviewAsync(image, ComponentToken);
+                // Not awaited, so a slow uplink can't hold up the registration.
+                if (Observatory.Cadence.HasSubscribers)
+                    _ = SendPreviewAsync(ImagePreviewPayload.FromResult(result, PreviewSource.Nina, isSaved: true));
+
+                if (eventArgs.MetaData?.Image.ImageType is not (CaptureSequence.ImageTypes.LIGHT
+                    or CaptureSequence.ImageTypes.SNAPSHOT)) return;
+                if (result.FilePath is not { } filePath) return;
+                if (!Observatory.Settings.IsCloudUploadEnabled() || !Observatory.Authenticator.IsAuthenticated)
+                    return;
+
+                (int? captureId, _) = await Observatory.AstraeusWebClient.PostManualCaptureAsync(
+                    result, Guid.NewGuid().ToString("N"), isCloudUploadEnabled: true, shouldCalibrate: false);
+                if (captureId is not int registeredId)
+                {
+                    LogWarning($"{Path.GetFileName(filePath)} was saved by N.I.N.A. but could not be registered " +
+                               "on the server, so it was not uploaded.");
+                    return;
+                }
+
+                // The frame's own target, never the autopilot's, which may be left over from an earlier run.
+                QueueManualFrame(registeredId, filePath, result.PreviewJpeg, plan: null, shouldUpload: true,
+                    targetName: eventArgs.MetaData?.Target.Name ?? string.Empty);
+            }
+            catch (OperationCanceledException)
+            {
+                // The plugin is shutting down.
+            }
+            catch (Exception ex)
+            {
+                LogWarning($"N.I.N.A.'s frame could not be sent to the dashboard: {ex.Message}");
+            }
+        }
+
+        /// <summary>
         /// The frame's R2 object key. The target name is unvalidated server JSON, so ObjectKey cleans it,
         /// and ObjectKey.Join keeps forward slashes where System.IO.Path would use backslashes.
         /// </summary>
-        internal string BuildR2Filename(string filePath)
+        internal string BuildR2Filename(string filePath, string? targetName = null)
         {
             string date = DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             string fileName = Path.GetFileName(filePath);
-            return ObjectKey.Join(ObjectKey.SafeSegment(CurrentTargetName), date, fileName);
+            return ObjectKey.Join(ObjectKey.SafeSegment(targetName ?? CurrentTargetName), date, fileName);
         }
 
         ///////////// Camera controls /////////////
@@ -883,10 +931,11 @@ namespace CosmicVaults.NINA.Astraeus.Engine
         }
 
         private void QueueManualFrame(int captureId, string filePath, byte[]? previewJpeg, CalibrationPlan? plan,
-            bool shouldUpload)
+            bool shouldUpload, string? targetName = null)
         {
             _manualFrames = _manualFrames
-                .ContinueWith(_ => ProcessManualFrameAsync(captureId, filePath, previewJpeg, plan, shouldUpload),
+                .ContinueWith(_ => ProcessManualFrameAsync(captureId, filePath, previewJpeg, plan, shouldUpload,
+                        targetName),
                     TaskScheduler.Default)
                 .Unwrap();
         }
@@ -896,7 +945,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine
         /// already recorded.
         /// </summary>
         private async Task ProcessManualFrameAsync(int captureId, string filePath, byte[]? previewJpeg,
-            CalibrationPlan? plan, bool shouldUpload)
+            CalibrationPlan? plan, bool shouldUpload, string? targetName = null)
         {
             try
             {
@@ -946,7 +995,7 @@ namespace CosmicVaults.NINA.Astraeus.Engine
                 // Goes through the shared queue so a manual run and the autopilot never split the
                 // uplink with two transfers. The key is built now, while the target name is still the
                 // one this frame was taken under.
-                Observatory.CaptureUploads.TryEnqueue(pending, BuildR2Filename(filePath), DeviceType,
+                Observatory.CaptureUploads.TryEnqueue(pending, BuildR2Filename(filePath, targetName), DeviceType,
                     DefaultLogCategory);
             }
             catch (OperationCanceledException)
@@ -1003,10 +1052,9 @@ namespace CosmicVaults.NINA.Astraeus.Engine
                     }
                 }
 
-                // Sent live because the R2 copy only lands once the upload queue reaches this frame. Not
-                // awaited, so a slow uplink can't hold up the autopilot. Not gated on viewers either,
-                // since the JPEG exists for R2 anyway and it's one per exposure.
-                if (result.IsSuccess)
+                // Sent live while someone is watching, because the R2 copy only lands once the upload
+                // queue reaches this frame. Not awaited, so a slow uplink can't hold up the autopilot.
+                if (result.IsSuccess && Observatory.Cadence.HasSubscribers)
                     _ = SendPreviewAsync(ImagePreviewPayload.FromResult(result, PreviewSource.Autopilot,
                         isSaved: true));
 
